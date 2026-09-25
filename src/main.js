@@ -3,6 +3,7 @@ import '@lichess-org/chessground/assets/chessground.base.css';
 import '@lichess-org/chessground/assets/chessground.brown.css';
 import '@lichess-org/chessground/assets/chessground.cburnett.css';
 import './style.css';
+import './debug.css';
 
 import {
   canonicalPosition,
@@ -15,9 +16,18 @@ import {
 } from './graph.js';
 import { getIncoming, getNode, getOutgoing } from './db.js';
 import { discoverForViewport, ensureManualEdge, loadExplorer } from './explorer.js';
+import {
+  clearDebugLog,
+  debugLog,
+  debugText,
+  getDebugEntries,
+  isDebugEnabled,
+  setDebugEnabled,
+} from './debug.js';
 
 const app = document.querySelector('#app');
 
+const initialDepth = Number.isFinite(history.state?.cvDepth) ? history.state.cvDepth : 0;
 const state = {
   center: positionFromUrl(),
   orientation: localStorage.getItem('chessview.orientation') === 'black' ? 'black' : 'white',
@@ -26,7 +36,11 @@ const state = {
   scene: null,
   boardApis: [],
   generation: 0,
+  navDepth: initialDepth,
+  debug: isDebugEnabled(),
 };
+
+debugLog('app start', { center: state.center, turn: state.center.split(' ')[1], navDepth: state.navDepth });
 
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
@@ -83,8 +97,6 @@ async function collectScene(center, max) {
   const selected = chooseNeighborhood({ center, incoming, outgoingBySource, max });
   const selectedKeys = new Set(selected.map((item) => item.key));
 
-  // Use spare slots for siblings reached from a known parent. They sit laterally
-  // and help reveal move-order/transposition context without overwhelming the map.
   for (const parentEdge of incomingEdges) {
     if (selected.length >= max) break;
     const siblings = (await getOutgoing(parentEdge.source))
@@ -165,6 +177,42 @@ function relationLabel(item) {
   return 'next';
 }
 
+function debugDrawerHtml() {
+  if (!state.debug) return '';
+  return `
+    <aside class="debug-drawer" aria-label="Chessview debug log">
+      <div class="debug-head">
+        <div class="debug-title">Debug <small>${getDebugEntries().length} events</small></div>
+        <div class="debug-actions">
+          <button class="debug-action" id="debug-copy" type="button">Copy</button>
+          <button class="debug-action" id="debug-clear" type="button">Clear</button>
+        </div>
+      </div>
+      <pre class="debug-log" id="debug-log">${escapeHtml(debugText())}</pre>
+    </aside>
+  `;
+}
+
+function bindDebugControls() {
+  document.querySelector('#debug-toggle')?.addEventListener('click', () => {
+    state.debug = setDebugEnabled(!state.debug);
+    render();
+  });
+  document.querySelector('#debug-clear')?.addEventListener('click', () => {
+    clearDebugLog();
+    render();
+  });
+  document.querySelector('#debug-copy')?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(debugText());
+      debugLog('debug log copied');
+    } catch (error) {
+      debugLog('debug copy failed', error, 'warn');
+    }
+    render();
+  });
+}
+
 function renderShell(scene) {
   disposeBoards();
   const centerNode = scene.nodes.get(state.center) ?? {};
@@ -172,6 +220,8 @@ function renderShell(scene) {
   const total = centerNode.games ?? 0;
   const other = explorer ? omittedShare(explorer) : 0;
   const opening = centerNode.opening;
+  const boardPosition = state.center;
+  const turn = boardPosition.split(' ')[1] === 'b' ? 'black' : 'white';
 
   app.innerHTML = `
     <main class="app-shell">
@@ -182,6 +232,8 @@ function renderShell(scene) {
         </a>
         <div class="topbar-meta">
           <span class="network-status ${state.loading ? 'is-loading' : ''}">${state.loading ? 'mapping…' : state.error ? 'offline map' : 'Lichess · rated standard'}</span>
+          <button class="toolbar-button" id="back" type="button" ${state.navDepth > 0 ? '' : 'disabled'} title="Back to the previously viewed position">← Back</button>
+          <button class="toolbar-button ${state.debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${state.debug}">Debug</button>
           <button class="icon-button" id="flip" type="button" aria-label="Flip all boards" title="Flip all boards">⇅</button>
         </div>
       </header>
@@ -194,6 +246,7 @@ function renderShell(scene) {
             <h1>${escapeHtml(opening?.name ?? 'Explore from here')}</h1>
             <div class="position-stats">
               ${total ? `<span>${compactGames(total)} games</span>` : '<span>no cached games yet</span>'}
+              <span>${turn} to move</span>
               ${other >= 0.005 ? `<span>other moves · ${percent(other)}</span>` : ''}
             </div>
           </div>
@@ -202,27 +255,40 @@ function renderShell(scene) {
         </div>
         <div id="satellites"></div>
         ${state.error ? `<div class="toast">${escapeHtml(state.error)}</div>` : ''}
+        ${debugDrawerHtml()}
       </section>
     </main>
   `;
 
-  const centerEl = document.querySelector('#center-board');
-  const turn = state.center.split(' ')[1] === 'b' ? 'black' : 'white';
-  const centerApi = Chessground(centerEl, {
-    fen: toPlayableFen(state.center),
+  debugLog('center board render', {
+    position: boardPosition,
+    turn,
     orientation: state.orientation,
+    legalOrigins: legalDestinations(boardPosition).size,
+    navDepth: state.navDepth,
+  });
+
+  const centerEl = document.querySelector('#center-board');
+  const centerApi = Chessground(centerEl, {
+    fen: toPlayableFen(boardPosition),
+    orientation: state.orientation,
+    turnColor: turn,
     coordinates: true,
     animation: { enabled: true, duration: 180 },
     movable: {
       free: false,
       color: turn,
-      dests: legalDestinations(state.center),
+      dests: legalDestinations(boardPosition),
       showDests: true,
       events: {
         after: async (from, to) => {
-          const result = await ensureManualEdge(state.center, from, to, 'q');
+          debugLog('board move event', { source: boardPosition, turn, from, to });
+          const result = await ensureManualEdge(boardPosition, from, to, 'q');
           if (result) recenter(result.target, { pushHistory: true });
-          else render();
+          else {
+            debugLog('board move reverted', { source: boardPosition, from, to }, 'warn');
+            render();
+          }
         },
       },
     },
@@ -232,12 +298,20 @@ function renderShell(scene) {
   });
   state.boardApis.push(centerApi);
 
+  document.querySelector('#back')?.addEventListener('click', () => {
+    if (state.navDepth <= 0) return;
+    debugLog('navigation back', { from: state.center, navDepth: state.navDepth });
+    history.back();
+  });
+
   document.querySelector('#flip').addEventListener('click', () => {
     state.orientation = state.orientation === 'white' ? 'black' : 'white';
     localStorage.setItem('chessview.orientation', state.orientation);
+    debugLog('orientation changed', { orientation: state.orientation });
     render();
   });
 
+  bindDebugControls();
   renderSatellites(scene);
 }
 
@@ -264,7 +338,10 @@ function renderSatellites(scene) {
       <span class="mini-board board-frame"></span>
       ${node.opening?.name ? `<span class="opening-label">${escapeHtml(node.opening.name)}</span>` : ''}
     `;
-    wrapper.addEventListener('click', () => recenter(item.key, { pushHistory: true }));
+    wrapper.addEventListener('click', () => {
+      debugLog('satellite selected', { relation: item.relation, move: item.edge?.san ?? null, target: item.key });
+      recenter(item.key, { pushHistory: true });
+    });
     host.appendChild(wrapper);
 
     const boardEl = wrapper.querySelector('.mini-board');
@@ -327,6 +404,7 @@ async function render() {
     state.scene = scene;
     renderShell(scene);
   } catch (error) {
+    debugLog('render failed', error, 'error');
     state.error = error?.message ?? 'Could not render the opening map.';
     const fallback = { selected: [], nodes: new Map([[state.center, { key: state.center }]]) };
     renderShell(fallback);
@@ -334,45 +412,64 @@ async function render() {
 }
 
 async function refreshDiscovery() {
-  const generation = state.generation;
+  const requestedCenter = state.center;
   state.loading = true;
   state.error = '';
+  debugLog('refresh discovery', { center: requestedCenter, budget: boardBudget() });
   render();
   try {
-    await discoverForViewport(state.center, boardBudget(), () => {
-      if (generation <= state.generation) render();
+    await discoverForViewport(requestedCenter, boardBudget(), () => {
+      if (requestedCenter === state.center) render();
     });
   } catch (error) {
-    state.error = error?.message ?? 'Lichess Opening Explorer is temporarily unavailable.';
+    debugLog('discovery failed', { center: requestedCenter, error: error?.message ?? String(error) }, 'error');
+    if (requestedCenter === state.center) {
+      state.error = error?.message ?? 'Lichess Opening Explorer is temporarily unavailable.';
+    }
   } finally {
-    state.loading = false;
-    render();
+    if (requestedCenter === state.center) {
+      state.loading = false;
+      render();
+    }
   }
 }
 
 async function recenter(key, { pushHistory = false } = {}) {
   const next = canonicalPosition(key);
   if (next === state.center) return;
+  const previous = state.center;
   state.center = next;
   state.error = '';
-  if (pushHistory) history.pushState({ fen: next }, '', positionUrl(next));
-  else history.replaceState({ fen: next }, '', positionUrl(next));
+  if (pushHistory) {
+    state.navDepth += 1;
+    history.pushState({ fen: next, cvDepth: state.navDepth }, '', positionUrl(next));
+  } else {
+    history.replaceState({ fen: next, cvDepth: state.navDepth }, '', positionUrl(next));
+  }
+  debugLog('recenter', { from: previous, to: next, pushHistory, navDepth: state.navDepth });
   await render();
   refreshDiscovery();
 }
 
-window.addEventListener('popstate', () => {
+window.addEventListener('popstate', (event) => {
+  const previous = state.center;
   state.center = positionFromUrl();
+  state.navDepth = Number.isFinite(event.state?.cvDepth) ? event.state.cvDepth : 0;
+  state.error = '';
+  debugLog('popstate', { from: previous, to: state.center, navDepth: state.navDepth });
   render().then(refreshDiscovery);
 });
 
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(render, 120);
+  resizeTimer = setTimeout(() => {
+    debugLog('viewport resized', { width: window.innerWidth, height: window.innerHeight, budget: boardBudget() });
+    render();
+  }, 120);
 });
 
-history.replaceState({ fen: state.center }, '', positionUrl(state.center));
+history.replaceState({ fen: state.center, cvDepth: state.navDepth }, '', positionUrl(state.center));
 await render();
-loadExplorer(state.center).catch(() => {});
+loadExplorer(state.center).catch((error) => debugLog('initial explorer preload failed', error, 'warn'));
 refreshDiscovery();

@@ -27,12 +27,23 @@ and has not established another task branch. Skills with stricter write contract
 keep those stricter contracts; in particular, `distill-history` may rewrite only
 an explicitly authorized named non-`main` task branch.
 
+## Default branch workflow
+
+`branch-preview.md` owns Chessview's compact branch-development lifecycle and
+its conversational commands:
+
+`branch -> implement -> preview -> review -> distill -> merge -> cleanup`
+
+It is intentionally project-local for now. `chessview-gpt.md` owns policy and
+authorization, while `.github/workflows/` owns executable CI and deployment
+behavior.
+
 ## Bootstrap
 
 ChatGPT Project Instructions are bootstrap only. They should establish the
 project, the work ref, and the two policy refs, then point at the repository-owned
-adapter. Do not copy rule bodies, skill procedures, GitHub mechanics, or Assay
-procedure into the Project Instructions.
+adapter. Do not copy rule bodies, skill procedures, GitHub mechanics, Assay
+procedure, or the branch workflow into the Project Instructions.
 
 Use:
 

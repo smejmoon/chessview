@@ -37,6 +37,13 @@ function cleanCallbackUrl() {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+function clearAuthTransaction({ cleanUrl = false } = {}) {
+  sessionStorage.removeItem(VERIFIER_KEY);
+  sessionStorage.removeItem(STATE_KEY);
+  sessionStorage.removeItem(REDIRECT_KEY);
+  if (cleanUrl) history.replaceState(history.state, '', cleanCallbackUrl());
+}
+
 export function getLichessAccessToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -79,7 +86,7 @@ export async function completeLichessAuth() {
 
   if (oauthError) {
     const description = params.get('error_description') || oauthError;
-    history.replaceState(history.state, '', cleanCallbackUrl());
+    clearAuthTransaction({ cleanUrl: true });
     debugLog('lichess auth denied', { error: oauthError, description }, 'warn');
     throw new Error(`Lichess sign-in failed: ${description}`);
   }
@@ -91,7 +98,8 @@ export async function completeLichessAuth() {
 
   if (!verifier || !expectedState || !returnedState || returnedState !== expectedState) {
     debugLog('lichess auth state mismatch', { hasVerifier: Boolean(verifier), hasExpectedState: Boolean(expectedState) }, 'error');
-    throw new Error('Could not verify the Lichess sign-in response. Please try signing in again.');
+    clearAuthTransaction({ cleanUrl: true });
+    throw new Error('Could not verify the Lichess sign-in response. Reload to sign in again.');
   }
 
   const body = new URLSearchParams({
@@ -103,30 +111,38 @@ export async function completeLichessAuth() {
   });
 
   debugLog('lichess token exchange', { redirectUri, clientId: CLIENT_ID });
-  const response = await fetch(`${LICHESS_HOST}/api/token`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body,
-  });
+  let response;
+  try {
+    response = await fetch(`${LICHESS_HOST}/api/token`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    });
+  } catch (error) {
+    clearAuthTransaction({ cleanUrl: true });
+    debugLog('lichess token exchange network failure', error, 'error');
+    throw new Error('Lichess sign-in token exchange failed. Reload to sign in again.');
+  }
 
   if (!response.ok) {
     let detail = '';
     try { detail = (await response.text()).slice(0, 300); } catch {}
+    clearAuthTransaction({ cleanUrl: true });
     debugLog('lichess token exchange failed', { status: response.status, detail }, 'error');
-    throw new Error(`Lichess sign-in token exchange returned ${response.status}`);
+    throw new Error(`Lichess sign-in token exchange returned ${response.status}. Reload to sign in again.`);
   }
 
   const token = await response.json();
-  if (!token?.access_token) throw new Error('Lichess sign-in did not return an access token.');
+  if (!token?.access_token) {
+    clearAuthTransaction({ cleanUrl: true });
+    throw new Error('Lichess sign-in did not return an access token. Reload to sign in again.');
+  }
 
   localStorage.setItem(TOKEN_KEY, token.access_token);
-  sessionStorage.removeItem(VERIFIER_KEY);
-  sessionStorage.removeItem(STATE_KEY);
-  sessionStorage.removeItem(REDIRECT_KEY);
-  history.replaceState(history.state, '', cleanCallbackUrl());
+  clearAuthTransaction({ cleanUrl: true });
   debugLog('lichess auth complete', { tokenType: token.token_type ?? 'Bearer', scope: token.scope ?? '' });
   return token.access_token;
 }

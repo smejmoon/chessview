@@ -9,6 +9,7 @@ Build a static, browser-only chess opening explorer where a canonical chess posi
 - Large playable central Chessground board.
 - Miniature Chessground boards for navigation only.
 - Rated standard Lichess Opening Explorer is the statistical source.
+- Live Explorer access uses the visitor's Lichess authorization through browser OAuth2 Authorization Code + PKCE; no client secret or personal token is shipped in the static bundle.
 - No engine analysis in v1.
 - Graph nodes are canonical chess positions; every edge is exactly one legal move.
 - Position identity includes pieces, side to move, castling rights, and only relevant en-passant state; halfmove/fullmove counters are ignored.
@@ -32,24 +33,29 @@ Build a static, browser-only chess opening explorer where a canonical chess posi
 - `chess.js` owns legal move generation and FEN handling.
 - `chessground` renders the playable center board and navigation mini-boards.
 - IndexedDB stores nodes, edges, and explorer metadata.
-- The browser calls `https://explorer.lichess.ovh/lichess` directly.
+- The browser authenticates with Lichess using OAuth2 Authorization Code + PKCE and calls `https://explorer.lichess.org/lichess` with the resulting bearer token.
+- OAuth callback parameters and PKCE transaction state are consumed on both success and terminal callback failure so a reload can start a clean sign-in.
+- Explorer network requests are globally serialized. After HTTP 429, all new Explorer requests pause for at least 60 seconds before resuming; obsolete discovery work is cancelled when the viewed center changes.
 - GitHub Actions builds and deploys `dist/` to GitHub Pages.
 
 ## Graph discovery model
 
 1. Load/recover the center position from the URL.
 2. Merge the center into IndexedDB by canonical position key.
-3. Fetch Opening Explorer statistics for the center when stale/missing.
-4. Add legal explorer continuations as graph edges, merging child positions by canonical key.
-5. Mark moves >= 5% as auto-expandable when the source sample is >= the configured sample floor.
-6. Recursively inspect qualifying branches only while useful slots remain. This keeps the rule local to each source position rather than cumulative from the center.
-7. Build the visible neighborhood from:
+3. Complete or initiate the visitor's Lichess OAuth2 PKCE authorization when no usable access token exists.
+4. Fetch Opening Explorer statistics for the center when stale/missing through the global serialized request gate.
+5. Reconcile the source position's Explorer-derived edge set against the latest response, deleting stale automatic edges while preserving explicitly explored/manual edges.
+6. Add legal explorer continuations as graph edges, merging child positions by canonical key.
+7. Mark moves >= 5% as auto-expandable when the source sample is >= the configured sample floor.
+8. Recursively inspect qualifying branches only while useful slots remain. This keeps the rule local to each source position rather than cumulative from the center.
+9. Stop obsolete discovery when the user recenters. If Lichess returns HTTP 429, stop branch discovery and hold all subsequent Explorer network traffic for at least one minute.
+10. Build the visible neighborhood from:
    - known incoming positions,
    - branch-balanced outgoing continuations,
    - useful deeper descendants,
    - siblings/cousins reachable through known parents,
    - merged transpositions already discovered.
-8. Render a layered directional map and keep stable branch ordering from persisted/local layout hints.
+11. Render a layered directional map and keep stable branch ordering from persisted/local layout hints.
 
 ## Branch-balanced selection
 
@@ -64,8 +70,9 @@ Build a static, browser-only chess opening explorer where a canonical chess posi
 - Automatic expansion sample floor: initially `80` games.
 - Surrounding-board budget: responsive, capped at `19`.
 - Explorer cache TTL: 24 hours.
+- Explorer 429 cooldown: at least 60 seconds.
 
-These are implementation constants rather than product commitments, except for the 5% local threshold.
+These are implementation constants rather than product commitments, except for the 5% local threshold. The request-serialization and 429 cooldown behavior follows Lichess API requirements rather than product tuning.
 
 ## Test plan
 
@@ -76,21 +83,28 @@ Deterministic unit tests cover:
 - transposition merge behavior;
 - local 5% qualification;
 - branch-balanced selection determinism and capacity limits;
-- URL round-tripping.
+- URL round-tripping;
+- OAuth callback success and terminal-failure cleanup;
+- expired-token / HTTP 401 handling;
+- global Explorer request serialization and 60-second 429 cooldown;
+- cancellation of stale discovery work;
+- Explorer edge reconciliation, including stale automatic-edge removal and manual-edge preservation.
 
 Manual/real-data verification should include:
 
 - a broad opening such as the initial position / common king-pawn openings;
 - a narrow forcing line where local percentages stay high at successive nodes;
-- a practical transposition, e.g. positions reachable by different move orders in common Indian/English structures.
+- a practical transposition, e.g. positions reachable by different move orders in common Indian/English structures;
+- an authenticated fresh browser session and an expired/revoked authorization session;
+- real navigation after a rate-limit response to confirm the UI remains usable from cached data during cooldown.
 
 ## Delivery sequence
 
 1. Establish project/build/deploy scaffolding.
 2. Implement canonical chess-state and graph persistence primitives.
-3. Implement Lichess explorer client and progressive graph discovery.
+3. Implement Lichess OAuth2 PKCE authorization, Explorer client, request pacing, and progressive graph discovery.
 4. Implement branch-balanced neighborhood selection.
 5. Build Chessground center-board interaction and mini-board navigation.
 6. Add directional spatial layout, edges, labels, omitted-share annotation, orientation control, responsive sizing, and transitions.
-7. Add deterministic tests.
+7. Add deterministic tests for graph, auth, persistence, and Explorer request-control behavior.
 8. Verify production build through CI and adjust any build/runtime issues.

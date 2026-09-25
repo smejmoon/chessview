@@ -109,6 +109,18 @@ commit boundaries mostly reflect execution mechanics rather than durable changes
 but only when the work is on a named non-`main` task branch that the skill is
 allowed to rewrite.
 
+## Default development workflow
+
+For feature work that benefits from seeing a deployed result before production,
+load and follow `chatgpt/branch-preview.md` from the Chessview project-policy
+ref. It owns the compact lifecycle and command meanings for branch work:
+
+`branch -> implement -> preview -> review -> distill -> merge -> cleanup`
+
+The workflow is a project-local convention, not a Strake skill. This adapter
+continues to own authorization, policy refs, and skill routing; `.github/workflows/`
+continues to own executable CI and deployment behavior.
+
 ## Fresh evidence for reviews and audits
 
 Special review workflows must begin from fresh repository state. Re-resolve the

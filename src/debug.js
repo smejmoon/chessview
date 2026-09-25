@@ -2,7 +2,8 @@ const STORAGE_KEY = 'chessview.debug';
 const MAX_ENTRIES = 160;
 const entries = [];
 
-let enabled = localStorage.getItem(STORAGE_KEY) === '1';
+const storage = globalThis.localStorage;
+let enabled = storage?.getItem(STORAGE_KEY) === '1';
 
 function normalizeDetail(detail) {
   if (detail == null) return null;
@@ -41,7 +42,7 @@ export function isDebugEnabled() {
 
 export function setDebugEnabled(value) {
   enabled = Boolean(value);
-  localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0');
+  storage?.setItem(STORAGE_KEY, enabled ? '1' : '0');
   debugLog(enabled ? 'debug enabled' : 'debug disabled');
   return enabled;
 }
@@ -62,9 +63,11 @@ export function debugText() {
   }).join('\n');
 }
 
-window.chessviewDebug = {
-  get enabled() { return enabled; },
-  entries: getDebugEntries,
-  text: debugText,
-  clear: clearDebugLog,
-};
+if (typeof window !== 'undefined') {
+  window.chessviewDebug = {
+    get enabled() { return enabled; },
+    entries: getDebugEntries,
+    text: debugText,
+    clear: clearDebugLog,
+  };
+}

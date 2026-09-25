@@ -143,37 +143,32 @@ function disposeBoards() {
 
 function layoutPositions(items) {
   const positions = new Map();
-  if (state.view === 'lines') {
-    const direct = items.filter((item) => item.distance === 1);
-    const deeper = items.filter((item) => item.distance > 1);
-    direct.forEach((item, index) => {
-      const x = direct.length === 1 ? 50 : 16 + (68 * index) / Math.max(1, direct.length - 1);
-      positions.set(item.key, { x, y: 75, tier: 1 });
-    });
-    const byDepth = new Map();
-    deeper.forEach((item) => {
-      if (!byDepth.has(item.distance)) byDepth.set(item.distance, []);
-      byDepth.get(item.distance).push(item);
-    });
-    for (const [depth, level] of byDepth) {
-      level.forEach((item, index) => {
-        const x = level.length === 1 ? 50 : 12 + (76 * index) / Math.max(1, level.length - 1);
-        positions.set(item.key, { x, y: Math.min(92, 76 + (depth - 1) * 9), tier: 2 });
-      });
-    }
-  } else {
-    const byDepth = new Map();
-    items.forEach((item) => {
-      if (!byDepth.has(item.distance)) byDepth.set(item.distance, []);
-      byDepth.get(item.distance).push(item);
-    });
-    for (const [depth, level] of byDepth) {
-      level.forEach((item, index) => {
-        const x = level.length === 1 ? 50 : 13 + (74 * index) / Math.max(1, level.length - 1);
-        positions.set(item.key, { x, y: Math.max(10, 53 - depth * 17), tier: depth === 1 ? 1 : 2 });
-      });
-    }
+  if (!items.length) return positions;
+
+  const levels = new Map();
+  for (const item of items) {
+    if (!levels.has(item.distance)) levels.set(item.distance, []);
+    levels.get(item.distance).push(item);
   }
+
+  const maxDepth = Math.max(...levels.keys());
+  const centerX = state.view === 'roots' ? 74 : 26;
+  const edgeX = state.view === 'roots' ? 8 : 92;
+
+  for (const [depth, level] of [...levels.entries()].sort((a, b) => a[0] - b[0])) {
+    const progress = depth / Math.max(1, maxDepth);
+    const x = centerX + (edgeX - centerX) * progress;
+    const count = level.length;
+    const yStart = count <= 1 ? 50 : 12;
+    const yEnd = count <= 1 ? 50 : 88;
+
+    level.forEach((item, index) => {
+      const y = count <= 1 ? 50 : yStart + ((yEnd - yStart) * index) / Math.max(1, count - 1);
+      const tier = depth === 1 && count <= 4 ? 1 : 2;
+      positions.set(item.key, { x, y, tier });
+    });
+  }
+
   return positions;
 }
 
@@ -215,15 +210,20 @@ function railExplorerHtml(scene) {
       </button>`).join('')}</div>`;
   }
 
-  const edges = scene.incomingEdges.slice().sort((a, b) => (b.games ?? 0) - (a.games ?? 0) || (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci));
-  if (!edges.length) return `<div class="rail-empty">No known Roots yet. Roots grow as Chessview discovers positions through Lines.</div>`;
-  return `<div class="explorer-list">${edges.slice(0, 14).map((edge) => {
-    const node = scene.nodes.get(edge.source) ?? {};
+  const ancestry = scene.selected
+    .slice()
+    .sort((a, b) => a.distance - b.distance || (b.edge?.games ?? 0) - (a.edge?.games ?? 0) || a.key.localeCompare(b.key));
+  if (!ancestry.length) return `<div class="rail-empty">No known Roots yet. Roots grow as Chessview discovers positions through Lines.</div>`;
+
+  return `<div class="explorer-list">${ancestry.map((item) => {
+    const edge = item.edge ?? {};
+    const node = scene.nodes.get(item.key) ?? {};
     return `
-      <button class="explorer-row roots-row" type="button" data-nav-key="${escapeHtml(edge.source)}">
-        <span class="explorer-move">${escapeHtml(edge.san ?? edge.uci)}</span>
+      <button class="explorer-row roots-row" type="button" data-nav-key="${escapeHtml(item.key)}">
+        <span class="root-depth">${item.distance === 1 ? 'root' : `−${item.distance}`}</span>
+        <span class="explorer-move">${escapeHtml(edge.san ?? edge.uci ?? '')}</span>
         <span class="root-name">${escapeHtml(node.opening?.name ?? 'known position')}</span>
-        <span class="explorer-share">${edge.share ? percent(edge.share) : 'root'}</span>
+        <span class="explorer-share">${edge.share ? percent(edge.share) : ''}</span>
         <span class="explorer-games">${edge.games ? compactGames(edge.games) : ''}</span>
       </button>`;
   }).join('')}</div>`;
@@ -278,7 +278,7 @@ function renderShell(scene) {
   const opening = centerNode.opening;
   const boardPosition = state.center;
   const turn = boardPosition.split(' ')[1] === 'b' ? 'black' : 'white';
-  const rootCount = scene.incomingEdges.length;
+  const rootCount = state.view === 'roots' ? scene.selected.length : scene.incomingEdges.length;
   const lineCount = (scene.outgoingBySource.get(state.center) ?? []).filter((edge) => edge.qualifies || edge.manual).length;
 
   app.innerHTML = `
@@ -316,13 +316,13 @@ function renderShell(scene) {
           </div>
 
           <div class="mode-tabs" role="tablist" aria-label="Graph direction">
-            <button id="roots-tab" class="mode-tab ${state.view === 'roots' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.view === 'roots'}">Roots <small>${rootCount}</small></button>
+            <button id="roots-tab" class="mode-tab ${state.view === 'roots' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.view === 'roots'}">Roots <small>${rootCount || ''}</small></button>
             <button id="lines-tab" class="mode-tab ${state.view === 'lines' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.view === 'lines'}">Lines <small>${lineCount || ''}</small></button>
           </div>
 
           <section class="rail-explorer">
             <div class="rail-section-head">
-              <div><strong>${state.view === 'roots' ? 'Known Roots' : 'Opening Explorer'}</strong><small>${state.view === 'roots' ? `${scene.selected.length} positions in known ancestry` : 'moves from this position'}</small></div>
+              <div><strong>${state.view === 'roots' ? 'Root Explorer' : 'Opening Explorer'}</strong><small>${state.view === 'roots' ? `${scene.selected.length} known positions · ${scene.incomingEdges.length} direct ${scene.incomingEdges.length === 1 ? 'Root' : 'Roots'}` : 'moves from this position'}</small></div>
             </div>
             ${railExplorerHtml(scene)}
           </section>
@@ -428,9 +428,10 @@ function drawEdges(scene) {
     const y1 = a.top + a.height / 2 - mapRect.top;
     const x2 = b.left + b.width / 2 - mapRect.left;
     const y2 = b.top + b.height / 2 - mapRect.top;
-    const bend = Math.max(26, Math.abs(y2 - y1) * 0.32);
+    const horizontal = x2 >= x1 ? 1 : -1;
+    const bend = Math.max(28, Math.abs(x2 - x1) * 0.36);
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${y1 + (y2 > y1 ? bend : -bend)}, ${x2} ${y2 - (y2 > y1 ? bend : -bend)}, ${x2} ${y2}`);
+    path.setAttribute('d', `M ${x1} ${y1} C ${x1 + horizontal * bend} ${y1}, ${x2 - horizontal * bend} ${y2}, ${x2} ${y2}`);
     path.setAttribute('class', strong ? 'edge edge-strong' : 'edge');
     svg.appendChild(path);
   };

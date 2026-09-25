@@ -1,3 +1,13 @@
+function abortError() {
+  const error = new Error('The operation was aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw abortError();
+}
+
 export function createRequestGate({
   fetchImpl = (...args) => fetch(...args),
   now = () => Date.now(),
@@ -9,15 +19,17 @@ export function createRequestGate({
   let cooldownUntil = 0;
   let lastRequestAt = 0;
 
-  async function waitForWindow() {
+  async function waitForWindow(signal) {
+    throwIfAborted(signal);
     const current = now();
     const nextAllowedAt = Math.max(cooldownUntil, lastRequestAt + minIntervalMs);
     if (nextAllowedAt > current) await sleep(nextAllowedAt - current);
+    throwIfAborted(signal);
   }
 
-  function run(input, init) {
+  function run(input, init = {}) {
     const execute = async () => {
-      await waitForWindow();
+      await waitForWindow(init.signal);
       lastRequestAt = now();
       const response = await fetchImpl(input, init);
       if (response?.status === 429) {

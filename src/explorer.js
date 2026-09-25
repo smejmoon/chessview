@@ -12,11 +12,10 @@ import {
 import { getNode, getOutgoing, putEdges, putNode, replaceExplorerEdges } from './db.js';
 import { debugLog } from './debug.js';
 import { clearLichessAccessToken, requireLichessAccessToken } from './auth.js';
-import { createRequestGate } from './request-gate.js';
+import { lichessGateway } from './lichess-gateway.js';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
 const inFlight = new Map();
-const requestGate = createRequestGate();
 
 function explorerUrl(key) {
   const url = new URL(ENDPOINT);
@@ -34,7 +33,7 @@ function httpError(status, message) {
   return error;
 }
 
-export async function loadExplorer(key, { force = false } = {}) {
+export async function loadExplorer(key, { force = false, signal } = {}) {
   const canonical = canonicalPosition(key);
   const cached = await getNode(canonical);
   const fresh = cached?.explorer && Date.now() - (cached.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS;
@@ -54,7 +53,8 @@ export async function loadExplorer(key, { force = false } = {}) {
 
     let response;
     try {
-      response = await requestGate.run(url, {
+      response = await lichessGateway.request(url, {
+        signal,
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
@@ -75,7 +75,7 @@ export async function loadExplorer(key, { force = false } = {}) {
         throw httpError(401, 'Lichess authorization expired. Reload to sign in again.');
       }
       if (response.status === 429) {
-        const retryAfterMs = Math.max(0, requestGate.cooldownUntil - Date.now());
+        const retryAfterMs = Math.max(0, lichessGateway.cooldownUntil - Date.now());
         debugLog('explorer cooldown started', { retryAfterMs }, 'warn');
         throw httpError(429, 'Lichess explorer is rate-limited. Requests are paused for one minute.');
       }
@@ -172,7 +172,7 @@ export async function discoverForViewport(centerKey, budget, onProgress, { signa
   debugLog('discovery start', { center, budget });
   if (signal?.aborted) return null;
 
-  const centerNode = await loadExplorer(center);
+  const centerNode = await loadExplorer(center, { signal });
   if (signal?.aborted) return centerNode;
   onProgress?.();
 
@@ -189,7 +189,7 @@ export async function discoverForViewport(centerKey, budget, onProgress, { signa
     const known = await getNode(item.key);
     if ((known?.games ?? Infinity) < AUTO_SAMPLE_FLOOR && known?.explorer) continue;
     try {
-      const node = await loadExplorer(item.key);
+      const node = await loadExplorer(item.key, { signal });
       if (signal?.aborted) break;
       inspected += 1;
       onProgress?.();

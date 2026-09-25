@@ -22,6 +22,7 @@ Failure of supplementary evidence reduces richness rather than structural usabil
   - under `0.5` pawn loss: strong;
   - `0.5` to under `1.0`: dubious;
   - `1.0+`: bad.
+- Connector color is a move-quality channel only: strong moves use green, dubious moves amber, bad moves red, and unavailable/unknown evaluation stays neutral. Engine quality must not alter connector thickness.
 
 ## Human evidence
 
@@ -46,6 +47,7 @@ Root rarity is separate from move quality and does not reuse the green/amber/red
 - Root moves below 1% are very rare.
 - Synthetic/manual zero-share edges and tiny source samples do not establish rarity.
 - Rarity presentation may use a diamond, reduced emphasis, and dashed connectors; the stronger treatment applies to very rare Roots.
+- Rarity may change dash/opacity but does not change connector color or the Line-popularity width channel.
 
 ## Tunables
 
@@ -69,6 +71,7 @@ Deterministic tests should cover:
 - Root rarity thresholds and evidence gating;
 - request-failure values remaining distinct from genuine missing evidence;
 - consumer/presentation state keeping request failure distinct from ordinary unavailable or no-mismatch evidence;
+- connector quality decoration changing color without overriding Line-popularity width;
 - supplementary evidence completing, failing, or arriving late without blocking or reopening successful structural readiness.
 
 Manual verification should include positions with both common and rare Root move orders and positions where Masters, rated Lichess, and engine evidence disagree in useful ways. It should also confirm that failed Masters or cloud-eval requests show an unavailable indicator rather than the ordinary no-data/no-mismatch state while leaving an otherwise established graph globally settled.

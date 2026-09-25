@@ -124,8 +124,9 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
   const branchQueues = [];
   for (const root of roots) {
     if (selected.length >= max) break;
-    push({ key: root.target, edge: root, relation: 'outgoing', distance: 1, branch: root.uci });
-    branchQueues.push({ branch: root.uci, current: root.target, distance: 1 });
+    const lineShare = root.share ?? 0;
+    push({ key: root.target, edge: root, relation: 'outgoing', distance: 1, branch: root.uci, lineShare });
+    branchQueues.push({ branch: root.uci, lineShare, current: root.target, distance: 1 });
   }
 
   let progressed = true;
@@ -147,6 +148,7 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
         relation: 'descendant',
         distance: queue.distance,
         branch: queue.branch,
+        lineShare: queue.lineShare,
       }) || progressed;
     }
   }

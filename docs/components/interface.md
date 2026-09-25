@@ -10,6 +10,9 @@ Own Chessview's position-centered navigation model and spatial presentation.
 - Surrounding positions are smaller Chessground boards used for navigation rather than direct play.
 - Root boards sit to the left of the current position; Line boards sit to the right.
 - Root move cues point toward the current position; Line move cues identify the move that produced the displayed child position.
+- In Lines view, connector thickness encodes the first move's rated-Explorer share from the current center. Every deeper segment belonging to that Line inherits the same thickness; deeper local move shares do not change it.
+- Connector color does not encode popularity. It is reserved for per-edge move-quality evidence when available, while a connector without usable evaluation stays neutral.
+- Root rarity remains a separate dash/opacity treatment and does not reuse Line thickness.
 - Siblings, cousins, and merged transpositions may occupy lateral context where useful without changing Root/Line direction semantics.
 - The right-side control and evidence surface is the Rail.
 - Clicking a miniature board recenters immediately.
@@ -45,6 +48,7 @@ Deterministic/browser contract tests should cover:
 - Root-left / Line-right directional semantics;
 - global orientation behavior;
 - stable identity between rendered positions/connectors and their graph edges;
+- Line descendants inheriting the first move's center share for connector-width semantics;
 - current-view settlement waiting for every critical structural contributor;
 - supplementary evidence hydration not blocking or reopening a successfully settled structural view;
 - stale work from an obsolete generation being unable to settle the current view;
@@ -52,4 +56,4 @@ Deterministic/browser contract tests should cover:
 - critical structural failure ending loading without showing the normal success-style settled state;
 - supplementary request failures remaining locally visible without downgrading structural readiness.
 
-Manual verification should include dense Root and Line neighborhoods, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. For network-backed structural navigation it should confirm `Updating…` → `Ready` → subtle check; cached structural navigation that settles inside the delay should skip `Updating…` and still acknowledge `Ready` before fading to the check. Supplementary evidence should be allowed to appear afterward without reopening the global loading state.
+Manual verification should include dense Root and Line neighborhoods, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. It should confirm that every segment of one Line keeps the same popularity thickness even when deeper local move percentages differ, while quality color may change edge by edge. For network-backed structural navigation it should confirm `Updating…` → `Ready` → subtle check; cached structural navigation that settles inside the delay should skip `Updating…` and still acknowledge `Ready` before fading to the check. Supplementary evidence should be allowed to appear afterward without reopening the global loading state.

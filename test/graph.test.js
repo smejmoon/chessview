@@ -74,6 +74,7 @@ test('branch-balanced neighborhood gives roots space before going deeper', () =>
 
   const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 4 });
   assert.deepEqual(selected.map((item) => item.key), ['a1', 'b1', 'a2', 'b2']);
+  assert.deepEqual(selected.map((item) => item.lineShare), [0.6, 0.3, 0.6, 0.3]);
   assert.equal(selected.length, 4);
 });
 

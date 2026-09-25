@@ -6,9 +6,9 @@ Finish browser composition so one application controller owns render/navigation 
 
 `audits/2026-09-25-17-30-00-gpt-5.6-sol-chatgpt.md`, finding “UI composition is an implicit multi-writer DOM protocol,” records the original shared-DOM coupling. `docs/components/interface.md` §Requirements, §Composition direction, and §Verification require stable Roots/Lines navigation, position-based history, stable graph-edge identity in presentation, explicit current-view settlement, and a single controller-owned render/navigation lifecycle.
 
-The lifecycle slice has landed: `src/main.js` is the single HTML application entrypoint, controller-issued View Cycle tokens/events coordinate structural settlement, and Root/evidence contributors no longer use `MutationObserver` to discover when a render occurred. Supplementary evidence no longer blocks global readiness or competes with Line discovery for Lichess transport; its UI hydration is generation-safe and progressive. Critical render/structure failure now terminates in an explicit degraded `Unavailable` state, and a failed center Explorer request degrades only when no persisted Explorer snapshot can establish the current Line structure.
+Current composition already has a single HTML application entrypoint and controller-issued View Cycle tokens/events for structural settlement. Supplementary evidence hydrates independently of readiness and Line discovery. Critical render/structure failure has an explicit degraded terminal state. Line neighborhood selection also now carries explicit inherited `lineShare` model state from the center move through descendants, so connector popularity width no longer has to be inferred from rendered labels.
 
-The remaining composition problem is narrower: Root/evidence code still derives relationships from DOM labels/order in several places, Rail navigation still synthesizes `popstate`, unexpected supplementary contributor exceptions can still be console-only at their local surface, and the real controller↔contributor seam still lacks automated contract coverage.
+The remaining composition problem is narrower: Root/evidence code still derives edge relationships from DOM labels/order in several places, connector-quality decoration still pairs path/satellite arrays by rendered index rather than stable edge identity, Rail navigation still synthesizes `popstate`, unexpected supplementary contributor exceptions can still be console-only at their local surface, and the real controller↔contributor seam still lacks automated contract coverage.
 
 # Edges:
 
@@ -20,7 +20,7 @@ Shared `LichessGateway` serialization/rate-limit policy remains outside this out
 
 # Unsettled:
 
-Choose the smallest stable node/edge keyed composition model that removes remaining DOM depth/label/index inference without creating a second hidden application state machine.
+Choose the smallest stable node/edge keyed composition model that removes the remaining DOM depth/label/index inference without creating a second hidden application state machine.
 
 Choose the smallest integration-test seam that exercises real controller/contributor settlement, superseded navigation, critical failure/recovery, history/recentering, supplementary evidence arriving after readiness, and stable edge association without turning the suite into pixel/layout snapshots or adding a browser harness unless one is earned.
 
@@ -36,7 +36,7 @@ Deterministic automated tests exercise the real product-critical composition bou
 
 # Steps:
 
-Define the stable node/edge keyed state passed from the controller to Root/evidence contributors and migrate remaining DOM relationship inference onto it.
+Define the remaining stable node/edge keyed state passed from the controller to Root/evidence contributors and migrate DOM relationship inference onto it.
 
 Replace synthetic navigation/lifecycle browser events with explicit controller APIs while preserving browser back/forward behavior.
 

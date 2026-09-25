@@ -18,6 +18,7 @@ import {
   stableEdgeOrder,
   toPlayableFen,
 } from './graph.js';
+import { lineStrokeWidth } from './edge-visual.js';
 import { getIncoming, getNode, getOutgoing } from './db.js';
 import { discoverForViewport, ensureManualEdge } from './explorer.js';
 import {
@@ -478,7 +479,7 @@ function drawEdges(scene) {
   svg.innerHTML = '';
   const elementFor = (key) => document.querySelector(`.position[data-key="${CSS.escape(key)}"]`);
 
-  const addLine = (sourceKey, targetKey, strong = false) => {
+  const addLine = (sourceKey, targetKey, lineShare = null) => {
     const source = elementFor(sourceKey);
     const target = elementFor(targetKey);
     if (!source || !target) return;
@@ -492,12 +493,13 @@ function drawEdges(scene) {
     const bend = Math.max(28, Math.abs(x2 - x1) * 0.36);
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', `M ${x1} ${y1} C ${x1 + horizontal * bend} ${y1}, ${x2 - horizontal * bend} ${y2}, ${x2} ${y2}`);
-    path.setAttribute('class', strong ? 'edge edge-strong' : 'edge');
+    path.setAttribute('class', 'edge');
+    if (state.view === 'lines') path.style.strokeWidth = `${lineStrokeWidth(lineShare)}px`;
     svg.appendChild(path);
   };
 
   for (const item of scene.selected) {
-    addLine(item.edge?.source ?? state.center, item.edge?.target ?? item.key, (item.edge?.share ?? 0) >= 0.2);
+    addLine(item.edge?.source ?? state.center, item.edge?.target ?? item.key, item.lineShare);
   }
 }
 

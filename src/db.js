@@ -79,9 +79,13 @@ export async function replaceExplorerEdges(source, edges) {
       const existing = cursor.value;
       const incoming = pending.get(existing.id);
       if (incoming) {
-        store.put({ ...incoming, manual: Boolean(existing.manual || incoming.manual) });
+        store.put({
+          ...incoming,
+          manual: Boolean(existing.manual || incoming.manual),
+          derived: Boolean(existing.derived || incoming.derived),
+        });
         pending.delete(existing.id);
-      } else if (!existing.manual) {
+      } else if (!existing.manual && !existing.derived) {
         cursor.delete();
       }
       cursor.continue();

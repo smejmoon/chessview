@@ -10,6 +10,7 @@ import {
   totalGames,
 } from './graph.js';
 import { getNode, getOutgoing, putEdges, putNode } from './db.js';
+import { debugLog } from './debug.js';
 
 const ENDPOINT = 'https://explorer.lichess.ovh/lichess';
 const inFlight = new Map();
@@ -28,12 +29,35 @@ export async function loadExplorer(key, { force = false } = {}) {
   const canonical = canonicalPosition(key);
   const cached = await getNode(canonical);
   const fresh = cached?.explorer && Date.now() - (cached.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS;
-  if (!force && fresh) return cached;
-  if (inFlight.has(canonical)) return inFlight.get(canonical);
+  if (!force && fresh) {
+    debugLog('explorer cache hit', { position: canonical, games: cached.games ?? 0 });
+    return cached;
+  }
+  if (inFlight.has(canonical)) {
+    debugLog('explorer request joined', { position: canonical });
+    return inFlight.get(canonical);
+  }
 
   const promise = (async () => {
-    const response = await fetch(explorerUrl(canonical), { headers: { Accept: 'application/json' } });
-    if (!response.ok) throw new Error(`Lichess explorer returned ${response.status}`);
+    const url = explorerUrl(canonical);
+    debugLog('explorer request', { position: canonical, url: url.toString() });
+
+    let response;
+    try {
+      response = await fetch(url, { headers: { Accept: 'application/json' } });
+    } catch (error) {
+      debugLog('explorer network error', { position: canonical, url: url.toString(), error: error?.message ?? String(error) }, 'error');
+      throw error;
+    }
+
+    debugLog('explorer response', { position: canonical, status: response.status, ok: response.ok });
+    if (!response.ok) {
+      let body = '';
+      try { body = (await response.text()).slice(0, 500); } catch {}
+      debugLog('explorer HTTP error', { position: canonical, status: response.status, body }, 'error');
+      throw new Error(`Lichess explorer returned ${response.status}`);
+    }
+
     const explorer = await response.json();
     const node = {
       ...(cached ?? {}),
@@ -69,13 +93,14 @@ export async function loadExplorer(key, { force = false } = {}) {
           key: child.key,
           fen: child.fen,
         });
-      } catch {
-        // Explorer should only return legal moves. Ignore malformed/stale entries defensively.
+      } catch (error) {
+        debugLog('ignored explorer move', { position: canonical, uci: move.uci, error: error?.message ?? String(error) }, 'warn');
       }
     }
 
     await putNode(node);
     await putEdges(edges);
+    debugLog('explorer stored', { position: canonical, games: node.games, edges: edges.length, qualifying: edges.filter((edge) => edge.qualifies).length });
     return node;
   })().finally(() => inFlight.delete(canonical));
 
@@ -86,12 +111,17 @@ export async function loadExplorer(key, { force = false } = {}) {
 export async function ensureManualEdge(sourceKey, from, to, promotion = 'q') {
   const chess = new Chess(toPlayableFen(sourceKey));
   let played;
+  debugLog('manual move attempt', { source: canonicalPosition(sourceKey), from, to, promotion, turn: chess.turn() });
   try {
     played = chess.move({ from, to, promotion });
-  } catch {
+  } catch (error) {
+    debugLog('manual move rejected', { source: canonicalPosition(sourceKey), from, to, error: error?.message ?? String(error) }, 'warn');
     return null;
   }
-  if (!played) return null;
+  if (!played) {
+    debugLog('manual move rejected', { source: canonicalPosition(sourceKey), from, to }, 'warn');
+    return null;
+  }
 
   const target = canonicalPosition(chess.fen());
   const edge = {
@@ -109,11 +139,13 @@ export async function ensureManualEdge(sourceKey, from, to, promotion = 'q') {
   await putEdges([edge]);
   const existing = await getNode(target);
   await putNode({ ...(existing ?? {}), key: target, fen: chess.fen() });
+  debugLog('manual move stored', { san: played.san, uci: edge.uci, source: edge.source, target });
   return { edge, target };
 }
 
 export async function discoverForViewport(centerKey, budget, onProgress) {
   const center = canonicalPosition(centerKey);
+  debugLog('discovery start', { center, budget });
   const centerNode = await loadExplorer(center);
   onProgress?.();
 
@@ -121,7 +153,6 @@ export async function discoverForViewport(centerKey, budget, onProgress) {
     .filter((edge) => edge.qualifies)
     .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci));
 
-  // Frontier is branch-balanced: one candidate per root branch at a time.
   const frontier = roots.map((edge) => ({ key: edge.target, branch: edge.uci, depth: 1 }));
   let inspected = 0;
   const requestBudget = Math.max(3, Math.min(14, budget));
@@ -138,13 +169,12 @@ export async function discoverForViewport(centerKey, budget, onProgress) {
       const next = (await getOutgoing(item.key))
         .filter((edge) => edge.qualifies)
         .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci));
-      // Favor narrow branches: enqueue only the strongest continuation initially.
-      // Other breadth remains persisted and can appear naturally after recentering.
       if (next[0]) frontier.push({ key: next[0].target, branch: item.branch, depth: item.depth + 1 });
-    } catch {
-      // Keep the already discovered map usable when the network or explorer is unavailable.
+    } catch (error) {
+      debugLog('branch discovery failed', { position: item.key, branch: item.branch, depth: item.depth, error: error?.message ?? String(error) }, 'warn');
     }
   }
 
+  debugLog('discovery complete', { center, inspected, roots: roots.length });
   return centerNode;
 }

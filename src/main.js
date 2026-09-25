@@ -15,7 +15,7 @@ import {
   toPlayableFen,
 } from './graph.js';
 import { getIncoming, getNode, getOutgoing } from './db.js';
-import { discoverForViewport, ensureManualEdge, loadExplorer } from './explorer.js';
+import { discoverForViewport, ensureManualEdge } from './explorer.js';
 import {
   clearDebugLog,
   debugLog,
@@ -38,6 +38,7 @@ const state = {
   generation: 0,
   navDepth: initialDepth,
   debug: isDebugEnabled(),
+  discoveryController: null,
 };
 
 debugLog('app start', { center: state.center, turn: state.center.split(' ')[1], navDepth: state.navDepth });
@@ -412,6 +413,9 @@ async function render() {
 }
 
 async function refreshDiscovery() {
+  state.discoveryController?.abort();
+  const controller = new AbortController();
+  state.discoveryController = controller;
   const requestedCenter = state.center;
   state.loading = true;
   state.error = '';
@@ -419,15 +423,16 @@ async function refreshDiscovery() {
   render();
   try {
     await discoverForViewport(requestedCenter, boardBudget(), () => {
-      if (requestedCenter === state.center) render();
-    });
+      if (!controller.signal.aborted && requestedCenter === state.center) render();
+    }, { signal: controller.signal });
   } catch (error) {
+    if (controller.signal.aborted) return;
     debugLog('discovery failed', { center: requestedCenter, error: error?.message ?? String(error) }, 'error');
     if (requestedCenter === state.center) {
       state.error = error?.message ?? 'Lichess Opening Explorer is temporarily unavailable.';
     }
   } finally {
-    if (requestedCenter === state.center) {
+    if (state.discoveryController === controller && requestedCenter === state.center) {
       state.loading = false;
       render();
     }
@@ -471,5 +476,4 @@ window.addEventListener('resize', () => {
 
 history.replaceState({ fen: state.center, cvDepth: state.navDepth }, '', positionUrl(state.center));
 await render();
-loadExplorer(state.center).catch((error) => debugLog('initial explorer preload failed', error, 'warn'));
 refreshDiscovery();

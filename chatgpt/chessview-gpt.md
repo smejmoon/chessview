@@ -21,10 +21,14 @@ A task branch never becomes authority for the policy governing its own work.
 Resolve repository evidence from the ref that owns it rather than silently
 substituting another ref.
 
-`docs/PLAN.md` at the Chessview project-policy ref is Chessview's product and
-implementation plan authority. Product terminology established there, including
-**Roots** and **Lines**, should be used consistently in product-facing work unless
-the human explicitly changes it.
+`docs/PLAN.md` at the Chessview project-policy ref is Chessview's plan entry
+point. It owns the product goal, canonical product terminology, cross-component
+commitments, and the component map. The `docs/components/` documents linked from
+the plan own detailed requirements, implementation choices, tunables, and
+verification in their scopes. Load the relevant component documents before work
+that may change their contracts. Product terminology established by the plan,
+including **Roots** and **Lines**, should be used consistently in product-facing
+work unless the human explicitly changes it.
 
 ## Composition
 
@@ -175,9 +179,9 @@ safely rewrite that history rather than weakening its contract.
 
 Chessview is a static browser application deployed by GitHub Actions to
 `gh-pages`. Its current stack and behavioral requirements are owned by repository
-sources, especially `docs/PLAN.md`, `README.md`, the source tree, tests, and the
-Pages workflow. Verify these sources from the relevant ref before making
-implementation claims.
+sources, especially `docs/PLAN.md`, the relevant `docs/components/` documents,
+`README.md`, the source tree, tests, and the Pages workflow. Verify these sources
+from the relevant ref before making implementation claims.
 
 Prefer small, reversible product iterations. Preserve canonical-position graph
 identity and transposition merging when changing visualization or navigation.

@@ -26,10 +26,11 @@ export function canonicalPosition(fen) {
 
 export function moveToChild(sourceKey, move) {
   const chess = new Chess(toPlayableFen(sourceKey));
+  const uciPromotion = move.uci?.slice(4) || undefined;
   const played = chess.move({
     from: move.from ?? move.uci?.slice(0, 2),
     to: move.to ?? move.uci?.slice(2, 4),
-    promotion: move.promotion ?? move.uci?.slice(4) || undefined,
+    promotion: move.promotion ?? uciPromotion,
   });
   if (!played) throw new Error(`Illegal move from graph source: ${move.uci ?? ''}`);
   return {
@@ -109,7 +110,6 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
     return true;
   };
 
-  // Preserve a small amount of learned incoming context.
   incoming
     .slice()
     .sort((a, b) => (b.games ?? 0) - (a.games ?? 0) || a.key.localeCompare(b.key))
@@ -121,7 +121,6 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
     .slice()
     .sort(stableEdgeOrder);
 
-  // Breadth first: each first-level branch gets one visible representative.
   const branchQueues = [];
   for (const root of roots) {
     if (selected.length >= max) break;
@@ -129,8 +128,6 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
     branchQueues.push({ branch: root.uci, current: root.target, distance: 1 });
   }
 
-  // Spare capacity follows qualifying lines round-robin. A branch with one strong
-  // continuation naturally reaches deeper without a bushy branch monopolizing slots.
   let progressed = true;
   while (selected.length < max && progressed) {
     progressed = false;

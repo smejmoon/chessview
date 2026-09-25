@@ -1,0 +1,22 @@
+{
+  "name": "chessview",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@lichess-org/chessground": "10.2.0",
+    "chess.js": "1.4.0"
+  },
+  "devDependencies": {
+    "vite": "8.3.1"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

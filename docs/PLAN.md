@@ -4,6 +4,17 @@
 
 Build a static, browser-only chess opening explorer where a canonical chess position is the center of a spatial graph and nearby positions are rendered as smaller chessboards. The map should make continuations, known incoming positions, siblings/cousins, and transpositions visually understandable without turning the experience into a move-list dashboard.
 
+## Product terminology
+
+Chessview uses **Roots** and **Lines** as the canonical user-facing terms for the two directions around the current position:
+
+- **Root** — a known position that reaches the current position by one legal move. A position may have multiple Roots when different move orders transpose into the same canonical position. When ancestry is expanded, the **Roots** view includes the upstream move-order tree feeding those immediate Roots.
+- **Line** — a known position reached from the current position by one legal move. Deeper continuation positions belong to that Line as it extends forward.
+- **Roots** therefore answer **“How can this position be reached?”**
+- **Lines** answer **“Where can play go from here?”**
+
+These are product/UI terms. Implementation code may still use graph terms such as `incoming` / `outgoing`, `source` / `target`, and predecessor / successor where those are clearer technically.
+
 ## Product requirements
 
 - Large playable central Chessground board.
@@ -19,7 +30,7 @@ Build a static, browser-only chess opening explorer where a canonical chess posi
 - Sub-5% moves are aggregated into an "other moves" share rather than expanded.
 - No arbitrary opening-depth cap; the practical bound is the local visible-board budget and sample floor.
 - Visible neighborhood uses a branch-balanced selection with a desktop maximum of 19 surrounding boards and smaller responsive budgets.
-- Known incoming nodes bias upward; outgoing nodes bias downward; siblings/cousins/transpositions can sit laterally.
+- Roots provide incoming context; Lines provide forward continuations; siblings/cousins/transpositions can sit laterally.
 - Clicking a miniature board recenters immediately.
 - Playing a legal move on the center recenters even when that move is below the auto-expansion threshold.
 - All visible boards share one global orientation with a flip control.
@@ -50,19 +61,19 @@ Build a static, browser-only chess opening explorer where a canonical chess posi
 8. Recursively inspect qualifying branches only while useful slots remain. This keeps the rule local to each source position rather than cumulative from the center.
 9. Stop obsolete discovery when the user recenters. If Lichess returns HTTP 429, stop branch discovery and hold all subsequent Explorer network traffic for at least one minute.
 10. Build the visible neighborhood from:
-   - known incoming positions,
-   - branch-balanced outgoing continuations,
-   - useful deeper descendants,
-   - siblings/cousins reachable through known parents,
+   - known Roots (incoming positions),
+   - branch-balanced Lines (outgoing continuations),
+   - useful deeper Line descendants,
+   - siblings/cousins reachable through known Roots,
    - merged transpositions already discovered.
 11. Render a layered directional map and keep stable branch ordering from persisted/local layout hints.
 
 ## Branch-balanced selection
 
-- Reserve some budget for known incoming context.
-- Give each qualifying first-level outgoing branch a fair first slot before spending extra capacity deeper.
-- Spend remaining capacity round-robin across branches, preferring narrow qualifying continuations before adding excessive breadth from one bushy branch.
-- Keep selection deterministic by stable move/key ordering so branches do not randomly swap sides after recentering.
+- Reserve some budget for known Root context.
+- Give each qualifying first-level Line a fair first slot before spending extra capacity deeper.
+- Spend remaining capacity round-robin across Lines, preferring narrow qualifying continuations before adding excessive breadth from one bushy branch.
+- Keep selection deterministic by stable move/key ordering so Lines do not randomly swap sides after recentering.
 
 ## Tunable v1 constants
 

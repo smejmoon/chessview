@@ -4,7 +4,7 @@ Replace the single-descendant-spine behavior in automatic Line discovery and nei
 
 # Because:
 
-`docs/PLAN.md`, “Graph discovery model” and “Branch-balanced selection,” require recursive inspection of qualifying branches while useful slots remain, a fair first slot for each first-level Line, and remaining capacity spent round-robin across Lines while preferring narrow qualifying continuations before excessive breadth.
+`docs/components/discovery.md` §Requirements and §Verification require recursive inspection of qualifying branches while useful slots remain, a fair first slot for each first-level Line, remaining capacity spent round-robin across Lines, and deterministic coverage that proves qualifying siblings are not starved.
 
 `audits/2026-09-25-17-30-00-gpt-5.6-sol-chatgpt.md`, finding “Branch-balanced discovery collapses each Line to one descendant spine,” records that discovery advances with only `next[0]` and neighborhood selection advances each branch through one `current` descendant. Qualifying siblings can therefore remain undiscovered or unselected despite spare budget.
 
@@ -16,7 +16,7 @@ The existing 5% local qualification threshold, sample floor, cancellation behavi
 
 # Unsettled:
 
-Make the plan phrase “preferring narrow qualifying continuations before adding excessive breadth from one bushy branch” operational and deterministic: define the frontier ordering within each first-level Line without creating an arbitrary depth cap or starving qualifying siblings.
+Make `docs/components/discovery.md` §Requirements phrase “a preference for useful narrow continuations before excessive breadth from one bushy branch” operational and deterministic: define the frontier ordering within each first-level Line without creating an arbitrary depth cap or starving qualifying siblings.
 
 Decide whether discovery and visible-neighborhood selection should share one frontier abstraction or use separate implementations pinned to the same fairness contract.
 

@@ -3,12 +3,18 @@ import { getIncoming, getOutgoing } from './db.js';
 import { canonicalPosition, START_FEN } from './graph.js';
 import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { expandMoveOrderTranspositions } from './transpositions.js';
+import {
+  reportViewWorkSettled,
+  requestViewRefresh,
+  VIEW_RENDERED_EVENT,
+} from './view-cycle.js';
 
 const START = canonicalPosition(START_FEN);
 const expandedTargets = new Set();
 const expandingTargets = new Map();
 let generation = 0;
 let cueGeneration = 0;
+let structureGeneration = 0;
 
 async function collectIncomingToStart(target, maxDepth = 32) {
   const incomingByTarget = new Map();
@@ -36,24 +42,20 @@ async function expandCurrentRootTranspositions() {
   const map = document.querySelector('.map.mode-roots');
   const center = map?.querySelector('.center-position[data-key]');
   const target = center?.dataset.key;
-  if (!target || expandedTargets.has(target)) return;
+  if (!target || expandedTargets.has(target)) return { addedEdges: 0 };
   if (expandingTargets.has(target)) return expandingTargets.get(target);
 
   const promise = (async () => {
     const incomingByTarget = await collectIncomingToStart(target);
     const referencePath = reconstructPgnPath(target, incomingByTarget, START);
-    if (!referencePath?.length) return;
+    if (!referencePath?.length) return { addedEdges: 0 };
 
     const result = await expandMoveOrderTranspositions(referencePath, target, {
       maxPaths: 256,
       maxStates: 75_000,
     });
     expandedTargets.add(target);
-
-    const current = document.querySelector('.map.mode-roots .center-position[data-key]');
-    if (result.addedEdges > 0 && current?.dataset.key === target) {
-      window.dispatchEvent(new Event('resize'));
-    }
+    return result;
   })().finally(() => expandingTargets.delete(target));
 
   expandingTargets.set(target, promise);
@@ -404,24 +406,49 @@ function bindLinkedHover() {
   });
 }
 
-let scheduled = false;
-function scheduleDecorate() {
-  if (scheduled) return;
-  scheduled = true;
-  requestAnimationFrame(() => {
-    scheduled = false;
-    layoutRootSatellites();
-    decorateMoveCues();
-    decorateRootRows();
-    unflattenRootRows().then(() => bindLinkedHover());
-    bindLinkedHover();
-    expandCurrentRootTranspositions();
-  });
+function currentViewMatches(detail) {
+  const map = document.querySelector('.map.mode-roots, .map.mode-lines');
+  const center = map?.querySelector('.center-position[data-key]')?.dataset.key;
+  const view = map?.classList.contains('mode-roots') ? 'roots' : 'lines';
+  return center === detail.center && view === detail.view;
 }
 
-new MutationObserver(scheduleDecorate).observe(document.querySelector('#app'), {
-  childList: true,
-  subtree: true,
-});
+async function decorateForView(detail) {
+  const run = ++structureGeneration;
+  let requestedRefresh = false;
+  try {
+    const expansion = await expandCurrentRootTranspositions();
+    if (run !== structureGeneration || !currentViewMatches(detail)) return;
+    if ((expansion?.addedEdges ?? 0) > 0) {
+      requestedRefresh = true;
+      requestViewRefresh({ cycleId: detail.cycleId, center: detail.center, view: detail.view });
+      return;
+    }
 
-scheduleDecorate();
+    layoutRootSatellites();
+    await decorateMoveCues();
+    if (run !== structureGeneration || !currentViewMatches(detail)) return;
+    await decorateRootRows();
+    if (run !== structureGeneration || !currentViewMatches(detail)) return;
+    await unflattenRootRows();
+    if (run !== structureGeneration || !currentViewMatches(detail)) return;
+    bindLinkedHover();
+  } catch (error) {
+    console.error('Chessview Root composition failed', error);
+  } finally {
+    if (!requestedRefresh && run === structureGeneration && currentViewMatches(detail)) {
+      reportViewWorkSettled({
+        cycleId: detail.cycleId,
+        label: 'structure',
+        task: detail.tasks?.structure,
+        center: detail.center,
+      });
+    }
+  }
+}
+
+window.addEventListener(VIEW_RENDERED_EVENT, (event) => {
+  const detail = event.detail ?? {};
+  if (!detail.tasks?.structure) return;
+  decorateForView(detail);
+});

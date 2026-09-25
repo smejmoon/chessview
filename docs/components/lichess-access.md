@@ -4,7 +4,7 @@
 
 Own authentication, endpoint access, shared request policy, endpoint caches, and transport/failure semantics for Chessview's Lichess-backed data.
 
-The architectural boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md).
+The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). This component owns the observable request-policy requirements that boundary must enforce.
 
 ## Data sources
 
@@ -17,11 +17,12 @@ The architectural boundary is defined separately in [`docs/architecture/lichess-
 - Live rated Explorer access uses the visitor's Lichess authorization through browser OAuth2 Authorization Code + PKCE.
 - No client secret or personal token is shipped in the static bundle.
 - OAuth callback parameters and PKCE transaction state are consumed on both successful completion and terminal callback failure so reload can begin a clean sign-in.
-- The OAuth token exchange is Lichess network traffic and therefore also goes through `LichessGateway`.
+- Browser navigation to Lichess's OAuth authorization endpoint is the user-agent authorization handoff and is outside the request scheduler.
+- The OAuth token exchange is an application-issued Lichess API request and therefore goes through `LichessGateway`.
 
 ## Network boundary
 
-All Lichess network requests go through the application-wide `LichessGateway`, including rated Explorer, Masters, cloud evaluation, and OAuth token exchange.
+All application-issued HTTP requests to Lichess APIs and services go through the application-wide `LichessGateway`, including rated Explorer, Masters, cloud evaluation, and OAuth token exchange. Top-level browser navigation to the OAuth authorization endpoint is not such a request.
 
 The gateway must:
 

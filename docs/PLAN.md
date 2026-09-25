@@ -26,7 +26,7 @@ The right-side control and evidence surface is the **Rail**.
 - The current position is a large playable board; surrounding boards are navigation surfaces. Root context is left of center and Line context is right of center.
 - Recentring is position-based. The URL identifies the current position, not the path used to reach it.
 - Discovered graph and evidence data persist in the browser.
-- Lichess network traffic is coordinated application-wide through `LichessGateway`; transport failure is not interpreted as absence of chess evidence.
+- Application-issued Lichess API requests are coordinated application-wide through `LichessGateway`; transport failure is not interpreted as absence of chess evidence.
 - Production remains a static GitHub Pages deployment.
 
 ## Components

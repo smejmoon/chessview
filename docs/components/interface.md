@@ -18,10 +18,16 @@ Own Chessview's position-centered navigation model and spatial presentation.
 - The URL identifies the canonical current position, not the navigation path used to reach it.
 - Browser history navigation restores position-centered state consistently.
 - Evidence presentation follows the [Evidence](evidence.md) component rather than deriving chess meaning from DOM layout.
+- The application indicates when the current visible view is still settling and when that view has reached a terminal state.
+- “Ready” means every operation that can still materially change the current visible view has either succeeded, established absence, failed explicitly, or been cancelled as obsolete. Background work that cannot change what the visitor is waiting on does not block readiness.
+- Readiness is scoped to the current view generation: completion from an obsolete position/view must not settle a newer one.
+- The readiness treatment stays subtle: delayed `Updating…`, a brief `Ready`, then a persistent low-emphasis check.
 
 ## Composition direction
 
 The durable target is a single application/controller owner for render and navigation lifecycle. Root/transposition/evidence behavior should supply explicit data keyed by stable node/edge identity rather than discovering domain meaning by observing and rewriting shared rendered DOM.
+
+Current-view settlement belongs to that controller lifecycle rather than to Lichess transport or a generic request counter. Visible contributors report terminal completion for controller-issued work tokens; the controller alone decides when the generation is settled.
 
 This composition refactor is tracked separately in the browser-composition backlog outcome; this component records the product/interface contract it must preserve.
 
@@ -35,6 +41,10 @@ Deterministic/browser contract tests should cover:
 - browser back/forward navigation;
 - Root-left / Line-right directional semantics;
 - global orientation behavior;
-- stable identity between rendered positions/connectors and their graph edges.
+- stable identity between rendered positions/connectors and their graph edges;
+- current-view settlement waiting for every visible contributor;
+- stale work from an obsolete generation being unable to settle the current view;
+- fast cached work avoiding a distracting `Updating…` flash while still acknowledging `Ready`;
+- settled failures counting as complete while their local unavailable state remains visible.
 
-Manual verification should include dense Root and Line neighborhoods, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering.
+Manual verification should include dense Root and Line neighborhoods, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. It should also confirm the top-bar transition `Updating…` → `Ready` → subtle check during both cached and network-backed navigation.

@@ -13,9 +13,14 @@ import {
   railWorthy,
   rootRarity,
 } from './eval.js';
+import {
+  evidenceRequestFailed,
+  engineUnavailableLabel,
+  humanFailureIndicator,
+} from './evidence-presentation.js';
+import { reportViewWorkSettled, VIEW_RENDERED_EVENT } from './view-cycle.js';
 
 let generation = 0;
-let scheduled = false;
 let guideOn = localStorage.getItem('chessview.guide') === '1';
 
 function escapeHtml(value = '') {
@@ -80,11 +85,16 @@ function recenterFromRail(key) {
   window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
 }
 
-function humanMarkerHtml(mismatch, population) {
+function humanMarkerHtml(mismatch, population, evidenceValue = null) {
+  const populationLabel = population === 'masters' ? 'Masters' : 'Lichess';
+  const failure = humanFailureIndicator(evidenceValue, populationLabel);
+  if (failure) {
+    return `<span class="human-marker human-${population} human-unavailable" title="${escapeHtml(failure.title)}">${failure.text}</span>`;
+  }
   if (!mismatch) return '';
   const arrow = mismatch.direction === 'up' ? '▲' : '▼';
   const label = mismatch.direction === 'up' ? 'performs better than engine expectation' : 'performs worse than engine expectation';
-  return `<span class="human-marker human-${population} human-${mismatch.direction}" title="${population === 'masters' ? 'Masters' : 'Lichess'} ${label}">${arrow}</span>`;
+  return `<span class="human-marker human-${population} human-${mismatch.direction}" title="${populationLabel} ${label}">${arrow}</span>`;
 }
 
 function qualityLabel(moveEval) {
@@ -101,9 +111,9 @@ function setClass(element, prefix, value) {
 function guideHtml() {
   return `
     <section class="eval-guide" aria-label="Chessview guide">
-      <div><strong>Engine</strong><span class="guide-dot guide-good"></span>&lt;0.5 pawn <span class="guide-dot guide-dubious"></span>0.5–1.0 <span class="guide-dot guide-bad"></span>1.0+</div>
+      <div><strong>Engine</strong><span class="guide-dot guide-good"></span>&lt;0.5 pawn <span class="guide-dot guide-dubious"></span>0.5–1.0 <span class="guide-dot guide-bad"></span>1.0+ <span class="human-marker human-unavailable">!</span> unavailable</div>
       <div><strong>Root rarity</strong><span class="rarity-key">◇</span>&lt;5% · stronger fade/dash &lt;1%</div>
-      <div><strong>Human mismatch</strong><span class="human-marker human-masters">▲</span> Masters <span class="human-marker human-lichess">▲</span> Lichess · ▲ better, ▼ worse than engine expectation</div>
+      <div><strong>Human mismatch</strong><span class="human-marker human-masters">▲</span> Masters <span class="human-marker human-lichess">▲</span> Lichess · ▲ better, ▼ worse than engine expectation · <span class="human-marker human-unavailable">!</span> unavailable</div>
     </section>`;
 }
 
@@ -223,12 +233,16 @@ function decorateSatelliteUi(element, edge, evidence, view) {
     evalPill.className = 'mini-eval';
     label.appendChild(evalPill);
   }
-  const loss = lossLabel(moveEval, '·');
+  const engineUnavailable = engineUnavailableLabel([evidence.sourceEval, evidence.targetEval], {
+    failed: 'Cloud eval request failed',
+    missing: 'No adequate cloud eval',
+  });
+  const loss = moveEval ? lossLabel(moveEval) : evidenceRequestFailed(evidence.sourceEval, evidence.targetEval) ? '!' : '·';
   if (evalPill.textContent !== loss) evalPill.textContent = loss;
   const rarityText = rarityNote(rarity, edge);
   evalPill.title = moveEval
     ? `${lossLabel(moveEval)} pawn loss vs best${moveEval.depth ? ` · depth ${moveEval.depth}` : ''}${rarityText ? ` · ${rarityText}` : ''}${boardEval?.label ? ` · resulting position ${boardEval.label}` : ''}`
-    : `${rarityText ? `${rarityText} · ` : ''}${boardEval?.label ? `Resulting position ${boardEval.label}` : 'No adequate cloud eval'}`;
+    : `${rarityText ? `${rarityText} · ` : ''}${boardEval?.label ? `Resulting position ${boardEval.label}` : engineUnavailable}`;
 
   const shareText = evidencedShareLabel(edge);
   let share = label.querySelector('.mini-share');
@@ -244,7 +258,7 @@ function decorateSatelliteUi(element, edge, evidence, view) {
   }
 
   let humans = label.querySelector('.mini-humans');
-  const humanHtml = `${humanMarkerHtml(evidence.mastersMismatch, 'masters')}${humanMarkerHtml(evidence.lichessMismatch, 'lichess')}`;
+  const humanHtml = `${humanMarkerHtml(evidence.mastersMismatch, 'masters', evidence.masters)}${humanMarkerHtml(evidence.lichessMismatch, 'lichess')}`;
   if (humanHtml) {
     if (!humans) {
       humans = document.createElement('span');
@@ -288,12 +302,15 @@ function decorateConnectorQuality() {
   }
 }
 
-function railRowHtml(edge, moveEval, mastersMismatch, lichessMismatch) {
+function railRowHtml(row) {
+  const { edge, moveEval, targetEval, masters, mastersMismatch, lichessMismatch, sourceEval } = row;
   const quality = qualityLabel(moveEval);
-  const evalLabel = lossLabel(moveEval);
-  const mismatch = `${humanMarkerHtml(mastersMismatch, 'masters')}${humanMarkerHtml(lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
+  const engineFailed = evidenceRequestFailed(sourceEval, targetEval);
+  const evalLabel = moveEval ? lossLabel(moveEval) : engineFailed ? '!' : '—';
+  const mismatch = `${humanMarkerHtml(mastersMismatch, 'masters', masters)}${humanMarkerHtml(lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
   const share = evidencedShareLabel(edge);
-  const title = `${edge.san ?? edge.uci}${share ? ` · ${share}` : ''}${edge.games ? ` · ${compactGames(edge.games)} games` : ''}${moveEval ? ` · ${lossLabel(moveEval)} pawn loss vs best` : ''}`;
+  const engineNote = !moveEval && engineFailed ? ' · engine evidence request failed' : '';
+  const title = `${edge.san ?? edge.uci}${share ? ` · ${share}` : ''}${edge.games ? ` · ${compactGames(edge.games)} games` : ''}${moveEval ? ` · ${lossLabel(moveEval)} pawn loss vs best` : ''}${engineNote}`;
   return `
     <button class="eval-rail-row eval-${quality}" type="button" data-eval-nav="${escapeHtml(edge.target)}" title="${escapeHtml(title)}">
       <span class="eval-rail-move">${escapeHtml(edge.san ?? edge.uci)}</span>
@@ -304,11 +321,16 @@ function railRowHtml(edge, moveEval, mastersMismatch, lichessMismatch) {
 }
 
 async function hydrateRailMove(centerAtStart, edge, sourceEval) {
-  let moveEval = moveEvaluation(centerAtStart, edge, sourceEval, null);
-  if (moveEval || !sourceEval || sourceEval.depth < ENGINE_MIN_DEPTH) return moveEval;
+  const moveEval = moveEvaluation(centerAtStart, edge, sourceEval, null);
+  if (moveEval || !sourceEval || sourceEval.depth < ENGINE_MIN_DEPTH || evidenceRequestFailed(sourceEval)) {
+    return { moveEval, targetEval: null };
+  }
   const targetEval = await loadCloudEval(edge.target);
   if (currentCenter() !== centerAtStart) return null;
-  return moveEvaluation(centerAtStart, edge, sourceEval, targetEval);
+  return {
+    moveEval: moveEvaluation(centerAtStart, edge, sourceEval, targetEval),
+    targetEval,
+  };
 }
 
 async function decorateLineRail(centerAtStart) {
@@ -333,12 +355,16 @@ async function decorateLineRail(centerAtStart) {
   const batchSize = 4;
   for (let index = 0; index < candidates.length; index += batchSize) {
     const batch = await Promise.all(candidates.slice(index, index + batchSize).map(async (edge) => {
-      const moveEval = await hydrateRailMove(centerAtStart, edge, sourceEval);
-      if (currentCenter() !== centerAtStart) return null;
+      const hydrated = await hydrateRailMove(centerAtStart, edge, sourceEval);
+      if (!hydrated || currentCenter() !== centerAtStart) return null;
+      const { moveEval, targetEval } = hydrated;
       if (!railWorthy({ edge, sourceKey: centerAtStart, lichessExplorer: lichess, moveQuality: moveEval })) return null;
       return {
         edge,
         moveEval,
+        targetEval,
+        sourceEval,
+        masters,
         mastersMismatch: humanMismatch(masters, edge, centerAtStart, moveEval),
         lichessMismatch: humanMismatch(lichess, edge, centerAtStart, moveEval),
       };
@@ -353,12 +379,20 @@ async function decorateLineRail(centerAtStart) {
 
   const list = rail.querySelector('.rail-explorer .explorer-list');
   if (!list) return;
-  const signature = rows.map(({ edge, moveEval, mastersMismatch, lichessMismatch }) => [edge.id, moveEval?.lossCp, moveEval?.quality, mastersMismatch?.direction, lichessMismatch?.direction].join(':')).join('|');
+  const signature = rows.map(({ edge, moveEval, targetEval, masters, mastersMismatch, lichessMismatch }) => [
+    edge.id,
+    moveEval?.lossCp,
+    moveEval?.quality,
+    mastersMismatch?.direction,
+    lichessMismatch?.direction,
+    evidenceRequestFailed(sourceEval, targetEval) ? 'engine-failed' : '',
+    evidenceRequestFailed(masters) ? 'masters-failed' : '',
+  ].join(':')).join('|');
   if (list.dataset.evalSignature === signature) return;
   list.dataset.evalSignature = signature;
   list.classList.add('eval-rail-list');
   list.innerHTML = rows.length
-    ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span>Human</span><span></span></div>${rows.map((row) => railRowHtml(row.edge, row.moveEval, row.mastersMismatch, row.lichessMismatch)).join('')}`
+    ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span>Human</span><span></span></div>${rows.map((row) => railRowHtml(row)).join('')}`
     : '<div class="rail-empty">No Rail-worthy Lines yet.</div>';
 
   list.querySelectorAll('[data-eval-nav]').forEach((button) => {
@@ -412,18 +446,23 @@ async function decorateRootRail(centerAtStart) {
     const lossCell = row.querySelector('.explorer-share');
     if (lossCell) {
       lossCell.classList.add('root-loss');
-      const text = lossLabel(evidence.moveEval);
+      const engineFailed = evidenceRequestFailed(evidence.sourceEval, evidence.targetEval);
+      const text = evidence.moveEval ? lossLabel(evidence.moveEval) : engineFailed ? '!' : '—';
       if (lossCell.textContent !== text) lossCell.textContent = text;
       const rarityText = rarityNote(rarity, edge);
+      const engineUnavailable = engineUnavailableLabel([evidence.sourceEval, evidence.targetEval], {
+        failed: 'Cloud eval request failed',
+        missing: 'No adequate cloud eval',
+      });
       lossCell.title = evidence.moveEval
         ? `${text} pawn loss vs best${rarityText ? ` · ${rarityText}` : ''}`
-        : `${rarityText ? `${rarityText} · ` : ''}No adequate cloud eval`;
+        : `${rarityText ? `${rarityText} · ` : ''}${engineUnavailable}`;
     }
 
     const humanCell = row.querySelector('.explorer-games');
     if (humanCell) {
       humanCell.classList.add('root-human');
-      const html = `${humanMarkerHtml(evidence.mastersMismatch, 'masters')}${humanMarkerHtml(evidence.lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
+      const html = `${humanMarkerHtml(evidence.mastersMismatch, 'masters', evidence.masters)}${humanMarkerHtml(evidence.lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
       if (humanCell.innerHTML !== html) humanCell.innerHTML = html;
     }
   }
@@ -440,7 +479,7 @@ async function decorateCenter(centerAtStart) {
   let badge = stats.querySelector('.center-eval-detail');
   const html = evaluation
     ? `<strong>${escapeHtml(evaluation.label)}</strong>${evaluation.depth ? ` <span>d${evaluation.depth}</span>` : ''}`
-    : '<span>eval unavailable</span>';
+    : `<span>${escapeHtml(engineUnavailableLabel([cloud]))}</span>`;
   if (!badge) {
     badge = document.createElement('span');
     badge.className = 'center-eval-detail';
@@ -449,31 +488,38 @@ async function decorateCenter(centerAtStart) {
   if (badge.innerHTML !== html) badge.innerHTML = html;
 }
 
-async function decorate() {
+async function decorate(detail) {
   const run = ++generation;
-  decorateStructure();
-  const centerAtStart = currentCenter();
-  if (!centerAtStart) return;
+  const centerAtStart = detail.center;
+  try {
+    decorateStructure();
+    if (currentCenter() !== centerAtStart) return;
 
-  await decorateCenter(centerAtStart);
-  if (run !== generation || currentCenter() !== centerAtStart) return;
-  await decorateLineRail(centerAtStart);
-  if (run !== generation || currentCenter() !== centerAtStart) return;
-  await decorateRootRail(centerAtStart);
-  if (run !== generation || currentCenter() !== centerAtStart) return;
-  await decorateSatellites(centerAtStart);
-  if (run !== generation || currentCenter() !== centerAtStart) return;
-  decorateConnectorQuality();
+    await decorateCenter(centerAtStart);
+    if (run !== generation || currentCenter() !== centerAtStart) return;
+    await decorateLineRail(centerAtStart);
+    if (run !== generation || currentCenter() !== centerAtStart) return;
+    await decorateRootRail(centerAtStart);
+    if (run !== generation || currentCenter() !== centerAtStart) return;
+    await decorateSatellites(centerAtStart);
+    if (run !== generation || currentCenter() !== centerAtStart) return;
+    decorateConnectorQuality();
+  } catch (error) {
+    console.error('Chessview evidence decoration failed', error);
+  } finally {
+    if (run === generation && currentCenter() === centerAtStart) {
+      reportViewWorkSettled({
+        cycleId: detail.cycleId,
+        label: 'evidence',
+        task: detail.tasks?.evidence,
+        center: centerAtStart,
+      });
+    }
+  }
 }
 
-function schedule() {
-  if (scheduled) return;
-  scheduled = true;
-  requestAnimationFrame(() => {
-    scheduled = false;
-    decorate();
-  });
-}
-
-new MutationObserver(schedule).observe(document.querySelector('#app'), { childList: true, subtree: true });
-schedule();
+window.addEventListener(VIEW_RENDERED_EVENT, (event) => {
+  const detail = event.detail ?? {};
+  if (!detail.tasks?.evidence) return;
+  decorate(detail);
+});

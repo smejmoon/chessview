@@ -4,6 +4,8 @@ import '@lichess-org/chessground/assets/chessground.brown.css';
 import '@lichess-org/chessground/assets/chessground.cburnett.css';
 import './style.css';
 import './debug.css';
+import './root-pgn.js';
+import './eval-ui.js';
 
 import {
   canonicalPosition,
@@ -26,6 +28,12 @@ import {
   isDebugEnabled,
   setDebugEnabled,
 } from './debug.js';
+import {
+  announceViewRendered,
+  createViewCycleController,
+  VIEW_REFRESH_REQUESTED_EVENT,
+  VIEW_WORK_SETTLED_EVENT,
+} from './view-cycle.js';
 
 const app = document.querySelector('#app');
 const initialDepth = Number.isFinite(history.state?.cvDepth) ? history.state.cvDepth : 0;
@@ -51,7 +59,44 @@ const state = {
   discoveryController: null,
 };
 
+function viewStatusSpec(presentation) {
+  if (presentation === 'updating') {
+    return { mark: '●', label: 'Updating…', title: 'Current view is updating' };
+  }
+  if (presentation === 'ready') {
+    return { mark: '✓', label: 'Ready', title: 'Current view finished updating' };
+  }
+  if (presentation === 'check') {
+    return { mark: '✓', label: '', title: 'Current view finished updating' };
+  }
+  return { mark: '', label: '', title: '' };
+}
+
+function paintViewStatus() {
+  const element = document.querySelector('#view-status');
+  if (!element) return;
+  const presentation = viewCycle.presentation;
+  const spec = viewStatusSpec(presentation);
+  element.className = `view-status is-${presentation}`;
+  element.title = spec.title;
+  element.setAttribute('aria-label', spec.title);
+  const mark = element.querySelector('.view-status-mark');
+  const label = element.querySelector('.view-status-label');
+  if (mark) mark.textContent = spec.mark;
+  if (label) label.textContent = spec.label;
+}
+
+const viewCycle = createViewCycleController({ onPresentation: paintViewStatus });
+
 debugLog('app start', { center: state.center, view: state.view, navDepth: state.navDepth });
+
+function beginViewCycle({ discovery = state.view === 'lines' } = {}) {
+  const expected = ['render', 'structure', 'evidence'];
+  if (discovery) expected.push('discovery');
+  const cycleId = viewCycle.start(expected);
+  debugLog('view cycle started', { cycleId, center: state.center, view: state.view, discovery });
+  return cycleId;
+}
 
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
@@ -199,8 +244,9 @@ function setView(next) {
   state.discoveryController?.abort();
   state.loading = false;
   debugLog('view changed', { view: next, center: state.center });
-  render().then(() => {
-    if (next === 'lines') refreshDiscovery();
+  const cycleId = beginViewCycle({ discovery: next === 'lines' });
+  render({ cycleId }).then(() => {
+    if (next === 'lines') refreshDiscovery(cycleId);
   });
 }
 
@@ -290,13 +336,15 @@ function renderShell(scene) {
   const turn = boardPosition.split(' ')[1] === 'b' ? 'black' : 'white';
   const rootCount = scene.incomingEdges.length;
   const lineCount = (scene.outgoingBySource.get(state.center) ?? []).filter((edge) => edge.qualifies || edge.manual).length;
+  const status = viewStatusSpec(viewCycle.presentation);
 
   app.innerHTML = `
     <main class="app-shell">
       <header class="topbar">
         <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a>
         <div class="topbar-meta">
-          <span class="network-status ${state.loading ? 'is-loading' : ''}">${state.loading ? 'mapping…' : state.error ? 'cached map' : 'Lichess · rated standard'}</span>
+          <span class="network-status">Lichess · rated standard</span>
+          <span id="view-status" class="view-status is-${viewCycle.presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}" title="${escapeHtml(status.title)}"><span class="view-status-mark" aria-hidden="true">${status.mark}</span><span class="view-status-label">${status.label}</span></span>
           <button class="toolbar-button" id="back" type="button" ${state.navDepth > 0 ? '' : 'disabled'}>← Back</button>
           <button class="toolbar-button ${state.debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button>
           <button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button>
@@ -451,41 +499,72 @@ function drawEdges(scene) {
   }
 }
 
-async function render() {
+function announceRendered(cycleId, evidenceTask, structureTask) {
+  announceViewRendered({
+    cycleId,
+    center: state.center,
+    view: state.view,
+    tasks: {
+      evidence: evidenceTask,
+      structure: structureTask,
+    },
+  });
+}
+
+async function render({ cycleId = viewCycle.cycleId } = {}) {
+  if (cycleId !== viewCycle.cycleId) return;
+  const renderTask = viewCycle.begin(cycleId, 'render');
+  const evidenceTask = viewCycle.begin(cycleId, 'evidence');
+  const structureTask = viewCycle.begin(cycleId, 'structure');
   const generation = ++state.generation;
+
   try {
     const scene = await collectScene(state.center, boardBudget());
-    if (generation !== state.generation) return;
+    if (generation !== state.generation || cycleId !== viewCycle.cycleId) return;
     state.scene = scene;
     renderShell(scene);
+    viewCycle.settle(cycleId, 'render', renderTask);
+    announceRendered(cycleId, evidenceTask, structureTask);
   } catch (error) {
+    if (generation !== state.generation || cycleId !== viewCycle.cycleId) return;
     debugLog('render failed', error, 'error');
     state.error = error?.message ?? 'Could not render the opening map.';
-    renderShell({ incomingEdges: [], incomingByTarget: new Map(), outgoingBySource: new Map(), selected: [], nodes: new Map([[state.center, { key: state.center }]]) });
+    const scene = { incomingEdges: [], incomingByTarget: new Map(), outgoingBySource: new Map(), selected: [], nodes: new Map([[state.center, { key: state.center }]]) };
+    state.scene = scene;
+    renderShell(scene);
+    viewCycle.settle(cycleId, 'render', renderTask);
+    announceRendered(cycleId, evidenceTask, structureTask);
   }
 }
 
-async function refreshDiscovery() {
-  if (state.view !== 'lines') return;
+async function refreshDiscovery(cycleId = viewCycle.cycleId) {
+  if (state.view !== 'lines' || cycleId !== viewCycle.cycleId) return;
   state.discoveryController?.abort();
   const controller = new AbortController();
   state.discoveryController = controller;
   const requestedCenter = state.center;
+  const discoveryTask = viewCycle.begin(cycleId, 'discovery');
   state.loading = true;
   state.error = '';
-  render();
+  render({ cycleId });
   try {
     await discoverForViewport(requestedCenter, boardBudget(), () => {
-      if (!controller.signal.aborted && requestedCenter === state.center && state.view === 'lines') render();
+      if (!controller.signal.aborted && cycleId === viewCycle.cycleId && requestedCenter === state.center && state.view === 'lines') {
+        render({ cycleId });
+      }
     }, { signal: controller.signal });
   } catch (error) {
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted || cycleId !== viewCycle.cycleId) return;
     debugLog('discovery failed', { center: requestedCenter, error: error?.message ?? String(error) }, 'error');
     if (requestedCenter === state.center) state.error = error?.message ?? 'Lichess Opening Explorer is temporarily unavailable.';
   } finally {
     if (state.discoveryController === controller && requestedCenter === state.center) {
       state.loading = false;
-      render();
+      state.discoveryController = null;
+      if (cycleId === viewCycle.cycleId) {
+        await render({ cycleId });
+        viewCycle.settle(cycleId, 'discovery', discoveryTask);
+      }
     }
   }
 }
@@ -496,6 +575,8 @@ async function recenter(key, { pushHistory = false } = {}) {
   const previous = state.center;
   state.center = next;
   state.error = '';
+  state.discoveryController?.abort();
+  state.loading = false;
   if (pushHistory) {
     state.navDepth += 1;
     history.pushState({ fen: next, cvDepth: state.navDepth }, '', positionUrl(next));
@@ -503,29 +584,45 @@ async function recenter(key, { pushHistory = false } = {}) {
     history.replaceState({ fen: next, cvDepth: state.navDepth }, '', positionUrl(next));
   }
   debugLog('recenter', { from: previous, to: next, view: state.view, navDepth: state.navDepth });
-  await render();
-  if (state.view === 'lines') refreshDiscovery();
+  const cycleId = beginViewCycle({ discovery: state.view === 'lines' });
+  await render({ cycleId });
+  if (state.view === 'lines') refreshDiscovery(cycleId);
 }
 
+window.addEventListener(VIEW_WORK_SETTLED_EVENT, (event) => {
+  const detail = event.detail ?? {};
+  viewCycle.settle(detail.cycleId, detail.label, detail.task);
+});
+
+window.addEventListener(VIEW_REFRESH_REQUESTED_EVENT, (event) => {
+  const detail = event.detail ?? {};
+  if (detail.cycleId !== viewCycle.cycleId || detail.center !== state.center || detail.view !== state.view) return;
+  render({ cycleId: detail.cycleId });
+});
+
 window.addEventListener('popstate', (event) => {
+  state.discoveryController?.abort();
   state.center = positionFromUrl();
   state.view = viewFromUrl();
   state.navDepth = Number.isFinite(event.state?.cvDepth) ? event.state.cvDepth : 0;
+  state.loading = false;
   state.error = '';
-  render().then(() => {
-    if (state.view === 'lines') refreshDiscovery();
+  const cycleId = beginViewCycle({ discovery: state.view === 'lines' });
+  render({ cycleId }).then(() => {
+    if (state.view === 'lines') refreshDiscovery(cycleId);
   });
 });
 
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(render, 120);
+  resizeTimer = setTimeout(() => render(), 120);
 });
 
 const initialUrl = new URL(window.location.href);
 initialUrl.searchParams.set('fen', state.center);
 initialUrl.searchParams.set('view', state.view);
 history.replaceState({ fen: state.center, cvDepth: state.navDepth }, '', `${initialUrl.pathname}${initialUrl.search}${initialUrl.hash}`);
-await render();
-if (state.view === 'lines') refreshDiscovery();
+const initialCycle = beginViewCycle({ discovery: state.view === 'lines' });
+await render({ cycleId: initialCycle });
+if (state.view === 'lines') refreshDiscovery(initialCycle);

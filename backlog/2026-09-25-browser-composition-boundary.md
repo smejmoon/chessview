@@ -6,7 +6,7 @@ Refactor browser composition so one application controller owns render and navig
 
 `audits/2026-09-25-17-30-00-gpt-5.6-sol-chatgpt.md`, finding “UI composition is an implicit multi-writer DOM protocol,” records that `src/main.js`, `src/root-pgn.js`, and `src/eval-ui.js` independently mutate the same rendered surface, with DOM order/labels and synthetic browser events carrying application meaning between them. That mechanism makes correctness depend on render timing and markup shape rather than explicit interfaces.
 
-`docs/PLAN.md`, “Product requirements” and “Test plan,” require stable Roots/Lines navigation, recentering, URL position identity, and deterministic URL round-tripping. The missing composition contract is therefore a product-boundary problem, not only a presentation cleanup.
+`docs/components/interface.md` §Requirements, §Composition direction, and §Verification require stable Roots/Lines navigation, recentering, URL position identity, browser history consistency, stable graph-edge identity in presentation, and a single controller-owned render/navigation lifecycle. The missing composition contract is therefore a product-boundary problem, not only a presentation cleanup.
 
 # Edges:
 

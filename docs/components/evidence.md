@@ -21,6 +21,7 @@ Own how Chessview turns engine and human statistical data into move-quality, mis
 - Masters is a separate comparison population rather than a replacement for rated Explorer.
 - Human-result markers appear only when sufficiently sampled human results materially disagree with the engine signal.
 - Failure to fetch Masters or engine evidence must not be interpreted as evidence that no disagreement or evaluation exists.
+- When no stale evidence is available, presentation distinguishes request failure from genuine missing, insufficient-depth, or no-mismatch evidence with an explicit unavailable state.
 
 ## Rail selection
 
@@ -58,6 +59,7 @@ Deterministic tests should cover:
 - human-result mismatch direction and sample gating;
 - Rail-worthy filtering and popular-bad retention;
 - Root rarity thresholds and evidence gating;
-- request-failure values remaining distinct from genuine missing evidence.
+- request-failure values remaining distinct from genuine missing evidence;
+- consumer/presentation state keeping request failure distinct from ordinary unavailable or no-mismatch evidence.
 
-Manual verification should include positions with both common and rare Root move orders and positions where Masters, rated Lichess, and engine evidence disagree in useful ways.
+Manual verification should include positions with both common and rare Root move orders and positions where Masters, rated Lichess, and engine evidence disagree in useful ways. It should also confirm that failed Masters or cloud-eval requests show an unavailable indicator rather than the ordinary no-data/no-mismatch state.

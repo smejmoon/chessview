@@ -1,0 +1,81 @@
+.view-status {
+  min-width: 72px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #77746f;
+  font-size: 11px;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  opacity: .9;
+  transition: min-width 260ms ease, gap 220ms ease, opacity 180ms ease, color 180ms ease;
+}
+
+.view-status-mark {
+  width: 10px;
+  display: inline-grid;
+  place-items: center;
+  color: rgba(179, 210, 103, .72);
+  font-size: 9px;
+  line-height: 1;
+  transition: opacity 180ms ease, color 180ms ease;
+}
+
+.view-status-label {
+  max-width: 64px;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-width 260ms ease, opacity 180ms ease;
+}
+
+.view-status.is-hidden {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.view-status.is-updating {
+  color: #8c8984;
+}
+
+.view-status.is-updating .view-status-mark {
+  color: var(--accent);
+  font-size: 7px;
+  animation: view-status-pulse 1s ease-in-out infinite;
+}
+
+.view-status.is-ready {
+  color: #a8b986;
+}
+
+.view-status.is-check {
+  min-width: 14px;
+  gap: 0;
+  opacity: .58;
+}
+
+.view-status.is-check .view-status-label {
+  max-width: 0;
+  opacity: 0;
+}
+
+@keyframes view-status-pulse {
+  0%, 100% { opacity: .38; transform: scale(.82); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 760px) {
+  .view-status { min-width: 14px; }
+  .view-status.is-updating .view-status-label,
+  .view-status.is-ready .view-status-label {
+    max-width: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-status.is-updating .view-status-mark {
+    animation: none;
+    opacity: .8;
+    transform: none;
+  }
+}

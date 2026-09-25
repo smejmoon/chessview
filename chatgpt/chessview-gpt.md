@@ -34,6 +34,10 @@ adds a repository-authored composition source, changes to that source must updat
 this mirror in the same change until a tracked generated runtime file replaces
 it.
 
+Selected Chessview rules, always loaded from the Chessview project-policy ref:
+
+- `rules/lichess-gateway.md`
+
 Selected Strake rules:
 
 - `rules/earned-complexity.md`
@@ -56,7 +60,9 @@ Selected Strake skills:
 - `skills/deadwood`
 - `skills/distill-history`
 
-Fetch every selected rule from the Strake policy ref when its scope applies.
+Fetch every selected Chessview rule from the Chessview project-policy ref when
+initializing this adapter and keep it in context for the conversation. Fetch
+every selected Strake rule from the Strake policy ref when its scope applies.
 For a task that may belong to a selected skill, inspect the live `name` and
 `description` frontmatter of plausible skills first, choose the narrowest skill
 that owns the request, then load its full `SKILL.md` and any supporting files it

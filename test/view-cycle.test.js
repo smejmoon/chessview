@@ -24,23 +24,46 @@ function fakeTimers() {
   };
 }
 
-test('view cycle settles only after the latest token for every visible contributor', () => {
+test('view cycle settles only after the latest token for every critical structural contributor', () => {
   const timers = fakeTimers();
   const cycle = createViewCycleController({ ...timers });
-  const id = cycle.start(['render', 'evidence', 'structure']);
+  const id = cycle.start(['render', 'structure', 'discovery']);
   const render = cycle.begin(id, 'render');
-  const evidence1 = cycle.begin(id, 'evidence');
-  const structure = cycle.begin(id, 'structure');
+  const structure1 = cycle.begin(id, 'structure');
+  const discovery = cycle.begin(id, 'discovery');
 
   cycle.settle(id, 'render', render);
+  cycle.settle(id, 'discovery', discovery);
+
+  const structure2 = cycle.begin(id, 'structure');
+  assert.equal(cycle.settle(id, 'structure', structure1), false);
+  assert.deepEqual(cycle.snapshot().pending, ['structure']);
+
+  assert.equal(cycle.settle(id, 'structure', structure2), true);
+  assert.equal(cycle.presentation, 'ready');
+});
+
+test('supplementary evidence does not block or reopen structural readiness', () => {
+  const timers = fakeTimers();
+  const cycle = createViewCycleController({ ...timers });
+  const id = cycle.start(['render', 'structure', 'evidence']);
+  const render = cycle.begin(id, 'render');
+  const structure = cycle.begin(id, 'structure');
+  const evidence1 = cycle.begin(id, 'evidence');
+
+  assert.deepEqual(cycle.snapshot().pending, ['render', 'structure']);
+  cycle.settle(id, 'render', render);
   cycle.settle(id, 'structure', structure);
+  assert.equal(cycle.presentation, 'ready');
+
+  timers.run(1_200);
+  assert.equal(cycle.presentation, 'check');
 
   const evidence2 = cycle.begin(id, 'evidence');
+  assert.equal(cycle.presentation, 'check');
   assert.equal(cycle.settle(id, 'evidence', evidence1), false);
-  assert.deepEqual(cycle.snapshot().pending, ['evidence']);
-
   assert.equal(cycle.settle(id, 'evidence', evidence2), true);
-  assert.equal(cycle.presentation, 'ready');
+  assert.equal(cycle.presentation, 'check');
 });
 
 test('completion from an obsolete generation cannot settle the current view', () => {
@@ -95,7 +118,7 @@ test('fast cached work skips Updating while still acknowledging Ready', () => {
   assert.equal(cycle.presentation, 'ready');
 });
 
-test('later visible work can reopen the same navigation cycle', () => {
+test('later visible work immediately clears the settled check before delayed Updating', () => {
   const timers = fakeTimers();
   const cycle = createViewCycleController({ ...timers });
   const id = cycle.start(['render']);
@@ -105,10 +128,27 @@ test('later visible work can reopen the same navigation cycle', () => {
   assert.equal(cycle.presentation, 'check');
 
   const nextRender = cycle.begin(id, 'render');
-  assert.equal(cycle.presentation, 'check');
+  assert.equal(cycle.presentation, 'hidden');
   timers.run(180);
   assert.equal(cycle.presentation, 'updating');
 
   cycle.settle(id, 'render', nextRender);
   assert.equal(cycle.presentation, 'ready');
+});
+
+test('a new pending generation immediately clears the previous generation check', () => {
+  const timers = fakeTimers();
+  const cycle = createViewCycleController({ ...timers });
+  const firstId = cycle.start(['render']);
+  const firstRender = cycle.begin(firstId, 'render');
+  cycle.settle(firstId, 'render', firstRender);
+  timers.run(1_200);
+  assert.equal(cycle.presentation, 'check');
+
+  const nextId = cycle.start(['render']);
+  const nextRender = cycle.begin(nextId, 'render');
+  assert.equal(cycle.presentation, 'hidden');
+  timers.run(180);
+  assert.equal(cycle.presentation, 'updating');
+  cycle.settle(nextId, 'render', nextRender);
 });

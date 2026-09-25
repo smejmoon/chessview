@@ -1,42 +1,46 @@
 # Do:
 
-Refactor browser composition so one application controller owns render and navigation lifecycle, while Roots/transposition and evaluation subsystems contribute explicit view-model data keyed by stable node/edge identity instead of discovering relationships by observing and rewriting shared DOM.
+Finish browser composition so one application controller owns render/navigation lifecycle and Root/transposition/evidence contributors exchange stable node/edge keyed state instead of inferring application meaning from rendered DOM.
 
 # Because:
 
-`audits/2026-09-25-17-30-00-gpt-5.6-sol-chatgpt.md`, finding “UI composition is an implicit multi-writer DOM protocol,” records that `src/main.js`, `src/root-pgn.js`, and `src/eval-ui.js` independently mutate the same rendered surface, with DOM order/labels and synthetic browser events carrying application meaning between them. That mechanism makes correctness depend on render timing and markup shape rather than explicit interfaces.
+`audits/2026-09-25-17-30-00-gpt-5.6-sol-chatgpt.md`, finding “UI composition is an implicit multi-writer DOM protocol,” records the original shared-DOM coupling. `docs/components/interface.md` §Requirements, §Composition direction, and §Verification require stable Roots/Lines navigation, position-based history, stable graph-edge identity in presentation, explicit current-view settlement, and a single controller-owned render/navigation lifecycle.
 
-`docs/components/interface.md` §Requirements, §Composition direction, and §Verification require stable Roots/Lines navigation, recentering, URL position identity, browser history consistency, stable graph-edge identity in presentation, and a single controller-owned render/navigation lifecycle. The missing composition contract is therefore a product-boundary problem, not only a presentation cleanup.
+The lifecycle slice has now landed: `src/main.js` is the single HTML application entrypoint, controller-issued View Cycle tokens/events coordinate visible settlement, and Root/evidence contributors no longer use `MutationObserver` to discover when a render occurred. View Cycle now treats evidence work as supplementary: evidence may still receive generation-scoped tokens for stale-work identity, but it does not block or reopen successful structural readiness. The remaining composition problem is narrower: Root/evidence code still derives relationships from DOM labels/order in several places, Rail navigation still synthesizes `popstate`, critical structural contributor failure still needs an explicit degraded terminal path, unexpected supplementary contributor exceptions can still be console-only, and the real controller↔contributor seam still lacks automated contract coverage.
 
 # Edges:
 
-This outcome includes the audit finding “Product-critical browser composition has no automated contract test” because tests should pin the replacement boundary rather than preserve the current observer protocol.
+Branch-balanced discovery behavior is tracked separately in `backlog/2026-09-25-branch-balanced-discovery.md`; this outcome must preserve its graph-selection semantics but does not redesign discovery policy.
 
-Branch-balanced discovery behavior is tracked separately in `backlog/2026-09-25-branch-balanced-discovery.md`; this outcome must preserve its eventual graph-selection semantics but does not need to change discovery policy.
+Evidence request lifetime and same-position request coalescing are tracked separately in `backlog/2026-09-25-evidence-request-lifetime.md`; this outcome may provide view-generation cancellation context, but it does not own Lichess request subscriber lifetime.
 
-Shared Lichess transport/rate-limit handling is outside this outcome. Data-loading APIs may be adapted only as needed to expose explicit state to the controller.
+Shared `LichessGateway` serialization/rate-limit policy remains outside this outcome. Data-loading APIs may be adapted only as needed to expose explicit state to the controller.
 
 # Unsettled:
 
-Choose the smallest explicit composition boundary that lets Root layout, transposition enrichment, evaluation evidence, navigation, and edge drawing exchange stable identities without DOM inference. Decide whether that is best expressed as one controller-owned render model, explicit application events, or a combination, while avoiding a second hidden state machine.
+Choose the smallest stable node/edge keyed composition model that removes remaining DOM depth/label/index inference without creating a second hidden application state machine.
 
-Decide the minimum browser-level contract suite needed to cover recenter/history behavior, Roots/Lines composition, edge association, and URL round-tripping without turning tests into pixel/layout snapshots.
+Decide the smallest explicit terminal-failure contract for critical structural contributors so failure ends loading without producing the normal success-style `Ready` / check state. Supplementary evidence failure stays local and must not downgrade a structurally established view.
+
+Choose the smallest integration-test seam that exercises real controller/contributor settlement, superseded navigation, explicit critical failure, history/recentering, and stable edge association without turning the suite into pixel/layout snapshots or adding a browser harness unless one is earned.
 
 # Complete:
 
 A single application owner controls the `#app` render/navigation lifecycle; core Root/evaluation composition no longer relies on `MutationObserver`, DOM row depth/label parsing, satellite/path array index pairing, or synthetic `resize`/`popstate` events to communicate application state.
 
-Root, Line, transposition, and evaluation decorations associate through stable node/edge identifiers or equivalent explicit model references, and deterministic automated tests exercise the product-critical composition boundary including URL round-tripping and representative recenter/history behavior.
+Root, Line, transposition, and evaluation decorations associate through stable node/edge identifiers or equivalent explicit model references. Critical structural contributor failures produce an explicit degraded terminal state before that contributor is counted terminal; supplementary evidence failures remain locally visible without blocking or downgrading structural readiness.
+
+Deterministic automated tests exercise the real product-critical composition boundary, including structural readiness independent of supplementary evidence, superseded generations, explicit critical failure, URL round-tripping, representative recenter/history behavior, and stable position/edge association.
 
 # Steps:
 
-Introduce or extract explicit position/navigation helpers and pin URL round-tripping with deterministic tests.
+Define the stable node/edge keyed state passed from the controller to Root/evidence contributors and migrate remaining DOM relationship inference onto it.
 
-Define stable node/edge keyed composition data and the controller-owned render/update lifecycle.
+Replace synthetic navigation/lifecycle browser events with explicit controller APIs while preserving browser back/forward behavior.
 
-Migrate Root/transposition behavior and evaluation/Rail behavior off DOM discovery and synthetic lifecycle events.
+Add an explicit degraded terminal path for critical structural contributor failure while keeping supplementary evidence failure local.
 
-Add focused browser/composition tests for identity association, recenter/history, and Roots/Lines integration; remove obsolete observer-coupling code once the contracts pass.
+Add focused composition-contract tests around the real controller/contributor seam, then remove obsolete DOM/synthetic-event coupling once those contracts pass.
 
 # Sync:
 

@@ -1,5 +1,5 @@
 import './eval-ui.css';
-import { canonicalPosition, positionUrl } from './graph.js';
+import { canonicalPosition } from './graph.js';
 import { getIncoming, getNode, getOutgoing } from './db.js';
 import {
   ENGINE_MIN_DEPTH,

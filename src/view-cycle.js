@@ -2,6 +2,8 @@ export const VIEW_RENDERED_EVENT = 'chessview:view-rendered';
 export const VIEW_WORK_SETTLED_EVENT = 'chessview:view-work-settled';
 export const VIEW_REFRESH_REQUESTED_EVENT = 'chessview:view-refresh-requested';
 
+const SUPPLEMENTARY_WORK = new Set(['evidence']);
+
 export function announceViewRendered(detail) {
   window.dispatchEvent(new CustomEvent(VIEW_RENDERED_EVENT, { detail }));
 }
@@ -24,6 +26,7 @@ export function createViewCycleController({
   let cycleId = 0;
   let taskSerial = 0;
   let pending = new Map();
+  let supplementary = new Map();
   let presentation = 'hidden';
   let hasSettled = false;
   let updatingTimer = null;
@@ -38,10 +41,8 @@ export function createViewCycleController({
 
   function snapshot() {
     return {
-      cycleId,
       presentation,
       pending: [...pending.keys()],
-      hasSettled,
     };
   }
 
@@ -61,7 +62,8 @@ export function createViewCycleController({
 
   function assign(label) {
     const token = `${cycleId}:${++taskSerial}`;
-    pending.set(label, token);
+    const target = SUPPLEMENTARY_WORK.has(label) ? supplementary : pending;
+    target.set(label, token);
     return token;
   }
 
@@ -82,12 +84,13 @@ export function createViewCycleController({
 
   function begin(id, label) {
     if (id !== cycleId || !label) return null;
+    if (SUPPLEMENTARY_WORK.has(label)) return assign(label);
     if (pending.size === 0 && hasSettled) {
       if (readyTimer != null) {
         clearTimeoutFn(readyTimer);
         readyTimer = null;
       }
-      present('check');
+      present('hidden');
       scheduleUpdating(id);
     }
     return assign(label);
@@ -97,7 +100,9 @@ export function createViewCycleController({
     clearTimers();
     cycleId += 1;
     pending = new Map();
-    present(hasSettled ? 'check' : 'hidden');
+    supplementary = new Map();
+    hasSettled = false;
+    present('hidden');
     for (const label of expected) assign(label);
     if (pending.size) scheduleUpdating(cycleId);
     else finish(cycleId);
@@ -105,9 +110,10 @@ export function createViewCycleController({
   }
 
   function settle(id, label, token) {
-    if (id !== cycleId || pending.get(label) !== token) return false;
-    pending.delete(label);
-    finish(id);
+    const target = SUPPLEMENTARY_WORK.has(label) ? supplementary : pending;
+    if (id !== cycleId || target.get(label) !== token) return false;
+    target.delete(label);
+    if (!SUPPLEMENTARY_WORK.has(label)) finish(id);
     return true;
   }
 

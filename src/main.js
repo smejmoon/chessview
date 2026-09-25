@@ -51,7 +51,6 @@ const state = {
   orientation: localStorage.getItem('chessview.orientation') === 'black' ? 'black' : 'white',
   loading: false,
   error: '',
-  scene: null,
   boardApis: [],
   generation: 0,
   navDepth: initialDepth,
@@ -188,7 +187,7 @@ async function collectScene(center, max) {
     }),
   );
 
-  return { incomingEdges, incomingByTarget, outgoingBySource, selected, nodes };
+  return { incomingEdges, outgoingBySource, selected, nodes };
 }
 
 function disposeBoards() {
@@ -521,7 +520,6 @@ async function render({ cycleId = viewCycle.cycleId } = {}) {
   try {
     const scene = await collectScene(state.center, boardBudget());
     if (generation !== state.generation || cycleId !== viewCycle.cycleId) return;
-    state.scene = scene;
     renderShell(scene);
     viewCycle.settle(cycleId, 'render', renderTask);
     announceRendered(cycleId, evidenceTask, structureTask);
@@ -529,8 +527,7 @@ async function render({ cycleId = viewCycle.cycleId } = {}) {
     if (generation !== state.generation || cycleId !== viewCycle.cycleId) return;
     debugLog('render failed', error, 'error');
     state.error = error?.message ?? 'Could not render the opening map.';
-    const scene = { incomingEdges: [], incomingByTarget: new Map(), outgoingBySource: new Map(), selected: [], nodes: new Map([[state.center, { key: state.center }]]) };
-    state.scene = scene;
+    const scene = { incomingEdges: [], outgoingBySource: new Map(), selected: [], nodes: new Map([[state.center, { key: state.center }]]) };
     renderShell(scene);
     viewCycle.settle(cycleId, 'render', renderTask);
     announceRendered(cycleId, evidenceTask, structureTask);

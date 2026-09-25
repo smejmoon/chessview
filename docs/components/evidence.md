@@ -4,6 +4,14 @@
 
 Own how Chessview turns engine and human statistical data into move-quality, mismatch, Rail-selection, and Root-rarity signals.
 
+## Product criticality
+
+This component is supplementary to the core position-graph experience defined by [`docs/PLAN.md`](../PLAN.md) §Product usability bar. Once the visible Root/Line neighborhood has been structurally established, evidence in this component may continue hydrating without blocking normal global readiness.
+
+Rated Lichess Explorer data used by [Discovery](discovery.md) to decide which Line boards belong in the visible graph can be critical to structural usability when persisted graph knowledge is insufficient. That structural use is owned by Discovery. The evidence uses below — engine evaluation, move quality, Masters comparison, mismatch markers, Rail filtering/annotation, and Root rarity — enrich an already navigable graph and are not themselves prerequisites for rendering or navigating the established Root/Line boards.
+
+Failure of supplementary evidence reduces richness rather than structural usability. Request failure must remain distinguishable from genuine absence at the local evidence surface, but it must not by itself reopen global `Updating…` or remove the normal settled check from a structurally established view.
+
 ## Engine evidence
 
 - Cached Lichess cloud evaluation is used only when it reaches adequate depth.
@@ -60,6 +68,7 @@ Deterministic tests should cover:
 - Rail-worthy filtering and popular-bad retention;
 - Root rarity thresholds and evidence gating;
 - request-failure values remaining distinct from genuine missing evidence;
-- consumer/presentation state keeping request failure distinct from ordinary unavailable or no-mismatch evidence.
+- consumer/presentation state keeping request failure distinct from ordinary unavailable or no-mismatch evidence;
+- supplementary evidence completing, failing, or arriving late without blocking or reopening successful structural readiness.
 
-Manual verification should include positions with both common and rare Root move orders and positions where Masters, rated Lichess, and engine evidence disagree in useful ways. It should also confirm that failed Masters or cloud-eval requests show an unavailable indicator rather than the ordinary no-data/no-mismatch state.
+Manual verification should include positions with both common and rare Root move orders and positions where Masters, rated Lichess, and engine evidence disagree in useful ways. It should also confirm that failed Masters or cloud-eval requests show an unavailable indicator rather than the ordinary no-data/no-mismatch state while leaving an otherwise established graph globally settled.

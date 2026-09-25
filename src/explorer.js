@@ -11,8 +11,9 @@ import {
 } from './graph.js';
 import { getNode, getOutgoing, putEdges, putNode } from './db.js';
 import { debugLog } from './debug.js';
+import { clearLichessAccessToken, requireLichessAccessToken } from './auth.js';
 
-const ENDPOINT = 'https://explorer.lichess.ovh/lichess';
+const ENDPOINT = 'https://explorer.lichess.org/lichess';
 const inFlight = new Map();
 
 function explorerUrl(key) {
@@ -39,12 +40,18 @@ export async function loadExplorer(key, { force = false } = {}) {
   }
 
   const promise = (async () => {
+    const token = await requireLichessAccessToken();
     const url = explorerUrl(canonical);
-    debugLog('explorer request', { position: canonical, url: url.toString() });
+    debugLog('explorer request', { position: canonical, url: url.toString(), authenticated: true });
 
     let response;
     try {
-      response = await fetch(url, { headers: { Accept: 'application/json' } });
+      response = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
     } catch (error) {
       debugLog('explorer network error', { position: canonical, url: url.toString(), error: error?.message ?? String(error) }, 'error');
       throw error;
@@ -55,6 +62,10 @@ export async function loadExplorer(key, { force = false } = {}) {
       let body = '';
       try { body = (await response.text()).slice(0, 500); } catch {}
       debugLog('explorer HTTP error', { position: canonical, status: response.status, body }, 'error');
+      if (response.status === 401) {
+        clearLichessAccessToken();
+        throw new Error('Lichess authorization expired. Reload to sign in again.');
+      }
       throw new Error(`Lichess explorer returned ${response.status}`);
     }
 

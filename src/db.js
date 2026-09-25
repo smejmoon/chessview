@@ -58,6 +58,43 @@ export async function putEdges(edges) {
   });
 }
 
+export async function replaceExplorerEdges(source, edges) {
+  const db = await openDb();
+  const tx = db.transaction('edges', 'readwrite');
+  const store = tx.objectStore('edges');
+  const index = store.index('source');
+  const pending = new Map(edges.map((edge) => [edge.id, edge]));
+
+  await new Promise((resolve, reject) => {
+    const request = index.openCursor(source);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        for (const edge of pending.values()) store.put(edge);
+        resolve();
+        return;
+      }
+
+      const existing = cursor.value;
+      const incoming = pending.get(existing.id);
+      if (incoming) {
+        store.put({ ...incoming, manual: Boolean(existing.manual || incoming.manual) });
+        pending.delete(existing.id);
+      } else if (!existing.manual) {
+        cursor.delete();
+      }
+      cursor.continue();
+    };
+  });
+
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
 async function getByIndex(indexName, value) {
   const db = await openDb();
   const tx = db.transaction('edges');

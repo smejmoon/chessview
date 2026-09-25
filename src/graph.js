@@ -153,3 +153,34 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
 
   return selected;
 }
+
+export function chooseRootNeighborhood({ center, incomingByTarget = new Map(), max = 19 }) {
+  const selected = [];
+  const seen = new Set([center]);
+  const frontier = [{ target: center, distance: 0, branch: null }];
+
+  while (frontier.length && selected.length < max) {
+    const current = frontier.shift();
+    const edges = (incomingByTarget.get(current.target) ?? [])
+      .slice()
+      .sort((a, b) => (b.games ?? 0) - (a.games ?? 0) || (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci) || a.source.localeCompare(b.source));
+
+    for (const edge of edges) {
+      if (selected.length >= max) break;
+      if (seen.has(edge.source)) continue;
+      seen.add(edge.source);
+      const distance = current.distance + 1;
+      const branch = current.branch ?? edge.source;
+      selected.push({
+        key: edge.source,
+        edge,
+        relation: 'root',
+        distance,
+        branch,
+      });
+      frontier.push({ target: edge.source, distance, branch });
+    }
+  }
+
+  return selected;
+}

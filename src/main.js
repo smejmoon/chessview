@@ -8,10 +8,12 @@ import './debug.css';
 import {
   canonicalPosition,
   chooseNeighborhood,
+  chooseRootNeighborhood,
   legalDestinations,
   omittedShare,
   positionFromUrl,
   positionUrl,
+  stableEdgeOrder,
   toPlayableFen,
 } from './graph.js';
 import { getIncoming, getNode, getOutgoing } from './db.js';
@@ -26,10 +28,18 @@ import {
 } from './debug.js';
 
 const app = document.querySelector('#app');
-
 const initialDepth = Number.isFinite(history.state?.cvDepth) ? history.state.cvDepth : 0;
+
+function viewFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const explicit = params.get('view');
+  if (explicit === 'roots' || explicit === 'lines') return explicit;
+  return localStorage.getItem('chessview.view') === 'roots' ? 'roots' : 'lines';
+}
+
 const state = {
   center: positionFromUrl(),
+  view: viewFromUrl(),
   orientation: localStorage.getItem('chessview.orientation') === 'black' ? 'black' : 'white',
   loading: false,
   error: '',
@@ -41,14 +51,14 @@ const state = {
   discoveryController: null,
 };
 
-debugLog('app start', { center: state.center, turn: state.center.split(' ')[1], navDepth: state.navDepth });
+debugLog('app start', { center: state.center, view: state.view, navDepth: state.navDepth });
 
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
-  if (window.innerWidth < 620) return 6;
-  if (window.innerWidth < 900 || area < 650_000) return 10;
-  if (window.innerWidth < 1250 || area < 1_000_000) return 14;
-  return 19;
+  if (window.innerWidth < 620) return 5;
+  if (window.innerWidth < 900 || area < 650_000) return 8;
+  if (window.innerWidth < 1250 || area < 1_000_000) return 12;
+  return 16;
 }
 
 function percent(value) {
@@ -67,20 +77,7 @@ function escapeHtml(value = '') {
     .replaceAll('"', '&quot;');
 }
 
-async function collectScene(center, max) {
-  const incomingEdges = await getIncoming(center);
-  const incoming = await Promise.all(
-    incomingEdges.map(async (edge) => {
-      const node = await getNode(edge.source);
-      return {
-        key: edge.source,
-        edge,
-        games: node?.games ?? edge.games ?? 0,
-        opening: node?.opening ?? null,
-      };
-    }),
-  );
-
+async function collectOutgoingGraph(center, max) {
   const outgoingBySource = new Map();
   const queue = [{ key: center, depth: 0 }];
   const visited = new Set();
@@ -90,25 +87,42 @@ async function collectScene(center, max) {
     visited.add(current.key);
     const edges = await getOutgoing(current.key);
     outgoingBySource.set(current.key, edges);
-    for (const edge of edges.filter((item) => item.qualifies)) {
+    for (const edge of edges.filter((item) => item.qualifies || item.manual).sort(stableEdgeOrder)) {
       if (!visited.has(edge.target)) queue.push({ key: edge.target, depth: current.depth + 1 });
     }
   }
+  return outgoingBySource;
+}
 
-  const selected = chooseNeighborhood({ center, incoming, outgoingBySource, max });
-  const selectedKeys = new Set(selected.map((item) => item.key));
-
-  for (const parentEdge of incomingEdges) {
-    if (selected.length >= max) break;
-    const siblings = (await getOutgoing(parentEdge.source))
-      .filter((edge) => edge.target !== center && (edge.qualifies || edge.manual))
-      .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci));
-    for (const edge of siblings) {
-      if (selected.length >= max) break;
-      if (selectedKeys.has(edge.target)) continue;
-      selectedKeys.add(edge.target);
-      selected.push({ key: edge.target, edge, relation: 'lateral', distance: 2, branch: parentEdge.source });
+async function collectIncomingGraph(center, max) {
+  const incomingByTarget = new Map();
+  const queue = [{ key: center, depth: 0 }];
+  const visited = new Set();
+  while (queue.length && visited.size < max * 3) {
+    const current = queue.shift();
+    if (visited.has(current.key) || current.depth > max) continue;
+    visited.add(current.key);
+    const edges = await getIncoming(current.key);
+    incomingByTarget.set(current.key, edges);
+    for (const edge of edges) {
+      if (!visited.has(edge.source)) queue.push({ key: edge.source, depth: current.depth + 1 });
     }
+  }
+  return incomingByTarget;
+}
+
+async function collectScene(center, max) {
+  const incomingEdges = await getIncoming(center);
+  let selected = [];
+  let outgoingBySource = new Map();
+  let incomingByTarget = new Map([[center, incomingEdges]]);
+
+  if (state.view === 'lines') {
+    outgoingBySource = await collectOutgoingGraph(center, max);
+    selected = chooseNeighborhood({ center, incoming: [], outgoingBySource, max });
+  } else {
+    incomingByTarget = await collectIncomingGraph(center, max);
+    selected = chooseRootNeighborhood({ center, incomingByTarget, max });
   }
 
   const nodes = new Map();
@@ -119,7 +133,7 @@ async function collectScene(center, max) {
     }),
   );
 
-  return { incomingEdges, outgoingBySource, selected, nodes };
+  return { incomingEdges, incomingByTarget, outgoingBySource, selected, nodes };
 }
 
 function disposeBoards() {
@@ -129,59 +143,96 @@ function disposeBoards() {
 
 function layoutPositions(items) {
   const positions = new Map();
-  positions.set(state.center, { x: 50, y: 50, tier: 0 });
-
-  const incoming = items.filter((item) => item.relation === 'incoming');
-  const lateral = items.filter((item) => item.relation === 'lateral');
-  const lower = items.filter((item) => item.relation === 'outgoing' || item.relation === 'descendant');
-
-  incoming.forEach((item, index) => {
-    const spread = incoming.length === 1 ? 0 : (index / (incoming.length - 1) - 0.5) * 58;
-    positions.set(item.key, { x: 50 + spread, y: 13, tier: 1 });
-  });
-
-  lateral.forEach((item, index) => {
-    const side = index % 2 === 0 ? -1 : 1;
-    const row = Math.floor(index / 2);
-    positions.set(item.key, { x: 50 + side * (38 + row * 5), y: 44 + row * 14, tier: 2 });
-  });
-
-  const roots = lower.filter((item) => item.distance === 1);
-  const rootX = new Map();
-  roots.forEach((item, index) => {
-    const normalized = roots.length === 1 ? 0 : index / (roots.length - 1) - 0.5;
-    rootX.set(item.branch ?? item.edge?.uci ?? item.key, 50 + normalized * 72);
-  });
-
-  const perBranchDepth = new Map();
-  lower.forEach((item) => {
-    const branch = item.branch ?? item.edge?.uci ?? item.key;
-    if (!rootX.has(branch)) {
-      const seed = [...branch].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-      rootX.set(branch, 18 + (seed % 65));
+  if (state.view === 'lines') {
+    const direct = items.filter((item) => item.distance === 1);
+    const deeper = items.filter((item) => item.distance > 1);
+    direct.forEach((item, index) => {
+      const x = direct.length === 1 ? 50 : 16 + (68 * index) / Math.max(1, direct.length - 1);
+      positions.set(item.key, { x, y: 75, tier: 1 });
+    });
+    const byDepth = new Map();
+    deeper.forEach((item) => {
+      if (!byDepth.has(item.distance)) byDepth.set(item.distance, []);
+      byDepth.get(item.distance).push(item);
+    });
+    for (const [depth, level] of byDepth) {
+      level.forEach((item, index) => {
+        const x = level.length === 1 ? 50 : 12 + (76 * index) / Math.max(1, level.length - 1);
+        positions.set(item.key, { x, y: Math.min(92, 76 + (depth - 1) * 9), tier: 2 });
+      });
     }
-    const depthIndex = perBranchDepth.get(branch) ?? 0;
-    perBranchDepth.set(branch, depthIndex + 1);
-    const xBase = rootX.get(branch);
-    const wiggle = item.distance > 1 ? ((depthIndex % 2 ? 1 : -1) * Math.min(8, item.distance * 2)) : 0;
-    const y = item.distance === 1 ? 79 : Math.min(92, 79 + (item.distance - 1) * 8);
-    positions.set(item.key, { x: xBase + wiggle, y, tier: item.distance <= 1 ? 1 : 2 });
-  });
-
+  } else {
+    const byDepth = new Map();
+    items.forEach((item) => {
+      if (!byDepth.has(item.distance)) byDepth.set(item.distance, []);
+      byDepth.get(item.distance).push(item);
+    });
+    for (const [depth, level] of byDepth) {
+      level.forEach((item, index) => {
+        const x = level.length === 1 ? 50 : 13 + (74 * index) / Math.max(1, level.length - 1);
+        positions.set(item.key, { x, y: Math.max(10, 53 - depth * 17), tier: depth === 1 ? 1 : 2 });
+      });
+    }
+  }
   return positions;
 }
 
 function relationLabel(item) {
-  if (item.relation === 'incoming') return 'from';
-  if (item.relation === 'lateral') return 'sibling';
+  if (state.view === 'roots') return item.distance === 1 ? 'root' : `−${item.distance}`;
   if (item.distance > 1) return `+${item.distance}`;
-  return 'next';
+  return 'line';
 }
 
-function debugDrawerHtml() {
+function setView(next) {
+  if (next === state.view) return;
+  state.view = next;
+  localStorage.setItem('chessview.view', next);
+  const url = new URL(window.location.href);
+  url.searchParams.set('view', next);
+  history.replaceState({ ...(history.state ?? {}), fen: state.center, cvDepth: state.navDepth }, '', `${url.pathname}${url.search}${url.hash}`);
+  state.error = '';
+  state.discoveryController?.abort();
+  state.loading = false;
+  debugLog('view changed', { view: next, center: state.center });
+  render().then(() => {
+    if (next === 'lines') refreshDiscovery();
+  });
+}
+
+function railExplorerHtml(scene) {
+  if (state.view === 'lines') {
+    const edges = (scene.outgoingBySource.get(state.center) ?? [])
+      .filter((edge) => edge.qualifies || edge.manual)
+      .slice()
+      .sort(stableEdgeOrder);
+    if (!edges.length) return `<div class="rail-empty">${state.loading ? 'Mapping continuations…' : 'No known Lines yet.'}</div>`;
+    return `<div class="explorer-list">${edges.slice(0, 14).map((edge) => `
+      <button class="explorer-row" type="button" data-nav-key="${escapeHtml(edge.target)}">
+        <span class="explorer-move">${escapeHtml(edge.san ?? edge.uci)}</span>
+        <span class="explorer-track"><span style="width:${Math.max(2, Math.round((edge.share ?? 0) * 100))}%"></span></span>
+        <span class="explorer-share">${percent(edge.share)}</span>
+        <span class="explorer-games">${compactGames(edge.games ?? 0)}</span>
+      </button>`).join('')}</div>`;
+  }
+
+  const edges = scene.incomingEdges.slice().sort((a, b) => (b.games ?? 0) - (a.games ?? 0) || (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci));
+  if (!edges.length) return `<div class="rail-empty">No known Roots yet. Roots grow as Chessview discovers positions through Lines.</div>`;
+  return `<div class="explorer-list">${edges.slice(0, 14).map((edge) => {
+    const node = scene.nodes.get(edge.source) ?? {};
+    return `
+      <button class="explorer-row roots-row" type="button" data-nav-key="${escapeHtml(edge.source)}">
+        <span class="explorer-move">${escapeHtml(edge.san ?? edge.uci)}</span>
+        <span class="root-name">${escapeHtml(node.opening?.name ?? 'known position')}</span>
+        <span class="explorer-share">${edge.share ? percent(edge.share) : 'root'}</span>
+        <span class="explorer-games">${edge.games ? compactGames(edge.games) : ''}</span>
+      </button>`;
+  }).join('')}</div>`;
+}
+
+function debugRailHtml() {
   if (!state.debug) return '';
   return `
-    <aside class="debug-drawer" aria-label="Chessview debug log">
+    <section class="rail-debug" aria-label="Chessview debug log">
       <div class="debug-head">
         <div class="debug-title">Debug <small>${getDebugEntries().length} events</small></div>
         <div class="debug-actions">
@@ -190,11 +241,15 @@ function debugDrawerHtml() {
         </div>
       </div>
       <pre class="debug-log" id="debug-log">${escapeHtml(debugText())}</pre>
-    </aside>
-  `;
+    </section>`;
 }
 
-function bindDebugControls() {
+function bindRailControls() {
+  document.querySelector('#roots-tab')?.addEventListener('click', () => setView('roots'));
+  document.querySelector('#lines-tab')?.addEventListener('click', () => setView('lines'));
+  document.querySelectorAll('[data-nav-key]').forEach((button) => {
+    button.addEventListener('click', () => recenter(button.dataset.navKey, { pushHistory: true }));
+  });
   document.querySelector('#debug-toggle')?.addEventListener('click', () => {
     state.debug = setDebugEnabled(!state.debug);
     render();
@@ -223,51 +278,58 @@ function renderShell(scene) {
   const opening = centerNode.opening;
   const boardPosition = state.center;
   const turn = boardPosition.split(' ')[1] === 'b' ? 'black' : 'white';
+  const rootCount = scene.incomingEdges.length;
+  const lineCount = (scene.outgoingBySource.get(state.center) ?? []).filter((edge) => edge.qualifies || edge.manual).length;
 
   app.innerHTML = `
     <main class="app-shell">
       <header class="topbar">
-        <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position">
-          <span class="brand-mark">♞</span>
-          <span>Chessview</span>
-        </a>
+        <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a>
         <div class="topbar-meta">
-          <span class="network-status ${state.loading ? 'is-loading' : ''}">${state.loading ? 'mapping…' : state.error ? 'offline map' : 'Lichess · rated standard'}</span>
-          <button class="toolbar-button" id="back" type="button" ${state.navDepth > 0 ? '' : 'disabled'} title="Back to the previously viewed position">← Back</button>
-          <button class="toolbar-button ${state.debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${state.debug}">Debug</button>
-          <button class="icon-button" id="flip" type="button" aria-label="Flip all boards" title="Flip all boards">⇅</button>
+          <span class="network-status ${state.loading ? 'is-loading' : ''}">${state.loading ? 'mapping…' : state.error ? 'cached map' : 'Lichess · rated standard'}</span>
+          <button class="toolbar-button" id="back" type="button" ${state.navDepth > 0 ? '' : 'disabled'}>← Back</button>
+          <button class="toolbar-button ${state.debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button>
+          <button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button>
         </div>
       </header>
 
-      <section class="map" id="map" aria-label="Opening position map">
-        <svg class="edges" id="edges" aria-hidden="true"></svg>
-        <div class="center-position position" data-key="${escapeHtml(state.center)}">
-          <div class="center-copy">
+      <div class="workspace">
+        <section class="map mode-${state.view}" id="map" aria-label="${state.view === 'roots' ? 'Root position map' : 'Continuation line map'}">
+          <svg class="edges" id="edges" aria-hidden="true"></svg>
+          <div class="center-position position" data-key="${escapeHtml(state.center)}">
+            <div class="center-board board-frame" id="center-board"></div>
+            <div class="center-hint">${state.view === 'roots' ? 'Known move orders converge here.' : 'Drag a legal move, or choose a Line.'}</div>
+          </div>
+          <div id="satellites"></div>
+          ${state.error ? `<div class="toast">${escapeHtml(state.error)}</div>` : ''}
+        </section>
+
+        <aside class="analysis-rail">
+          <div class="rail-position">
             <div class="eyebrow">${opening ? `${escapeHtml(opening.eco ?? '')} · opening` : 'current position'}</div>
             <h1>${escapeHtml(opening?.name ?? 'Explore from here')}</h1>
             <div class="position-stats">
               ${total ? `<span>${compactGames(total)} games</span>` : '<span>no cached games yet</span>'}
               <span>${turn} to move</span>
-              ${other >= 0.005 ? `<span>other moves · ${percent(other)}</span>` : ''}
+              ${state.view === 'lines' && other >= 0.005 ? `<span>other · ${percent(other)}</span>` : ''}
             </div>
           </div>
-          <div class="center-board board-frame" id="center-board"></div>
-          <div class="center-hint">Drag a legal move, or choose a nearby board.</div>
-        </div>
-        <div id="satellites"></div>
-        ${state.error ? `<div class="toast">${escapeHtml(state.error)}</div>` : ''}
-        ${debugDrawerHtml()}
-      </section>
-    </main>
-  `;
 
-  debugLog('center board render', {
-    position: boardPosition,
-    turn,
-    orientation: state.orientation,
-    legalOrigins: legalDestinations(boardPosition).size,
-    navDepth: state.navDepth,
-  });
+          <div class="mode-tabs" role="tablist" aria-label="Graph direction">
+            <button id="roots-tab" class="mode-tab ${state.view === 'roots' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.view === 'roots'}">Roots <small>${rootCount}</small></button>
+            <button id="lines-tab" class="mode-tab ${state.view === 'lines' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.view === 'lines'}">Lines <small>${lineCount || ''}</small></button>
+          </div>
+
+          <section class="rail-explorer">
+            <div class="rail-section-head">
+              <div><strong>${state.view === 'roots' ? 'Known Roots' : 'Opening Explorer'}</strong><small>${state.view === 'roots' ? `${scene.selected.length} positions in known ancestry` : 'moves from this position'}</small></div>
+            </div>
+            ${railExplorerHtml(scene)}
+          </section>
+          ${debugRailHtml()}
+        </aside>
+      </div>
+    </main>`;
 
   const centerEl = document.querySelector('#center-board');
   const centerApi = Chessground(centerEl, {
@@ -283,13 +345,9 @@ function renderShell(scene) {
       showDests: true,
       events: {
         after: async (from, to) => {
-          debugLog('board move event', { source: boardPosition, turn, from, to });
           const result = await ensureManualEdge(boardPosition, from, to, 'q');
           if (result) recenter(result.target, { pushHistory: true });
-          else {
-            debugLog('board move reverted', { source: boardPosition, from, to }, 'warn');
-            render();
-          }
+          else render();
         },
       },
     },
@@ -300,19 +358,15 @@ function renderShell(scene) {
   state.boardApis.push(centerApi);
 
   document.querySelector('#back')?.addEventListener('click', () => {
-    if (state.navDepth <= 0) return;
-    debugLog('navigation back', { from: state.center, navDepth: state.navDepth });
-    history.back();
+    if (state.navDepth > 0) history.back();
   });
-
-  document.querySelector('#flip').addEventListener('click', () => {
+  document.querySelector('#flip')?.addEventListener('click', () => {
     state.orientation = state.orientation === 'white' ? 'black' : 'white';
     localStorage.setItem('chessview.orientation', state.orientation);
-    debugLog('orientation changed', { orientation: state.orientation });
     render();
   });
 
-  bindDebugControls();
+  bindRailControls();
   renderSatellites(scene);
 }
 
@@ -323,6 +377,7 @@ function renderSatellites(scene) {
   scene.selected.forEach((item) => {
     const node = scene.nodes.get(item.key) ?? {};
     const point = positions.get(item.key);
+    if (!point) return;
     const wrapper = document.createElement('button');
     wrapper.type = 'button';
     wrapper.className = `satellite position tier-${point.tier} relation-${item.relation}`;
@@ -331,18 +386,10 @@ function renderSatellites(scene) {
     wrapper.style.setProperty('--y', `${point.y}%`);
     wrapper.title = node.opening?.name ?? item.edge?.san ?? item.key;
     wrapper.innerHTML = `
-      <span class="mini-label">
-        <span class="relation">${relationLabel(item)}</span>
-        <strong>${escapeHtml(item.edge?.san ?? '')}</strong>
-        ${item.edge?.share ? `<span>${percent(item.edge.share)}</span>` : ''}
-      </span>
+      <span class="mini-label"><span class="relation">${relationLabel(item)}</span><strong>${escapeHtml(item.edge?.san ?? '')}</strong>${item.edge?.share ? `<span>${percent(item.edge.share)}</span>` : ''}</span>
       <span class="mini-board board-frame"></span>
-      ${node.opening?.name ? `<span class="opening-label">${escapeHtml(node.opening.name)}</span>` : ''}
-    `;
-    wrapper.addEventListener('click', () => {
-      debugLog('satellite selected', { relation: item.relation, move: item.edge?.san ?? null, target: item.key });
-      recenter(item.key, { pushHistory: true });
-    });
+      ${node.opening?.name ? `<span class="opening-label">${escapeHtml(node.opening.name)}</span>` : ''}`;
+    wrapper.addEventListener('click', () => recenter(item.key, { pushHistory: true }));
     host.appendChild(wrapper);
 
     const boardEl = wrapper.querySelector('.mini-board');
@@ -369,12 +416,10 @@ function drawEdges(scene) {
   const mapRect = map.getBoundingClientRect();
   svg.setAttribute('viewBox', `0 0 ${mapRect.width} ${mapRect.height}`);
   svg.innerHTML = '';
-
   const elementFor = (key) => document.querySelector(`.position[data-key="${CSS.escape(key)}"]`);
-  const centerEl = elementFor(state.center);
 
   const addLine = (sourceKey, targetKey, strong = false) => {
-    const source = elementFor(sourceKey) ?? centerEl;
+    const source = elementFor(sourceKey);
     const target = elementFor(targetKey);
     if (!source || !target) return;
     const a = source.getBoundingClientRect();
@@ -383,7 +428,7 @@ function drawEdges(scene) {
     const y1 = a.top + a.height / 2 - mapRect.top;
     const x2 = b.left + b.width / 2 - mapRect.left;
     const y2 = b.top + b.height / 2 - mapRect.top;
-    const bend = Math.max(24, Math.abs(y2 - y1) * 0.34);
+    const bend = Math.max(26, Math.abs(y2 - y1) * 0.32);
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${y1 + (y2 > y1 ? bend : -bend)}, ${x2} ${y2 - (y2 > y1 ? bend : -bend)}, ${x2} ${y2}`);
     path.setAttribute('class', strong ? 'edge edge-strong' : 'edge');
@@ -391,9 +436,7 @@ function drawEdges(scene) {
   };
 
   for (const item of scene.selected) {
-    if (item.relation === 'incoming') addLine(item.key, state.center, item.edge?.share >= 0.2);
-    else if (item.relation === 'lateral') addLine(state.center, item.key, false);
-    else addLine(item.edge?.source ?? state.center, item.key, item.edge?.share >= 0.2);
+    addLine(item.edge?.source ?? state.center, item.edge?.target ?? item.key, (item.edge?.share ?? 0) >= 0.2);
   }
 }
 
@@ -407,30 +450,27 @@ async function render() {
   } catch (error) {
     debugLog('render failed', error, 'error');
     state.error = error?.message ?? 'Could not render the opening map.';
-    const fallback = { selected: [], nodes: new Map([[state.center, { key: state.center }]]) };
-    renderShell(fallback);
+    renderShell({ incomingEdges: [], incomingByTarget: new Map(), outgoingBySource: new Map(), selected: [], nodes: new Map([[state.center, { key: state.center }]]) });
   }
 }
 
 async function refreshDiscovery() {
+  if (state.view !== 'lines') return;
   state.discoveryController?.abort();
   const controller = new AbortController();
   state.discoveryController = controller;
   const requestedCenter = state.center;
   state.loading = true;
   state.error = '';
-  debugLog('refresh discovery', { center: requestedCenter, budget: boardBudget() });
   render();
   try {
     await discoverForViewport(requestedCenter, boardBudget(), () => {
-      if (!controller.signal.aborted && requestedCenter === state.center) render();
+      if (!controller.signal.aborted && requestedCenter === state.center && state.view === 'lines') render();
     }, { signal: controller.signal });
   } catch (error) {
     if (controller.signal.aborted) return;
     debugLog('discovery failed', { center: requestedCenter, error: error?.message ?? String(error) }, 'error');
-    if (requestedCenter === state.center) {
-      state.error = error?.message ?? 'Lichess Opening Explorer is temporarily unavailable.';
-    }
+    if (requestedCenter === state.center) state.error = error?.message ?? 'Lichess Opening Explorer is temporarily unavailable.';
   } finally {
     if (state.discoveryController === controller && requestedCenter === state.center) {
       state.loading = false;
@@ -451,29 +491,30 @@ async function recenter(key, { pushHistory = false } = {}) {
   } else {
     history.replaceState({ fen: next, cvDepth: state.navDepth }, '', positionUrl(next));
   }
-  debugLog('recenter', { from: previous, to: next, pushHistory, navDepth: state.navDepth });
+  debugLog('recenter', { from: previous, to: next, view: state.view, navDepth: state.navDepth });
   await render();
-  refreshDiscovery();
+  if (state.view === 'lines') refreshDiscovery();
 }
 
 window.addEventListener('popstate', (event) => {
-  const previous = state.center;
   state.center = positionFromUrl();
+  state.view = viewFromUrl();
   state.navDepth = Number.isFinite(event.state?.cvDepth) ? event.state.cvDepth : 0;
   state.error = '';
-  debugLog('popstate', { from: previous, to: state.center, navDepth: state.navDepth });
-  render().then(refreshDiscovery);
+  render().then(() => {
+    if (state.view === 'lines') refreshDiscovery();
+  });
 });
 
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    debugLog('viewport resized', { width: window.innerWidth, height: window.innerHeight, budget: boardBudget() });
-    render();
-  }, 120);
+  resizeTimer = setTimeout(render, 120);
 });
 
-history.replaceState({ fen: state.center, cvDepth: state.navDepth }, '', positionUrl(state.center));
+const initialUrl = new URL(window.location.href);
+initialUrl.searchParams.set('fen', state.center);
+initialUrl.searchParams.set('view', state.view);
+history.replaceState({ fen: state.center, cvDepth: state.navDepth }, '', `${initialUrl.pathname}${initialUrl.search}${initialUrl.hash}`);
 await render();
-refreshDiscovery();
+if (state.view === 'lines') refreshDiscovery();

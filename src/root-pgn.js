@@ -416,6 +416,7 @@ function currentViewMatches(detail) {
 async function decorateForView(detail) {
   const run = ++structureGeneration;
   let requestedRefresh = false;
+  let failed = false;
   try {
     const expansion = await expandCurrentRootTranspositions();
     if (run !== structureGeneration || !currentViewMatches(detail)) return;
@@ -434,6 +435,7 @@ async function decorateForView(detail) {
     if (run !== structureGeneration || !currentViewMatches(detail)) return;
     bindLinkedHover();
   } catch (error) {
+    failed = true;
     console.error('Chessview Root composition failed', error);
   } finally {
     if (!requestedRefresh && run === structureGeneration && currentViewMatches(detail)) {
@@ -442,6 +444,7 @@ async function decorateForView(detail) {
         label: 'structure',
         task: detail.tasks?.structure,
         center: detail.center,
+        failed,
       });
     }
   }

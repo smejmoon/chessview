@@ -61,6 +61,14 @@
   opacity: 0;
 }
 
+.view-status.is-failed {
+  color: #c99a76;
+}
+
+.view-status.is-failed .view-status-mark {
+  color: #e0a06d;
+}
+
 @keyframes view-status-pulse {
   0%, 100% { opacity: .38; transform: scale(.82); }
   50% { opacity: 1; transform: scale(1); }
@@ -77,7 +85,8 @@
   .view-status.is-check { min-width: 14px; }
 
   .view-status.is-updating .view-status-label,
-  .view-status.is-ready .view-status-label {
+  .view-status.is-ready .view-status-label,
+  .view-status.is-failed .view-status-label {
     max-width: 0;
     opacity: 0;
   }

@@ -72,6 +72,10 @@ function currentView() {
   return currentMap()?.classList.contains('mode-roots') ? 'roots' : 'lines';
 }
 
+function currentRun(run, centerAtStart) {
+  return run === generation && currentCenter() === centerAtStart;
+}
+
 function positionElement(key) {
   return document.querySelector(`.position[data-key="${CSS.escape(key)}"]`);
 }
@@ -85,9 +89,9 @@ function recenterFromRail(key) {
   window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
 }
 
-function humanMarkerHtml(mismatch, population, evidenceValue = null) {
+function humanMarkerHtml(mismatch, population, evidenceValue = null, { showFailure = true } = {}) {
   const populationLabel = population === 'masters' ? 'Masters' : 'Lichess';
-  const failure = humanFailureIndicator(evidenceValue, populationLabel);
+  const failure = showFailure ? humanFailureIndicator(evidenceValue, populationLabel) : null;
   if (failure) {
     return `<span class="human-marker human-${population} human-unavailable" title="${escapeHtml(failure.title)}">${failure.text}</span>`;
   }
@@ -173,19 +177,19 @@ function renderGuide() {
   position.insertAdjacentHTML('beforebegin', guideHtml());
 }
 
-async function evidenceForEdge(edge, centerAtStart) {
+async function evidenceForEdge(edge, centerAtStart, run) {
   if (!edge?.source || !edge?.target) return null;
   const sourceNode = await getNode(edge.source);
-  if (currentCenter() !== centerAtStart) return null;
+  if (!currentRun(run, centerAtStart)) return null;
 
   const sourceEval = await loadCloudEval(edge.source);
-  if (currentCenter() !== centerAtStart) return null;
+  if (!currentRun(run, centerAtStart)) return null;
   const targetEval = await loadCloudEval(edge.target);
-  if (currentCenter() !== centerAtStart) return null;
+  if (!currentRun(run, centerAtStart)) return null;
   const moveEval = moveEvaluation(edge.source, edge, sourceEval, targetEval);
 
   const masters = await loadMasters(edge.source);
-  if (currentCenter() !== centerAtStart) return null;
+  if (!currentRun(run, centerAtStart)) return null;
   const lichess = sourceNode?.explorer ?? null;
   return {
     sourceNode,
@@ -199,13 +203,13 @@ async function evidenceForEdge(edge, centerAtStart) {
   };
 }
 
-async function edgeForSatellite(element, view, centerAtStart) {
+async function edgeForSatellite(element, view, centerAtStart, run) {
   const key = element.dataset.key;
   const move = element.querySelector('.mini-label strong')?.textContent?.trim() ?? '';
   if (!key) return null;
 
   const candidates = view === 'roots' ? await getOutgoing(key) : await getIncoming(key);
-  if (currentCenter() !== centerAtStart) return null;
+  if (!currentRun(run, centerAtStart)) return null;
   const visible = candidates.filter((edge) => {
     const neighbor = view === 'roots' ? edge.target : edge.source;
     return Boolean(positionElement(neighbor));
@@ -271,15 +275,15 @@ function decorateSatelliteUi(element, edge, evidence, view) {
   }
 }
 
-async function decorateSatellites(centerAtStart) {
+async function decorateSatellites(centerAtStart, run) {
   const view = currentView();
   const satellites = [...document.querySelectorAll('.satellite[data-key]')];
   for (const element of satellites) {
-    if (currentCenter() !== centerAtStart || !element.isConnected) return;
-    const edge = await edgeForSatellite(element, view, centerAtStart);
+    if (!currentRun(run, centerAtStart) || !element.isConnected) return;
+    const edge = await edgeForSatellite(element, view, centerAtStart, run);
     if (!edge) continue;
-    const evidence = await evidenceForEdge(edge, centerAtStart);
-    if (!evidence || currentCenter() !== centerAtStart || !element.isConnected) return;
+    const evidence = await evidenceForEdge(edge, centerAtStart, run);
+    if (!evidence || !currentRun(run, centerAtStart) || !element.isConnected) return;
     decorateSatelliteUi(element, edge, evidence, view);
   }
 }
@@ -302,12 +306,12 @@ function decorateConnectorQuality() {
   }
 }
 
-function railRowHtml(row) {
+function railRowHtml(row, { showMastersFailure = true } = {}) {
   const { edge, moveEval, targetEval, masters, mastersMismatch, lichessMismatch, sourceEval } = row;
   const quality = qualityLabel(moveEval);
   const engineFailed = evidenceRequestFailed(sourceEval, targetEval);
   const evalLabel = moveEval ? lossLabel(moveEval) : engineFailed ? '!' : '—';
-  const mismatch = `${humanMarkerHtml(mastersMismatch, 'masters', masters)}${humanMarkerHtml(lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
+  const mismatch = `${humanMarkerHtml(mastersMismatch, 'masters', masters, { showFailure: showMastersFailure })}${humanMarkerHtml(lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
   const share = evidencedShareLabel(edge);
   const engineNote = !moveEval && engineFailed ? ' · engine evidence request failed' : '';
   const title = `${edge.san ?? edge.uci}${share ? ` · ${share}` : ''}${edge.games ? ` · ${compactGames(edge.games)} games` : ''}${moveEval ? ` · ${lossLabel(moveEval)} pawn loss vs best` : ''}${engineNote}`;
@@ -320,84 +324,105 @@ function railRowHtml(row) {
     </button>`;
 }
 
-async function hydrateRailMove(centerAtStart, edge, sourceEval) {
-  const moveEval = moveEvaluation(centerAtStart, edge, sourceEval, null);
-  if (moveEval || !sourceEval || sourceEval.depth < ENGINE_MIN_DEPTH || evidenceRequestFailed(sourceEval)) {
-    return { moveEval, targetEval: null };
-  }
-  const targetEval = await loadCloudEval(edge.target);
-  if (currentCenter() !== centerAtStart) return null;
+function railRow(edge, moveEval, targetEval, sourceEval, masters, lichess, sourceKey) {
   return {
-    moveEval: moveEvaluation(centerAtStart, edge, sourceEval, targetEval),
+    edge,
+    moveEval,
     targetEval,
+    sourceEval,
+    masters,
+    mastersMismatch: humanMismatch(masters, edge, sourceKey, moveEval),
+    lichessMismatch: humanMismatch(lichess, edge, sourceKey, moveEval),
   };
 }
 
-async function decorateLineRail(centerAtStart) {
-  const rail = document.querySelector('.analysis-rail');
-  if (!rail) return;
-  const node = await getNode(centerAtStart);
-  const outgoing = await getOutgoing(centerAtStart);
-  if (currentCenter() !== centerAtStart) return;
-
-  const sourceEval = await loadCloudEval(centerAtStart);
-  if (currentCenter() !== centerAtStart) return;
-  const masters = await loadMasters(centerAtStart);
-  if (currentCenter() !== centerAtStart) return;
-  const lichess = node?.explorer ?? null;
-
-  const candidates = outgoing
-    .slice()
-    .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || (a.uci ?? '').localeCompare(b.uci ?? ''))
-    .filter((edge) => edge.manual || (edge.games ?? 0) >= HUMAN_SAMPLE_FLOOR || (edge.share ?? 0) > POPULAR_BAD_SHARE);
-
-  const rows = [];
-  const batchSize = 4;
-  for (let index = 0; index < candidates.length; index += batchSize) {
-    const batch = await Promise.all(candidates.slice(index, index + batchSize).map(async (edge) => {
-      const hydrated = await hydrateRailMove(centerAtStart, edge, sourceEval);
-      if (!hydrated || currentCenter() !== centerAtStart) return null;
-      const { moveEval, targetEval } = hydrated;
-      if (!railWorthy({ edge, sourceKey: centerAtStart, lichessExplorer: lichess, moveQuality: moveEval })) return null;
-      return {
-        edge,
-        moveEval,
-        targetEval,
-        sourceEval,
-        masters,
-        mastersMismatch: humanMismatch(masters, edge, centerAtStart, moveEval),
-        lichessMismatch: humanMismatch(lichess, edge, centerAtStart, moveEval),
-      };
-    }));
-    if (currentCenter() !== centerAtStart) return;
-    rows.push(...batch.filter(Boolean));
-  }
-
+function renderLineRailRows(centerAtStart, run, candidates, rowsById, masters) {
+  if (!currentRun(run, centerAtStart)) return false;
+  const rows = candidates.map((edge) => rowsById.get(edge.id)).filter(Boolean);
   const linesCount = document.querySelector('#lines-tab small');
   if (linesCount) linesCount.textContent = String(rows.length);
-  if (currentView() !== 'lines') return;
+  if (currentView() !== 'lines') return true;
 
-  const list = rail.querySelector('.rail-explorer .explorer-list');
-  if (!list) return;
-  const signature = rows.map(({ edge, moveEval, targetEval, masters, mastersMismatch, lichessMismatch }) => [
+  const list = document.querySelector('.analysis-rail .rail-explorer .explorer-list');
+  if (!list) return false;
+  const mastersFailure = humanFailureIndicator(masters, 'Masters');
+  const signature = rows.map(({ edge, moveEval, targetEval, masters: rowMasters, mastersMismatch, lichessMismatch }) => [
     edge.id,
     moveEval?.lossCp,
     moveEval?.quality,
     mastersMismatch?.direction,
     lichessMismatch?.direction,
-    evidenceRequestFailed(sourceEval, targetEval) ? 'engine-failed' : '',
-    evidenceRequestFailed(masters) ? 'masters-failed' : '',
+    evidenceRequestFailed(rowMasters) ? 'masters-failed' : '',
+    evidenceRequestFailed(rowsById.get(edge.id)?.sourceEval, targetEval) ? 'engine-failed' : '',
   ].join(':')).join('|');
-  if (list.dataset.evalSignature === signature) return;
-  list.dataset.evalSignature = signature;
+  const fullSignature = `${signature}|masters:${mastersFailure ? 'failed' : masters ? 'ready' : 'pending'}`;
+  if (list.dataset.evalSignature === fullSignature) return true;
+  list.dataset.evalSignature = fullSignature;
   list.classList.add('eval-rail-list');
+  const humanHead = mastersFailure
+    ? `<span class="eval-human-head">Human <span class="human-marker human-masters human-unavailable" title="${escapeHtml(mastersFailure.title)}">${mastersFailure.text}</span></span>`
+    : '<span>Human</span>';
   list.innerHTML = rows.length
-    ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span>Human</span><span></span></div>${rows.map((row) => railRowHtml(row)).join('')}`
+    ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span>${humanHead}<span></span></div>${rows.map((row) => railRowHtml(row, { showMastersFailure: false })).join('')}`
     : '<div class="rail-empty">No Rail-worthy Lines yet.</div>';
 
   list.querySelectorAll('[data-eval-nav]').forEach((button) => {
     button.addEventListener('click', () => recenterFromRail(button.dataset.evalNav));
   });
+  return true;
+}
+
+async function decorateLineRail(centerAtStart, run) {
+  const node = await getNode(centerAtStart);
+  const outgoing = await getOutgoing(centerAtStart);
+  if (!currentRun(run, centerAtStart)) return;
+  const lichess = node?.explorer ?? null;
+
+  const sourceEvalPromise = loadCloudEval(centerAtStart);
+  const mastersPromise = loadMasters(centerAtStart);
+  const sourceEval = await sourceEvalPromise;
+  if (!currentRun(run, centerAtStart)) return;
+
+  const candidates = outgoing
+    .slice()
+    .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || (a.uci ?? '').localeCompare(b.uci ?? ''))
+    .filter((edge) => edge.manual || (edge.games ?? 0) >= HUMAN_SAMPLE_FLOOR || (edge.share ?? 0) > POPULAR_BAD_SHARE);
+  const rowsById = new Map();
+  const fallbackEdges = [];
+  const canUseFallback = Boolean(sourceEval?.pvs?.length)
+    && Number.isFinite(sourceEval?.depth)
+    && sourceEval.depth >= ENGINE_MIN_DEPTH
+    && !evidenceRequestFailed(sourceEval);
+
+  for (const edge of candidates) {
+    const moveEval = moveEvaluation(centerAtStart, edge, sourceEval, null);
+    if (!moveEval && canUseFallback) {
+      fallbackEdges.push(edge);
+      continue;
+    }
+    if (!railWorthy({ edge, sourceKey: centerAtStart, lichessExplorer: lichess, moveQuality: moveEval })) continue;
+    rowsById.set(edge.id, railRow(edge, moveEval, null, sourceEval, null, lichess, centerAtStart));
+  }
+  renderLineRailRows(centerAtStart, run, candidates, rowsById, null);
+
+  const masters = await mastersPromise;
+  if (!currentRun(run, centerAtStart)) return;
+  for (const [id, row] of rowsById) {
+    rowsById.set(id, railRow(row.edge, row.moveEval, row.targetEval, sourceEval, masters, lichess, centerAtStart));
+  }
+  renderLineRailRows(centerAtStart, run, candidates, rowsById, masters);
+
+  for (const edge of fallbackEdges) {
+    const targetEval = await loadCloudEval(edge.target);
+    if (!currentRun(run, centerAtStart)) return;
+    const moveEval = moveEvaluation(centerAtStart, edge, sourceEval, targetEval);
+    if (railWorthy({ edge, sourceKey: centerAtStart, lichessExplorer: lichess, moveQuality: moveEval })) {
+      rowsById.set(edge.id, railRow(edge, moveEval, targetEval, sourceEval, masters, lichess, centerAtStart));
+    } else {
+      rowsById.delete(edge.id);
+    }
+    renderLineRailRows(centerAtStart, run, candidates, rowsById, masters);
+  }
 }
 
 function rootRowDepth(row) {
@@ -407,13 +432,13 @@ function rootRowDepth(row) {
   return match ? Number(match[0]) : null;
 }
 
-async function edgeForRootRow(row, centerAtStart, depthByKey) {
+async function edgeForRootRow(row, centerAtStart, depthByKey, run) {
   const key = row.dataset.navKey;
   const depth = rootRowDepth(row);
   const move = row.querySelector('.explorer-move')?.textContent?.trim() ?? '';
   if (!key || !Number.isFinite(depth)) return null;
   const outgoing = await getOutgoing(key);
-  if (currentCenter() !== centerAtStart) return null;
+  if (!currentRun(run, centerAtStart)) return null;
   return outgoing
     .filter((edge) => depth === 1 ? edge.target === centerAtStart : depthByKey.get(edge.target) === depth - 1)
     .sort((a, b) => {
@@ -423,18 +448,18 @@ async function edgeForRootRow(row, centerAtStart, depthByKey) {
     })[0] ?? null;
 }
 
-async function decorateRootRail(centerAtStart) {
+async function decorateRootRail(centerAtStart, run) {
   if (currentView() !== 'roots') return;
   const rows = [...document.querySelectorAll('.roots-row[data-nav-key]')];
   if (!rows.length) return;
   const depthByKey = new Map(rows.map((row) => [row.dataset.navKey, rootRowDepth(row)]));
 
   for (const row of rows) {
-    if (currentCenter() !== centerAtStart || !row.isConnected) return;
-    const edge = await edgeForRootRow(row, centerAtStart, depthByKey);
+    if (!currentRun(run, centerAtStart) || !row.isConnected) return;
+    const edge = await edgeForRootRow(row, centerAtStart, depthByKey, run);
     if (!edge) continue;
-    const evidence = await evidenceForEdge(edge, centerAtStart);
-    if (!evidence || currentCenter() !== centerAtStart || !row.isConnected) return;
+    const evidence = await evidenceForEdge(edge, centerAtStart, run);
+    if (!evidence || !currentRun(run, centerAtStart) || !row.isConnected) return;
 
     const quality = qualityLabel(evidence.moveEval);
     const rarity = rootRarity(edge, evidence.sourceNode);
@@ -468,12 +493,12 @@ async function decorateRootRail(centerAtStart) {
   }
 }
 
-async function decorateCenter(centerAtStart) {
+async function decorateCenter(centerAtStart, run) {
   const position = document.querySelector('.rail-current-details');
   const stats = position?.querySelector('.position-stats');
   if (!position || !stats) return;
   const cloud = await loadCloudEval(centerAtStart);
-  if (currentCenter() !== centerAtStart || !position.isConnected) return;
+  if (!currentRun(run, centerAtStart) || !position.isConnected) return;
   const evaluation = positionEvaluation(cloud);
 
   let badge = stats.querySelector('.center-eval-detail');
@@ -493,21 +518,23 @@ async function decorate(detail) {
   const centerAtStart = detail.center;
   try {
     decorateStructure();
-    if (currentCenter() !== centerAtStart) return;
+    if (!currentRun(run, centerAtStart)) return;
 
-    await decorateCenter(centerAtStart);
-    if (run !== generation || currentCenter() !== centerAtStart) return;
-    await decorateLineRail(centerAtStart);
-    if (run !== generation || currentCenter() !== centerAtStart) return;
-    await decorateRootRail(centerAtStart);
-    if (run !== generation || currentCenter() !== centerAtStart) return;
-    await decorateSatellites(centerAtStart);
-    if (run !== generation || currentCenter() !== centerAtStart) return;
+    const results = await Promise.allSettled([
+      decorateCenter(centerAtStart, run),
+      decorateLineRail(centerAtStart, run),
+      decorateRootRail(centerAtStart, run),
+      decorateSatellites(centerAtStart, run),
+    ]);
+    for (const result of results) {
+      if (result.status === 'rejected') console.error('Chessview evidence decoration failed', result.reason);
+    }
+    if (!currentRun(run, centerAtStart)) return;
     decorateConnectorQuality();
   } catch (error) {
     console.error('Chessview evidence decoration failed', error);
   } finally {
-    if (run === generation && currentCenter() === centerAtStart) {
+    if (currentRun(run, centerAtStart)) {
       reportViewWorkSettled({
         cycleId: detail.cycleId,
         label: 'evidence',

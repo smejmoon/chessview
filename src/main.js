@@ -68,6 +68,9 @@ function viewStatusSpec(presentation) {
   if (presentation === 'check') {
     return { mark: '✓', label: '', title: 'Current view finished updating' };
   }
+  if (presentation === 'failed') {
+    return { mark: '!', label: 'Unavailable', title: 'Current view could not finish updating' };
+  }
   return { mark: '', label: '', title: '' };
 }
 
@@ -90,7 +93,7 @@ const viewCycle = createViewCycleController({ onPresentation: paintViewStatus })
 debugLog('app start', { center: state.center, view: state.view, navDepth: state.navDepth });
 
 function beginViewCycle({ discovery = state.view === 'lines' } = {}) {
-  const expected = ['render', 'structure', 'evidence'];
+  const expected = ['render', 'structure'];
   if (discovery) expected.push('discovery');
   const cycleId = viewCycle.start(expected);
   debugLog('view cycle started', { cycleId, center: state.center, view: state.view, discovery });
@@ -241,7 +244,7 @@ function setView(next) {
   history.replaceState({ ...(history.state ?? {}), fen: state.center, cvDepth: state.navDepth }, '', `${url.pathname}${url.search}${url.hash}`);
   state.error = '';
   state.discoveryController?.abort();
-  state.loading = false;
+  state.loading = next === 'lines';
   debugLog('view changed', { view: next, center: state.center });
   const cycleId = beginViewCycle({ discovery: next === 'lines' });
   render({ cycleId }).then(() => {
@@ -510,10 +513,10 @@ function announceRendered(cycleId, evidenceTask, structureTask) {
   });
 }
 
-async function render({ cycleId = viewCycle.cycleId } = {}) {
+async function render({ cycleId = viewCycle.cycleId, hydrateEvidence = !state.loading } = {}) {
   if (cycleId !== viewCycle.cycleId) return;
   const renderTask = viewCycle.begin(cycleId, 'render');
-  const evidenceTask = viewCycle.begin(cycleId, 'evidence');
+  const evidenceTask = hydrateEvidence ? viewCycle.begin(cycleId, 'evidence') : null;
   const structureTask = viewCycle.begin(cycleId, 'structure');
   const generation = ++state.generation;
 
@@ -529,7 +532,7 @@ async function render({ cycleId = viewCycle.cycleId } = {}) {
     state.error = error?.message ?? 'Could not render the opening map.';
     const scene = { incomingEdges: [], outgoingBySource: new Map(), selected: [], nodes: new Map([[state.center, { key: state.center }]]) };
     renderShell(scene);
-    viewCycle.settle(cycleId, 'render', renderTask);
+    viewCycle.fail(cycleId, 'render', renderTask);
     announceRendered(cycleId, evidenceTask, structureTask);
   }
 }
@@ -541,6 +544,7 @@ async function refreshDiscovery(cycleId = viewCycle.cycleId) {
   state.discoveryController = controller;
   const requestedCenter = state.center;
   const discoveryTask = viewCycle.begin(cycleId, 'discovery');
+  let criticalDiscoveryFailure = false;
   state.loading = true;
   state.error = '';
   render({ cycleId });
@@ -553,6 +557,11 @@ async function refreshDiscovery(cycleId = viewCycle.cycleId) {
   } catch (error) {
     if (controller.signal.aborted || cycleId !== viewCycle.cycleId) return;
     debugLog('discovery failed', { center: requestedCenter, error: error?.message ?? String(error) }, 'error');
+    let hasPersistedExplorer = false;
+    try {
+      hasPersistedExplorer = Boolean((await getNode(requestedCenter))?.explorer);
+    } catch {}
+    criticalDiscoveryFailure = !hasPersistedExplorer;
     if (requestedCenter === state.center) state.error = error?.message ?? 'Lichess Opening Explorer is temporarily unavailable.';
   } finally {
     if (state.discoveryController === controller && requestedCenter === state.center) {
@@ -560,7 +569,11 @@ async function refreshDiscovery(cycleId = viewCycle.cycleId) {
       state.discoveryController = null;
       if (cycleId === viewCycle.cycleId) {
         await render({ cycleId });
-        viewCycle.settle(cycleId, 'discovery', discoveryTask);
+        if (criticalDiscoveryFailure) {
+          viewCycle.fail(cycleId, 'discovery', discoveryTask);
+        } else {
+          viewCycle.settle(cycleId, 'discovery', discoveryTask);
+        }
       }
     }
   }
@@ -573,7 +586,7 @@ async function recenter(key, { pushHistory = false } = {}) {
   state.center = next;
   state.error = '';
   state.discoveryController?.abort();
-  state.loading = false;
+  state.loading = state.view === 'lines';
   if (pushHistory) {
     state.navDepth += 1;
     history.pushState({ fen: next, cvDepth: state.navDepth }, '', positionUrl(next));
@@ -588,7 +601,11 @@ async function recenter(key, { pushHistory = false } = {}) {
 
 window.addEventListener(VIEW_WORK_SETTLED_EVENT, (event) => {
   const detail = event.detail ?? {};
-  viewCycle.settle(detail.cycleId, detail.label, detail.task);
+  if (detail.failed) {
+    viewCycle.fail(detail.cycleId, detail.label, detail.task);
+  } else {
+    viewCycle.settle(detail.cycleId, detail.label, detail.task);
+  }
 });
 
 window.addEventListener(VIEW_REFRESH_REQUESTED_EVENT, (event) => {
@@ -602,7 +619,7 @@ window.addEventListener('popstate', (event) => {
   state.center = positionFromUrl();
   state.view = viewFromUrl();
   state.navDepth = Number.isFinite(event.state?.cvDepth) ? event.state.cvDepth : 0;
-  state.loading = false;
+  state.loading = state.view === 'lines';
   state.error = '';
   const cycleId = beginViewCycle({ discovery: state.view === 'lines' });
   render({ cycleId }).then(() => {
@@ -621,5 +638,6 @@ initialUrl.searchParams.set('fen', state.center);
 initialUrl.searchParams.set('view', state.view);
 history.replaceState({ fen: state.center, cvDepth: state.navDepth }, '', `${initialUrl.pathname}${initialUrl.search}${initialUrl.hash}`);
 const initialCycle = beginViewCycle({ discovery: state.view === 'lines' });
+if (state.view === 'lines') state.loading = true;
 await render({ cycleId: initialCycle });
 if (state.view === 'lines') refreshDiscovery(initialCycle);

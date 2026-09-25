@@ -6,7 +6,9 @@ Finish browser composition so one application controller owns render/navigation 
 
 `audits/2026-09-25-17-30-00-gpt-5.6-sol-chatgpt.md`, finding “UI composition is an implicit multi-writer DOM protocol,” records the original shared-DOM coupling. `docs/components/interface.md` §Requirements, §Composition direction, and §Verification require stable Roots/Lines navigation, position-based history, stable graph-edge identity in presentation, explicit current-view settlement, and a single controller-owned render/navigation lifecycle.
 
-The lifecycle slice has now landed: `src/main.js` is the single HTML application entrypoint, controller-issued View Cycle tokens/events coordinate visible settlement, and Root/evidence contributors no longer use `MutationObserver` to discover when a render occurred. View Cycle now treats evidence work as supplementary: evidence may still receive generation-scoped tokens for stale-work identity, but it does not block or reopen successful structural readiness. The remaining composition problem is narrower: Root/evidence code still derives relationships from DOM labels/order in several places, Rail navigation still synthesizes `popstate`, critical structural contributor failure still needs an explicit degraded terminal path, unexpected supplementary contributor exceptions can still be console-only, and the real controller↔contributor seam still lacks automated contract coverage.
+The lifecycle slice has landed: `src/main.js` is the single HTML application entrypoint, controller-issued View Cycle tokens/events coordinate structural settlement, and Root/evidence contributors no longer use `MutationObserver` to discover when a render occurred. Supplementary evidence no longer blocks global readiness or competes with Line discovery for Lichess transport; its UI hydration is generation-safe and progressive. Critical render/structure failure now terminates in an explicit degraded `Unavailable` state, and a failed center Explorer request degrades only when no persisted Explorer snapshot can establish the current Line structure.
+
+The remaining composition problem is narrower: Root/evidence code still derives relationships from DOM labels/order in several places, Rail navigation still synthesizes `popstate`, unexpected supplementary contributor exceptions can still be console-only at their local surface, and the real controller↔contributor seam still lacks automated contract coverage.
 
 # Edges:
 
@@ -20,17 +22,17 @@ Shared `LichessGateway` serialization/rate-limit policy remains outside this out
 
 Choose the smallest stable node/edge keyed composition model that removes remaining DOM depth/label/index inference without creating a second hidden application state machine.
 
-Decide the smallest explicit terminal-failure contract for critical structural contributors so failure ends loading without producing the normal success-style `Ready` / check state. Supplementary evidence failure stays local and must not downgrade a structurally established view.
+Choose the smallest integration-test seam that exercises real controller/contributor settlement, superseded navigation, critical failure/recovery, history/recentering, supplementary evidence arriving after readiness, and stable edge association without turning the suite into pixel/layout snapshots or adding a browser harness unless one is earned.
 
-Choose the smallest integration-test seam that exercises real controller/contributor settlement, superseded navigation, explicit critical failure, history/recentering, and stable edge association without turning the suite into pixel/layout snapshots or adding a browser harness unless one is earned.
+Decide whether unexpected supplementary presentation-code exceptions need a compact local unavailable summary beyond the existing source/evidence failure indicators; they must not downgrade an otherwise established structural view.
 
 # Complete:
 
 A single application owner controls the `#app` render/navigation lifecycle; core Root/evaluation composition no longer relies on `MutationObserver`, DOM row depth/label parsing, satellite/path array index pairing, or synthetic `resize`/`popstate` events to communicate application state.
 
-Root, Line, transposition, and evaluation decorations associate through stable node/edge identifiers or equivalent explicit model references. Critical structural contributor failures produce an explicit degraded terminal state before that contributor is counted terminal; supplementary evidence failures remain locally visible without blocking or downgrading structural readiness.
+Root, Line, transposition, and evaluation decorations associate through stable node/edge identifiers or equivalent explicit model references. Critical structural contributor failures produce an explicit degraded terminal state; supplementary evidence failures remain locally visible without blocking or downgrading structural readiness.
 
-Deterministic automated tests exercise the real product-critical composition boundary, including structural readiness independent of supplementary evidence, superseded generations, explicit critical failure, URL round-tripping, representative recenter/history behavior, and stable position/edge association.
+Deterministic automated tests exercise the real product-critical composition boundary, including structural readiness independent of supplementary evidence, superseded generations, critical failure/recovery, URL round-tripping, representative recenter/history behavior, late evidence hydration, and stable position/edge association.
 
 # Steps:
 
@@ -38,9 +40,9 @@ Define the stable node/edge keyed state passed from the controller to Root/evide
 
 Replace synthetic navigation/lifecycle browser events with explicit controller APIs while preserving browser back/forward behavior.
 
-Add an explicit degraded terminal path for critical structural contributor failure while keeping supplementary evidence failure local.
-
 Add focused composition-contract tests around the real controller/contributor seam, then remove obsolete DOM/synthetic-event coupling once those contracts pass.
+
+Decide and implement any remaining local summary needed for unexpected supplementary presentation failures without coupling them back into global readiness.
 
 # Sync:
 

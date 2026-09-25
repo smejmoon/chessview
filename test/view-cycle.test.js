@@ -62,8 +62,39 @@ test('supplementary evidence does not block or reopen structural readiness', () 
   const evidence2 = cycle.begin(id, 'evidence');
   assert.equal(cycle.presentation, 'check');
   assert.equal(cycle.settle(id, 'evidence', evidence1), false);
-  assert.equal(cycle.settle(id, 'evidence', evidence2), true);
+  assert.equal(cycle.fail(id, 'evidence', evidence2), true);
   assert.equal(cycle.presentation, 'check');
+});
+
+test('critical failure becomes degraded only after structural work is terminal', () => {
+  const timers = fakeTimers();
+  const cycle = createViewCycleController({ ...timers });
+  const id = cycle.start(['render', 'structure']);
+  const render = cycle.begin(id, 'render');
+  const structure = cycle.begin(id, 'structure');
+
+  assert.equal(cycle.fail(id, 'render', render), true);
+  assert.deepEqual(cycle.snapshot().pending, ['structure']);
+  assert.notEqual(cycle.presentation, 'failed');
+
+  cycle.settle(id, 'structure', structure);
+  assert.equal(cycle.presentation, 'failed');
+  timers.run(1_200);
+  assert.equal(cycle.presentation, 'failed');
+});
+
+test('a later retry can recover a failed critical contributor', () => {
+  const timers = fakeTimers();
+  const cycle = createViewCycleController({ ...timers });
+  const id = cycle.start(['render']);
+  const first = cycle.begin(id, 'render');
+  cycle.fail(id, 'render', first);
+  assert.equal(cycle.presentation, 'failed');
+
+  const retry = cycle.begin(id, 'render');
+  assert.equal(cycle.presentation, 'hidden');
+  cycle.settle(id, 'render', retry);
+  assert.equal(cycle.presentation, 'ready');
 });
 
 test('completion from an obsolete generation cannot settle the current view', () => {

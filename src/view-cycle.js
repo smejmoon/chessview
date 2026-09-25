@@ -27,6 +27,7 @@ export function createViewCycleController({
   let taskSerial = 0;
   let pending = new Map();
   let supplementary = new Map();
+  let failed = new Set();
   let presentation = 'hidden';
   let hasSettled = false;
   let updatingTimer = null;
@@ -62,8 +63,12 @@ export function createViewCycleController({
 
   function assign(label) {
     const token = `${cycleId}:${++taskSerial}`;
-    const target = SUPPLEMENTARY_WORK.has(label) ? supplementary : pending;
-    target.set(label, token);
+    if (SUPPLEMENTARY_WORK.has(label)) {
+      supplementary.set(label, token);
+    } else {
+      failed.delete(label);
+      pending.set(label, token);
+    }
     return token;
   }
 
@@ -73,11 +78,19 @@ export function createViewCycleController({
       clearTimeoutFn(updatingTimer);
       updatingTimer = null;
     }
+    if (readyTimer != null) {
+      clearTimeoutFn(readyTimer);
+      readyTimer = null;
+    }
     hasSettled = true;
+    if (failed.size) {
+      present('failed');
+      return true;
+    }
     present('ready');
     readyTimer = setTimeoutFn(() => {
       readyTimer = null;
-      if (id === cycleId && pending.size === 0) present('check');
+      if (id === cycleId && pending.size === 0 && failed.size === 0) present('check');
     }, readyHoldMs);
     return true;
   }
@@ -101,6 +114,7 @@ export function createViewCycleController({
     cycleId += 1;
     pending = new Map();
     supplementary = new Map();
+    failed = new Set();
     hasSettled = false;
     present('hidden');
     for (const label of expected) assign(label);
@@ -113,7 +127,21 @@ export function createViewCycleController({
     const target = SUPPLEMENTARY_WORK.has(label) ? supplementary : pending;
     if (id !== cycleId || target.get(label) !== token) return false;
     target.delete(label);
-    if (!SUPPLEMENTARY_WORK.has(label)) finish(id);
+    if (!SUPPLEMENTARY_WORK.has(label)) {
+      failed.delete(label);
+      finish(id);
+    }
+    return true;
+  }
+
+  function fail(id, label, token) {
+    const target = SUPPLEMENTARY_WORK.has(label) ? supplementary : pending;
+    if (id !== cycleId || target.get(label) !== token) return false;
+    target.delete(label);
+    if (!SUPPLEMENTARY_WORK.has(label)) {
+      failed.add(label);
+      finish(id);
+    }
     return true;
   }
 
@@ -121,6 +149,7 @@ export function createViewCycleController({
     start,
     begin,
     settle,
+    fail,
     get cycleId() {
       return cycleId;
     },

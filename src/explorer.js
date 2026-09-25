@@ -9,12 +9,14 @@ import {
   toPlayableFen,
   totalGames,
 } from './graph.js';
-import { getNode, getOutgoing, putEdges, putNode } from './db.js';
+import { getNode, getOutgoing, putEdges, putNode, replaceExplorerEdges } from './db.js';
 import { debugLog } from './debug.js';
 import { clearLichessAccessToken, requireLichessAccessToken } from './auth.js';
+import { createRequestGate } from './request-gate.js';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
 const inFlight = new Map();
+const requestGate = createRequestGate();
 
 function explorerUrl(key) {
   const url = new URL(ENDPOINT);
@@ -24,6 +26,12 @@ function explorerUrl(key) {
   url.searchParams.set('topGames', '0');
   url.searchParams.set('recentGames', '0');
   return url;
+}
+
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
 }
 
 export async function loadExplorer(key, { force = false } = {}) {
@@ -42,11 +50,11 @@ export async function loadExplorer(key, { force = false } = {}) {
   const promise = (async () => {
     const token = await requireLichessAccessToken();
     const url = explorerUrl(canonical);
-    debugLog('explorer request', { position: canonical, url: url.toString(), authenticated: true });
+    debugLog('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
 
     let response;
     try {
-      response = await fetch(url, {
+      response = await requestGate.run(url, {
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
@@ -64,9 +72,14 @@ export async function loadExplorer(key, { force = false } = {}) {
       debugLog('explorer HTTP error', { position: canonical, status: response.status, body }, 'error');
       if (response.status === 401) {
         clearLichessAccessToken();
-        throw new Error('Lichess authorization expired. Reload to sign in again.');
+        throw httpError(401, 'Lichess authorization expired. Reload to sign in again.');
       }
-      throw new Error(`Lichess explorer returned ${response.status}`);
+      if (response.status === 429) {
+        const retryAfterMs = Math.max(0, requestGate.cooldownUntil - Date.now());
+        debugLog('explorer cooldown started', { retryAfterMs }, 'warn');
+        throw httpError(429, 'Lichess explorer is rate-limited. Requests are paused for one minute.');
+      }
+      throw httpError(response.status, `Lichess explorer returned ${response.status}`);
     }
 
     const explorer = await response.json();
@@ -110,7 +123,7 @@ export async function loadExplorer(key, { force = false } = {}) {
     }
 
     await putNode(node);
-    await putEdges(edges);
+    await replaceExplorerEdges(canonical, edges);
     debugLog('explorer stored', { position: canonical, games: node.games, edges: edges.length, qualifying: edges.filter((edge) => edge.qualifies).length });
     return node;
   })().finally(() => inFlight.delete(canonical));
@@ -154,10 +167,13 @@ export async function ensureManualEdge(sourceKey, from, to, promotion = 'q') {
   return { edge, target };
 }
 
-export async function discoverForViewport(centerKey, budget, onProgress) {
+export async function discoverForViewport(centerKey, budget, onProgress, { signal } = {}) {
   const center = canonicalPosition(centerKey);
   debugLog('discovery start', { center, budget });
+  if (signal?.aborted) return null;
+
   const centerNode = await loadExplorer(center);
+  if (signal?.aborted) return centerNode;
   onProgress?.();
 
   const roots = (await getOutgoing(center))
@@ -168,12 +184,13 @@ export async function discoverForViewport(centerKey, budget, onProgress) {
   let inspected = 0;
   const requestBudget = Math.max(3, Math.min(14, budget));
 
-  while (frontier.length && inspected < requestBudget) {
+  while (frontier.length && inspected < requestBudget && !signal?.aborted) {
     const item = frontier.shift();
     const known = await getNode(item.key);
     if ((known?.games ?? Infinity) < AUTO_SAMPLE_FLOOR && known?.explorer) continue;
     try {
       const node = await loadExplorer(item.key);
+      if (signal?.aborted) break;
       inspected += 1;
       onProgress?.();
       if ((node.games ?? 0) < AUTO_SAMPLE_FLOOR) continue;
@@ -182,10 +199,15 @@ export async function discoverForViewport(centerKey, budget, onProgress) {
         .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci));
       if (next[0]) frontier.push({ key: next[0].target, branch: item.branch, depth: item.depth + 1 });
     } catch (error) {
+      if (signal?.aborted) break;
+      if (error?.status === 429) {
+        debugLog('discovery paused by rate limit', { position: item.key, branch: item.branch, depth: item.depth }, 'warn');
+        break;
+      }
       debugLog('branch discovery failed', { position: item.key, branch: item.branch, depth: item.depth, error: error?.message ?? String(error) }, 'warn');
     }
   }
 
-  debugLog('discovery complete', { center, inspected, roots: roots.length });
+  debugLog(signal?.aborted ? 'discovery cancelled' : 'discovery complete', { center, inspected, roots: roots.length });
   return centerNode;
 }

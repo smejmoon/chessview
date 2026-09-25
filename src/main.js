@@ -77,6 +77,13 @@ function escapeHtml(value = '') {
     .replaceAll('"', '&quot;');
 }
 
+function mapCenterX() {
+  if (window.innerWidth <= 460) return 34;
+  if (window.innerWidth <= 760) return 31;
+  if (window.innerWidth <= 1100) return 29;
+  return 26;
+}
+
 async function collectOutgoingGraph(center, max) {
   const outgoingBySource = new Map();
   const queue = [{ key: center, depth: 0 }];
@@ -112,9 +119,12 @@ async function collectIncomingGraph(center, max) {
 }
 
 async function collectScene(center, max) {
-  const incomingEdges = await getIncoming(center);
+  const [incomingEdges, outgoingEdges] = await Promise.all([
+    getIncoming(center),
+    getOutgoing(center),
+  ]);
   let selected = [];
-  let outgoingBySource = new Map();
+  let outgoingBySource = new Map([[center, outgoingEdges]]);
   let incomingByTarget = new Map([[center, incomingEdges]]);
 
   if (state.view === 'lines') {
@@ -152,8 +162,8 @@ function layoutPositions(items) {
   }
 
   const maxDepth = Math.max(...levels.keys());
-  const centerX = state.view === 'roots' ? 74 : 26;
-  const edgeX = state.view === 'roots' ? 8 : 92;
+  const centerX = mapCenterX();
+  const edgeX = 92;
 
   for (const [depth, level] of [...levels.entries()].sort((a, b) => a[0] - b[0])) {
     const progress = depth / Math.max(1, maxDepth);
@@ -278,7 +288,7 @@ function renderShell(scene) {
   const opening = centerNode.opening;
   const boardPosition = state.center;
   const turn = boardPosition.split(' ')[1] === 'b' ? 'black' : 'white';
-  const rootCount = state.view === 'roots' ? scene.selected.length : scene.incomingEdges.length;
+  const rootCount = scene.incomingEdges.length;
   const lineCount = (scene.outgoingBySource.get(state.center) ?? []).filter((edge) => edge.qualifies || edge.manual).length;
 
   app.innerHTML = `
@@ -296,7 +306,7 @@ function renderShell(scene) {
       <div class="workspace">
         <section class="map mode-${state.view}" id="map" aria-label="${state.view === 'roots' ? 'Root position map' : 'Continuation line map'}">
           <svg class="edges" id="edges" aria-hidden="true"></svg>
-          <div class="center-position position" data-key="${escapeHtml(state.center)}">
+          <div class="center-position position" data-key="${escapeHtml(state.center)}" style="left:${mapCenterX()}%">
             <div class="center-board board-frame" id="center-board"></div>
             <div class="center-hint">${state.view === 'roots' ? 'Known move orders converge here.' : 'Drag a legal move, or choose a Line.'}</div>
           </div>
@@ -316,8 +326,8 @@ function renderShell(scene) {
           </div>
 
           <div class="mode-tabs" role="tablist" aria-label="Graph direction">
-            <button id="roots-tab" class="mode-tab ${state.view === 'roots' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.view === 'roots'}">Roots <small>${rootCount || ''}</small></button>
-            <button id="lines-tab" class="mode-tab ${state.view === 'lines' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.view === 'lines'}">Lines <small>${lineCount || ''}</small></button>
+            <button id="roots-tab" class="mode-tab ${state.view === 'roots' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.view === 'roots'}">Roots <small>${rootCount}</small></button>
+            <button id="lines-tab" class="mode-tab ${state.view === 'lines' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.view === 'lines'}">Lines <small>${lineCount}</small></button>
           </div>
 
           <section class="rail-explorer">

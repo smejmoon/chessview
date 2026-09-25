@@ -2,15 +2,16 @@ name: Test, build, and publish Pages
 
 on:
   push:
-    branches: [main]
+    branches-ignore:
+      - gh-pages
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-publish
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -30,19 +31,55 @@ jobs:
       - name: Run deterministic tests
         run: npm test
 
+      - name: Determine Pages target
+        id: pages
+        run: node scripts/pages-target.js
+
       - name: Build static site
-        run: npm run build
+        env:
+          PAGES_BASE: ${{ steps.pages.outputs.base }}
+        run: npm run build -- --base "$PAGES_BASE"
 
       - name: Publish dist to gh-pages
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAGES_TARGET: ${{ steps.pages.outputs.target }}
+        shell: bash
         run: |
-          touch dist/.nojekyll
-          cd dist
-          git init
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --all
-          git commit -m "Deploy ${GITHUB_SHA}"
-          git branch -M gh-pages
-          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          set -euo pipefail
+
+          git fetch origin gh-pages:refs/remotes/origin/gh-pages
+          git worktree add --detach pages refs/remotes/origin/gh-pages
+
+          if [[ "$PAGES_TARGET" == "." ]]; then
+            if [[ "$GITHUB_REF_NAME" != "main" ]]; then
+              echo "Refusing to publish a non-main branch at the production root" >&2
+              exit 1
+            fi
+            if [[ -e dist/previews ]]; then
+              echo "Refusing to overwrite the reserved previews/ subtree" >&2
+              exit 1
+            fi
+            find pages -mindepth 1 -maxdepth 1 ! -name .git ! -name previews -exec rm -rf -- {} +
+            cp -a dist/. pages/
+          else
+            if [[ "$GITHUB_REF_NAME" == "main" || "$PAGES_TARGET" != previews/* ]]; then
+              echo "Refusing to publish outside the preview subtree" >&2
+              exit 1
+            fi
+            rm -rf -- "pages/$PAGES_TARGET"
+            mkdir -p -- "pages/$PAGES_TARGET"
+            cp -a dist/. "pages/$PAGES_TARGET/"
+          fi
+
+          touch pages/.nojekyll
+          git -C pages config user.name "github-actions[bot]"
+          git -C pages config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C pages add --all
+
+          if git -C pages diff --cached --quiet; then
+            echo "No Pages changes to publish"
+            exit 0
+          fi
+
+          git -C pages commit -m "Deploy ${GITHUB_REF_NAME} ${GITHUB_SHA}"
+          git -C pages push origin HEAD:gh-pages

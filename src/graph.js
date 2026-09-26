@@ -5,11 +5,11 @@ import {
   hasLineCandidates,
   takeLineCandidate,
 } from './line-frontier.js';
+import { createVisibleGraph } from './visible-graph.js';
 
 export const AUTO_THRESHOLD = 0.05;
 export const AUTO_SAMPLE_FLOOR = 80;
 export const EXPLORER_TTL_MS = 24 * 60 * 60 * 1000;
-
 export const START_FEN = new Chess().fen();
 
 export function toPlayableFen(positionKey) {
@@ -114,21 +114,28 @@ function stableIncomingEdgeOrder(a, b) {
     || a.target.localeCompare(b.target);
 }
 
+function lineChildren(outgoingBySource, key, distance, breadth = 0) {
+  return (outgoingBySource.get(key) ?? [])
+    .filter((edge) => edge.qualifies)
+    .slice()
+    .sort(stableEdgeOrder)
+    .map((edge, index) => ({
+      key: edge.target,
+      edge,
+      distance,
+      depth: distance,
+      breadth: breadth + index,
+    }));
+}
+
 export function chooseNeighborhood({ center, incoming = [], outgoingBySource = new Map(), max = 19 }) {
-  const selected = [];
-  const seen = new Set([center]);
-  const push = (entry) => {
-    if (!entry || seen.has(entry.key) || selected.length >= max) return false;
-    seen.add(entry.key);
-    selected.push(entry);
-    return true;
-  };
+  const visible = createVisibleGraph({ center, direction: 'lines', max });
 
   incoming
     .slice()
     .sort((a, b) => (b.games ?? 0) - (a.games ?? 0) || a.key.localeCompare(b.key))
     .slice(0, Math.min(4, Math.max(1, Math.floor(max / 4))))
-    .forEach((item) => push({ ...item, relation: 'incoming', distance: 1 }));
+    .forEach((item) => visible.addNode({ ...item, relation: 'incoming', distance: 1 }));
 
   const roots = (outgoingBySource.get(center) ?? [])
     .filter((edge) => edge.qualifies || edge.manual)
@@ -137,60 +144,63 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
 
   const lineFrontiers = [];
   for (const root of roots) {
-    if (selected.length >= max) break;
+    if (visible.boardCount() >= max) break;
+    const family = root.uci;
     const lineShare = root.share ?? 0;
-    push({ key: root.target, edge: root, relation: 'outgoing', distance: 1, branch: root.uci, lineShare });
-    const frontier = createLineFrontier(root.uci, null, lineShare);
-    const children = (outgoingBySource.get(root.target) ?? [])
-      .filter((edge) => edge.qualifies)
-      .slice()
-      .sort(stableEdgeOrder)
-      .map((edge, index) => ({ key: edge.target, edge, distance: 2, depth: 2, breadth: index }));
-    addLineCandidates(frontier, children);
+    visible.ensureFamily(family, { direction: 'lines', lineShare, rootEdgeId: edgeId(root) });
+    const result = visible.addNode({
+      key: root.target,
+      edge: root,
+      relation: 'outgoing',
+      distance: 1,
+      branch: family,
+      lineShare,
+      families: [family],
+    });
+    if (!result.node) continue;
+    visible.addRelationship({ edge: root, family, distance: 1, lineShare });
+
+    const frontier = createLineFrontier(family, null, lineShare);
+    frontier.seenEdges = new Set([edgeId(root)]);
+    addLineCandidates(frontier, lineChildren(outgoingBySource, root.target, 2));
     lineFrontiers.push(frontier);
   }
 
-  while (selected.length < max && hasLineCandidates(lineFrontiers)) {
+  while (visible.boardCount() < max && hasLineCandidates(lineFrontiers)) {
     let progressed = false;
     for (const frontier of lineFrontiers) {
-      if (selected.length >= max) break;
-      const next = takeLineCandidate(frontier, (candidate) => !seen.has(candidate.key));
+      if (visible.boardCount() >= max) break;
+      const next = takeLineCandidate(frontier, (candidate) => !frontier.seenEdges.has(edgeId(candidate.edge)));
       if (!next) continue;
-      if (!push({
+      frontier.seenEdges.add(edgeId(next.edge));
+
+      const result = visible.addNode({
         ...next,
         relation: 'descendant',
         branch: frontier.branch,
         lineShare: frontier.lineShare,
-      })) continue;
+        families: [frontier.branch],
+      });
+      if (!result.node) continue;
 
+      visible.addRelationship({
+        edge: next.edge,
+        family: frontier.branch,
+        distance: next.distance,
+        lineShare: frontier.lineShare,
+      });
+      addLineCandidates(frontier, lineChildren(
+        outgoingBySource,
+        next.key,
+        next.distance + 1,
+        next.breadth,
+      ));
       progressed = true;
-      const children = (outgoingBySource.get(next.key) ?? [])
-        .filter((edge) => edge.qualifies)
-        .slice()
-        .sort(stableEdgeOrder)
-        .map((edge, index) => ({
-          key: edge.target,
-          edge,
-          distance: next.distance + 1,
-          depth: next.depth + 1,
-          breadth: next.breadth + index,
-        }));
-      addLineCandidates(frontier, children);
     }
     if (!progressed) break;
   }
 
-  return selected;
-}
-
-function mergeRootEntry(entry, edge, branches) {
-  if (edge && !entry.edges.some((known) => edgeId(known) === edgeId(edge))) entry.edges.push(edge);
-  for (const branch of branches ?? []) {
-    if (branch && !entry.branches.includes(branch)) entry.branches.push(branch);
-  }
-  entry.branch = entry.branches[0] ?? entry.branch;
-  entry.merge = entry.edges.length > 1 || entry.branches.length > 1;
-  return entry;
+  return visible.result();
 }
 
 function rootCandidates(incomingByTarget, target, distance) {
@@ -201,65 +211,60 @@ function rootCandidates(incomingByTarget, target, distance) {
 }
 
 export function chooseRootNeighborhood({ center, incomingByTarget = new Map(), max = 19 }) {
-  const selected = [];
-  const selectedByKey = new Map();
+  const visible = createVisibleGraph({ center, direction: 'roots', max });
   const frontiers = [];
-
-  const add = ({ key, edge, distance, branches }) => {
-    const existing = selectedByKey.get(key);
-    if (existing) return { item: mergeRootEntry(existing, edge, branches), added: false };
-    if (selected.length >= max || key === center) return { item: null, added: false };
-
-    const item = {
-      key,
-      edge,
-      edges: edge ? [edge] : [],
-      relation: 'root',
-      distance,
-      branch: branches?.[0] ?? key,
-      branches: [...new Set((branches ?? [key]).filter(Boolean))],
-      merge: false,
-    };
-    selected.push(item);
-    selectedByKey.set(key, item);
-    return { item, added: true };
-  };
 
   const immediate = (incomingByTarget.get(center) ?? [])
     .slice()
     .sort(stableIncomingEdgeOrder);
 
   for (const edge of immediate) {
-    if (selected.length >= max) break;
-    const branch = edge.source;
-    const result = add({ key: branch, edge, distance: 1, branches: [branch] });
-    if (!result.item || !result.added) continue;
+    if (visible.boardCount() >= max) break;
+    const family = edge.source;
+    visible.ensureFamily(family, { direction: 'roots', rootEdgeId: edgeId(edge) });
+    const result = visible.addNode({
+      key: family,
+      edge,
+      relation: 'root',
+      distance: 1,
+      branch: family,
+      branches: [family],
+      families: [family],
+    });
+    if (!result.node) continue;
+    visible.addRelationship({ edge, family, distance: 1 });
     frontiers.push({
-      branch,
-      pending: rootCandidates(incomingByTarget, branch, 2),
+      branch: family,
+      pending: rootCandidates(incomingByTarget, family, 2),
+      seenEdges: new Set([edgeId(edge)]),
     });
   }
 
-  while (selected.length < max) {
+  while (visible.boardCount() < max) {
     let progressed = false;
 
     for (const frontier of frontiers) {
-      if (selected.length >= max) break;
+      if (visible.boardCount() >= max) break;
 
       while (frontier.pending.length) {
         const candidate = frontier.pending.shift();
         if (!candidate || candidate.key === center) continue;
+        const candidateEdgeId = edgeId(candidate.edge);
+        if (frontier.seenEdges.has(candidateEdgeId)) continue;
+        frontier.seenEdges.add(candidateEdgeId);
 
-        const downstream = selectedByKey.get(candidate.edge.target);
-        const branches = downstream?.branches?.length ? downstream.branches : [frontier.branch];
-        const existing = selectedByKey.get(candidate.key);
-        if (existing) {
-          mergeRootEntry(existing, candidate.edge, branches);
-          continue;
-        }
-
-        const result = add({ ...candidate, branches });
-        if (!result.item) break;
+        const downstream = visible.getNode(candidate.edge.target);
+        const families = downstream?.families?.length ? downstream.families : [frontier.branch];
+        families.forEach((family) => visible.ensureFamily(family, { direction: 'roots' }));
+        const result = visible.addNode({
+          ...candidate,
+          relation: 'root',
+          branch: families[0] ?? frontier.branch,
+          branches: families,
+          families,
+        });
+        if (!result.node) break;
+        visible.addRelationship({ edge: candidate.edge, families, distance: candidate.distance });
 
         frontier.pending.push(...rootCandidates(
           incomingByTarget,
@@ -274,5 +279,15 @@ export function chooseRootNeighborhood({ center, incomingByTarget = new Map(), m
     if (!progressed) break;
   }
 
-  return selected;
+  const result = visible.result();
+  for (const node of result.nodes) {
+    node.branches = [...node.families];
+    node.edges = node.relationships
+      .map((id) => result.relationshipById.get(id)?.edge)
+      .filter(Boolean);
+    node.edge = node.edges[0] ?? node.edge;
+    node.branch = node.branches[0] ?? node.branch;
+    node.merge = node.edges.length > 1 || node.branches.length > 1;
+  }
+  return result;
 }

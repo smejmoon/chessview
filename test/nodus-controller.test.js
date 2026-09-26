@@ -11,17 +11,20 @@ function deferred() {
 
 function fixture(overrides = {}) {
   const calls = [];
-  const browser = {
+  const routeLedger = {
     push(route) { calls.push(['push', route]); },
     replace(route) { calls.push(['replace', route]); },
-    persistView(view) { calls.push(['persistView', view]); },
-    persistOrientation(orientation) { calls.push(['persistOrientation', orientation]); },
     back() { calls.push(['back']); },
+  };
+  const preferences = {
+    setView(view) { calls.push(['setViewPreference', view]); },
+    setOrientation(orientation) { calls.push(['setOrientationPreference', orientation]); },
   };
   const controller = new NodusController({
     initial: { center: 'A', view: 'roots', orientation: 'white', navDepth: 0 },
     canonicalize: (value) => String(value).toUpperCase(),
-    browser,
+    routeLedger,
+    preferences,
     render: async (scope) => {
       calls.push(['render', scope.center, scope.view, scope.orientation]);
       return { composition: { center: scope.center, direction: scope.view } };
@@ -47,14 +50,14 @@ test('commands in, snapshot out', async () => {
 
   await controller.setView('lines');
   assert.equal(controller.snapshot.view, 'lines');
-  assert.ok(calls.some(([name, value]) => name === 'persistView' && value === 'lines'));
+  assert.ok(calls.some(([name, value]) => name === 'setViewPreference' && value === 'lines'));
 
   await controller.flip();
   assert.equal(controller.snapshot.orientation, 'black');
-  assert.ok(calls.some(([name, value]) => name === 'persistOrientation' && value === 'black'));
+  assert.ok(calls.some(([name, value]) => name === 'setOrientationPreference' && value === 'black'));
 });
 
-test('restore consumes browser history without pushing a new entry', async () => {
+test('restore consumes RouteLedger history without writing a new entry', async () => {
   const { controller, calls } = fixture();
   await controller.start();
   calls.length = 0;

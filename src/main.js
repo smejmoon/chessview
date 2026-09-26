@@ -18,7 +18,7 @@ import {
   stableEdgeOrder,
   toPlayableFen,
 } from './graph.js';
-import { lineStrokeWidth } from './edge-visual.js';
+import { drawVisibleEdges } from './map-render.js';
 import { getIncoming, getNode, getOutgoing } from './db.js';
 import { discoverForViewport, ensureManualEdge } from './explorer.js';
 import {
@@ -471,43 +471,15 @@ function renderSatellites(scene) {
 }
 
 function drawEdges(scene) {
-  const map = document.querySelector('#map');
-  const svg = document.querySelector('#edges');
-  if (!map || !svg) return;
-  const mapRect = map.getBoundingClientRect();
-  svg.setAttribute('viewBox', `0 0 ${mapRect.width} ${mapRect.height}`);
-  svg.innerHTML = '';
-  const elementFor = (key) => document.querySelector(`.position[data-key="${CSS.escape(key)}"]`);
-
-  const addLine = (sourceKey, targetKey, lineShare = null) => {
-    const source = elementFor(sourceKey);
-    const target = elementFor(targetKey);
-    if (!source || !target) return;
-    const a = source.getBoundingClientRect();
-    const b = target.getBoundingClientRect();
-    const x1 = a.left + a.width / 2 - mapRect.left;
-    const y1 = a.top + a.height / 2 - mapRect.top;
-    const x2 = b.left + b.width / 2 - mapRect.left;
-    const y2 = b.top + b.height / 2 - mapRect.top;
-    const horizontal = x2 >= x1 ? 1 : -1;
-    const bend = Math.max(28, Math.abs(x2 - x1) * 0.36);
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', `M ${x1} ${y1} C ${x1 + horizontal * bend} ${y1}, ${x2 - horizontal * bend} ${y2}, ${x2} ${y2}`);
-    path.setAttribute('class', 'edge');
-    if (state.view === 'lines') path.style.strokeWidth = `${lineStrokeWidth(lineShare)}px`;
-    svg.appendChild(path);
-  };
-
-  for (const item of scene.selected) {
-    addLine(item.edge?.source ?? state.center, item.edge?.target ?? item.key, item.lineShare);
-  }
+  drawVisibleEdges(document.querySelector('#map'), scene.selected, { direction: state.view });
 }
 
-function announceRendered(cycleId, evidenceTask, structureTask) {
+function announceRendered(cycleId, evidenceTask, structureTask, composition) {
   announceViewRendered({
     cycleId,
     center: state.center,
     view: state.view,
+    composition,
     tasks: {
       evidence: evidenceTask,
       structure: structureTask,
@@ -527,7 +499,7 @@ async function render({ cycleId = viewCycle.cycleId, hydrateEvidence = !state.lo
     if (generation !== state.generation || cycleId !== viewCycle.cycleId) return;
     renderShell(scene);
     viewCycle.settle(cycleId, 'render', renderTask);
-    announceRendered(cycleId, evidenceTask, structureTask);
+    announceRendered(cycleId, evidenceTask, structureTask, scene.selected);
   } catch (error) {
     if (generation !== state.generation || cycleId !== viewCycle.cycleId) return;
     debugLog('render failed', error, 'error');
@@ -535,7 +507,7 @@ async function render({ cycleId = viewCycle.cycleId, hydrateEvidence = !state.lo
     const scene = { incomingEdges: [], outgoingBySource: new Map(), selected: [], nodes: new Map([[state.center, { key: state.center }]]) };
     renderShell(scene);
     viewCycle.fail(cycleId, 'render', renderTask);
-    announceRendered(cycleId, evidenceTask, structureTask);
+    announceRendered(cycleId, evidenceTask, structureTask, scene.selected);
   }
 }
 

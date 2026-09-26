@@ -4,15 +4,17 @@ Define and implement evidence-request lifetime and coalescing so an obsolete vie
 
 # Because:
 
-`docs/components/lichess-access.md` §Network boundary requires queued obsolete work to be prevented from reaching the network, and `docs/components/interface.md` §Requirements scopes readiness to the current view generation. Current `src/eval.js` coalesces cloud-eval and Masters loads by canonical position by returning the first in-flight promise before considering a later caller's `AbortSignal`; the first caller's signal therefore effectively owns the shared request lifetime.
+`docs/components/lichess-access.md` §Network boundary requires queued obsolete work to be prevented from reaching the network, and `docs/components/interface.md` §Requirements scopes accepted work to the current view. Current `src/eval.js` coalesces cloud-eval and Masters loads by canonical position by returning the first in-flight promise before considering a later caller's `AbortSignal`; the first caller's signal therefore effectively owns the shared request lifetime.
 
-`audits/2026-09-25-22-28-08-gpt-5.6-sol-chatgpt.md`, finding “Obsolete evidence work is generation-stale but not request-cancelled,” records that stale evidence results are ignored by presentation but their queued requests can still consume the application-wide serialized Lichess request stream and delay the current view.
+`src/evidence-source.js` now makes evidence a value-returning contributor. It receives a view-scoped AbortSignal and checks it between awaits, and it serializes visible-relationship evidence derivation to limit how much obsolete work it queues at once. It deliberately does not pass that signal into `loadCloudEval` / `loadMasters`, because doing so while the in-flight maps have first-caller ownership would let one obsolete view cancel shared work still useful to another subscriber. This bounds some stale participation but does not solve shared request lifetime.
+
+`audits/2026-09-25-22-28-08-gpt-5.6-sol-chatgpt.md`, finding “Obsolete evidence work is generation-stale but not request-cancelled,” records that stale evidence results are ignored by publication but their queued requests can still consume the application-wide serialized Lichess request stream and delay the current view.
 
 # Edges:
 
 `backlog/2026-09-26-visible-graph-composition.md` owns the stable visible node/edge/family identity used by Root/Line and evidence presentation. This outcome may consume those identifiers when associating a subscriber with the current view, but request coalescing remains an evidence-loader concern and must not be keyed by rendered order or presentation layout.
 
-`backlog/2026-09-25-browser-composition-boundary.md` owns current-view generation and controller lifecycle. This outcome accepts subscriber obsolescence/lifetime context from that boundary and defines how it participates in shared evidence work; the browser-composition outcome later consumes this abstraction for evidence settlement and superseded-generation integration.
+`backlog/2026-09-25-browser-composition-boundary.md` owns immutable current-view publication. `NodusController` keeps revision/publication authority private and supplies only scoped obsolescence to the evidence source. This outcome must replace the evidence source's coarse view-level abort checks with subscriber participation that can detach independently from shared same-position work; the controller must not become the owner of shared request lifetime.
 
 `LichessGateway` continues to own application-wide serialization, cooldown, and pre-send `AbortSignal` enforcement. This outcome must use that boundary rather than introducing a second scheduler or changing chess/evidence cache meaning.
 
@@ -38,11 +40,11 @@ Add failing deterministic cases for shared same-position work with independently
 
 Define the minimum subscriber/request-lifetime abstraction around the existing cloud-eval and Masters in-flight maps.
 
-Accept explicit subscriber obsolescence from the current-view lifecycle without making the evidence loader own navigation or view-generation policy, and keep scheduling inside `LichessGateway`.
+Have `EvidenceSource` participate through that subscriber abstraction rather than handing its view AbortSignal to shared loaders, while keeping revision/publication policy in `NodusController` and scheduling in `LichessGateway`.
 
-Verify the abstraction against stable visible node/edge association and the browser controller seam, including a superseded view whose equivalent request is still needed by a newer subscriber.
+Verify the abstraction against stable visible relationship identity and immutable current-view publication, including a superseded view whose equivalent request is still needed by a newer subscriber.
 
-Run evidence, gateway, and view-lifecycle regressions and synchronize this entry around any remaining behavior.
+Run evidence, gateway, and controller regressions and synchronize this entry around any remaining behavior.
 
 # Sync:
 

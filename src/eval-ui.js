@@ -1,25 +1,10 @@
 import './eval-ui.css';
-import { getNode, getOutgoing } from './db.js';
-import {
-  ENGINE_MIN_DEPTH,
-  HUMAN_SAMPLE_FLOOR,
-  POPULAR_BAD_SHARE,
-  humanMismatch,
-  loadCloudEval,
-  loadMasters,
-  moveEvaluation,
-  positionEvaluation,
-  railWorthy,
-  rootRarity,
-} from './eval.js';
 import {
   evidenceRequestFailed,
   engineUnavailableLabel,
   humanFailureIndicator,
 } from './evidence-presentation.js';
 import { preferenceStore } from './preference-store.js';
-
-let guideOn = preferenceStore.getGuide();
 
 function escapeHtml(value = '') {
   return String(value)
@@ -58,14 +43,27 @@ function setClass(element, prefix, value) {
 }
 
 function relationshipsFor(composition, key, options = {}) {
-  if (typeof composition?.relationshipsFor === 'function') return composition.relationshipsFor(key, options);
   const { incoming = true, outgoing = true } = options;
   return (composition?.relationships ?? []).filter((relationship) => (
     (incoming && relationship.target === key) || (outgoing && relationship.source === key)
   ));
 }
 
-function decorateStructure() {
+function renderGuide() {
+  const rail = document.querySelector('.analysis-rail');
+  const existing = rail?.querySelector('.eval-guide');
+  if (!preferenceStore.getGuide()) return existing?.remove();
+  if (!rail || existing) return;
+  const position = rail.querySelector('.rail-current-details');
+  if (!position) return;
+  position.insertAdjacentHTML('beforebegin', `
+    <section class="eval-guide" aria-label="Chessview guide">
+      <div><strong>Engine</strong><span class="guide-dot guide-good"></span>&lt;0.5 pawn <span class="guide-dot guide-dubious"></span>0.5–1.0 <span class="guide-dot guide-bad"></span>1.0+</div>
+      <div><strong>Human mismatch</strong><span class="human-marker human-masters">▲</span> Masters <span class="human-marker human-lichess">▲</span> Lichess</div>
+    </section>`);
+}
+
+function decorateStructure(actions) {
   const rail = document.querySelector('.analysis-rail');
   const tabs = rail?.querySelector('.mode-tabs');
   if (!rail || !tabs) return;
@@ -79,115 +77,71 @@ function decorateStructure() {
   if (position) position.classList.add('rail-current-details');
   const debugButton = document.querySelector('#debug-toggle');
   if (debugButton && !document.querySelector('#guide-toggle')) {
+    const guideOn = preferenceStore.getGuide();
     const button = document.createElement('button');
     button.id = 'guide-toggle';
     button.type = 'button';
     button.className = `toolbar-button guide-toggle ${guideOn ? 'is-active' : ''}`;
     button.textContent = 'Guide';
     button.addEventListener('click', () => {
-      guideOn = preferenceStore.setGuide(!guideOn);
-      button.classList.toggle('is-active', guideOn);
-      renderGuide();
+      preferenceStore.setGuide(!preferenceStore.getGuide());
+      void actions.redraw();
     });
     debugButton.parentElement?.insertBefore(button, debugButton);
   }
   renderGuide();
 }
 
-function renderGuide() {
-  const rail = document.querySelector('.analysis-rail');
-  const existing = rail?.querySelector('.eval-guide');
-  if (!guideOn) return existing?.remove();
-  if (!rail || existing) return;
-  const position = rail.querySelector('.rail-current-details');
-  if (!position) return;
-  position.insertAdjacentHTML('beforebegin', `
-    <section class="eval-guide" aria-label="Chessview guide">
-      <div><strong>Engine</strong><span class="guide-dot guide-good"></span>&lt;0.5 pawn <span class="guide-dot guide-dubious"></span>0.5–1.0 <span class="guide-dot guide-bad"></span>1.0+</div>
-      <div><strong>Human mismatch</strong><span class="human-marker human-masters">▲</span> Masters <span class="human-marker human-lichess">▲</span> Lichess</div>
-    </section>`);
+function decorateCenter(evidence) {
+  const stats = document.querySelector('.rail-current-details .position-stats');
+  if (!stats || !evidence?.center) return;
+  const { cloud, evaluation } = evidence.center;
+  const badge = document.createElement('span');
+  badge.className = 'center-eval-detail';
+  badge.innerHTML = evaluation
+    ? `<strong>${escapeHtml(evaluation.label)}</strong>${evaluation.depth ? ` <span>d${evaluation.depth}</span>` : ''}`
+    : `<span>${escapeHtml(engineUnavailableLabel([cloud]))}</span>`;
+  stats.appendChild(badge);
 }
 
-async function edgeEvidence(scope, edge, cache) {
-  const id = edge?.id ?? `${edge?.source}|${edge?.uci ?? ''}|${edge?.target}`;
-  if (cache.has(id)) return cache.get(id);
-  const promise = (async () => {
-    const sourceNode = await getNode(edge.source);
-    if (!scope.isCurrent()) return null;
-    const [sourceEval, targetEval, masters] = await Promise.all([
-      loadCloudEval(edge.source),
-      loadCloudEval(edge.target),
-      loadMasters(edge.source),
-    ]);
-    if (!scope.isCurrent()) return null;
-    const moveEval = moveEvaluation(edge.source, edge, sourceEval, targetEval);
-    const lichess = sourceNode?.explorer ?? null;
-    return {
-      sourceNode,
-      sourceEval,
-      targetEval,
-      moveEval,
-      masters,
-      lichess,
-      mastersMismatch: humanMismatch(masters, edge, edge.source, moveEval),
-      lichessMismatch: humanMismatch(lichess, edge, edge.source, moveEval),
-    };
-  })();
-  cache.set(id, promise);
-  return promise;
-}
-
-function relationshipForSatellite(element, scope) {
+function relationshipForSatellite(element, view) {
   const key = element.dataset.key;
-  if (!key) return null;
-  const visible = scope.view === 'roots'
-    ? relationshipsFor(scope.composition, key, { incoming: false })
-    : relationshipsFor(scope.composition, key, { outgoing: false });
+  const composition = view.structure.value?.composition;
+  if (!key || !composition) return null;
+  const visible = view.mode === 'roots'
+    ? relationshipsFor(composition, key, { incoming: false })
+    : relationshipsFor(composition, key, { outgoing: false });
   return visible[0] ?? null;
 }
 
-async function decorateSatellites(scope, cache) {
+function decorateSatellites(view, evidenceById) {
   for (const element of document.querySelectorAll('.satellite[data-key]')) {
-    if (!scope.isCurrent() || !element.isConnected) return;
-    const relationship = relationshipForSatellite(element, scope);
-    if (!relationship) continue;
-    const evidence = await edgeEvidence(scope, relationship.edge, cache);
-    if (!evidence || !scope.isCurrent() || !element.isConnected) return;
+    const relationship = relationshipForSatellite(element, view);
+    const evidence = relationship ? evidenceById.get(relationship.id) : null;
+    if (!evidence) continue;
     const quality = evidence.moveEval?.quality ?? 'unknown';
-    const rarity = scope.view === 'roots' ? rootRarity(relationship.edge, evidence.sourceNode) : null;
     setClass(element, 'eval-', quality);
-    setClass(element, 'rarity-', rarity);
+    setClass(element, 'rarity-', evidence.rarity);
     const label = element.querySelector('.mini-label');
     if (!label) continue;
-    let pill = label.querySelector('.mini-eval');
-    if (!pill) {
-      pill = document.createElement('span');
-      pill.className = 'mini-eval';
-      label.appendChild(pill);
-    }
+    const pill = document.createElement('span');
+    pill.className = 'mini-eval';
     const failed = evidenceRequestFailed(evidence.sourceEval, evidence.targetEval);
     pill.textContent = evidence.moveEval ? lossLabel(evidence.moveEval) : failed ? '!' : '·';
     pill.title = evidence.moveEval
       ? `${lossLabel(evidence.moveEval)} pawn loss vs best`
       : engineUnavailableLabel([evidence.sourceEval, evidence.targetEval]);
+    label.appendChild(pill);
   }
 }
 
-async function decorateCenter(scope) {
-  const stats = document.querySelector('.rail-current-details .position-stats');
-  if (!stats) return;
-  const cloud = await loadCloudEval(scope.center);
-  if (!scope.isCurrent() || !stats.isConnected) return;
-  const evaluation = positionEvaluation(cloud);
-  let badge = stats.querySelector('.center-eval-detail');
-  if (!badge) {
-    badge = document.createElement('span');
-    badge.className = 'center-eval-detail';
-    stats.appendChild(badge);
+function decorateConnectors(evidenceById) {
+  for (const path of document.querySelectorAll('path[data-relationship-id]')) {
+    const evidence = evidenceById.get(path.dataset.relationshipId);
+    if (!evidence) continue;
+    setClass(path, 'edge-quality-', evidence.moveEval?.quality ?? null);
+    setClass(path, 'edge-rarity-', evidence.rarity);
   }
-  badge.innerHTML = evaluation
-    ? `<strong>${escapeHtml(evaluation.label)}</strong>${evaluation.depth ? ` <span>d${evaluation.depth}</span>` : ''}`
-    : `<span>${escapeHtml(engineUnavailableLabel([cloud]))}</span>`;
 }
 
 function railRowHtml(row) {
@@ -200,50 +154,18 @@ function railRowHtml(row) {
     <span class="eval-human-cell">${mismatch}</span><span class="eval-play">›</span></button>`;
 }
 
-async function decorateLineRail(scope) {
-  if (scope.view !== 'lines') return;
-  const [node, outgoing, sourceEval, masters] = await Promise.all([
-    getNode(scope.center),
-    getOutgoing(scope.center),
-    loadCloudEval(scope.center),
-    loadMasters(scope.center),
-  ]);
-  if (!scope.isCurrent()) return;
-  const lichess = node?.explorer ?? null;
-  const candidates = outgoing
-    .slice()
-    .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || (a.uci ?? '').localeCompare(b.uci ?? ''))
-    .filter((edge) => edge.manual || (edge.games ?? 0) >= HUMAN_SAMPLE_FLOOR || (edge.share ?? 0) > POPULAR_BAD_SHARE);
-  const rows = [];
-  for (const edge of candidates) {
-    let targetEval = null;
-    let moveEval = moveEvaluation(scope.center, edge, sourceEval, null);
-    const fallback = Boolean(sourceEval?.pvs?.length) && Number.isFinite(sourceEval?.depth) && sourceEval.depth >= ENGINE_MIN_DEPTH;
-    if (!moveEval && fallback) {
-      targetEval = await loadCloudEval(edge.target);
-      if (!scope.isCurrent()) return;
-      moveEval = moveEvaluation(scope.center, edge, sourceEval, targetEval);
-    }
-    if (!railWorthy({ edge, sourceKey: scope.center, lichessExplorer: lichess, moveQuality: moveEval })) continue;
-    rows.push({
-      edge,
-      sourceEval,
-      targetEval,
-      moveEval,
-      masters,
-      mastersMismatch: humanMismatch(masters, edge, scope.center, moveEval),
-      lichessMismatch: humanMismatch(lichess, edge, scope.center, moveEval),
-    });
-  }
+function decorateLineRail(view, actions, evidence) {
+  if (view.mode !== 'lines') return;
   const list = document.querySelector('.analysis-rail .rail-explorer .explorer-list');
-  if (!list || !scope.isCurrent()) return;
+  if (!list) return;
+  const rows = evidence?.rail?.rows ?? [];
+  const mastersFailure = humanFailureIndicator(evidence?.rail?.masters, 'Masters');
   list.classList.add('eval-rail-list');
-  const mastersFailure = humanFailureIndicator(masters, 'Masters');
   list.innerHTML = rows.length
     ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span>Human${mastersFailure ? ' !' : ''}</span><span></span></div>${rows.map(railRowHtml).join('')}`
     : '<div class="rail-empty">No Rail-worthy Lines yet.</div>';
   list.querySelectorAll('[data-eval-nav]').forEach((button) => {
-    button.addEventListener('click', () => scope.navigate(button.dataset.evalNav));
+    button.addEventListener('click', () => actions.navigate(button.dataset.evalNav));
   });
 }
 
@@ -253,21 +175,22 @@ function showPresentationFailure(error) {
   const note = document.createElement('div');
   note.className = 'rail-empty evidence-presentation-failure';
   note.textContent = 'Supplementary evidence is temporarily unavailable.';
-  note.title = error?.message ?? 'Evidence presentation failed';
+  note.title = error || 'Evidence presentation failed';
   rail.appendChild(note);
 }
 
-export async function decorateEvidence(scope) {
-  decorateStructure();
-  const cache = new Map();
-  const results = await Promise.allSettled([
-    decorateCenter(scope),
-    decorateLineRail(scope),
-    decorateSatellites(scope, cache),
-  ]);
-  const rejected = results.filter((result) => result.status === 'rejected');
-  if (rejected.length && scope.isCurrent()) {
-    showPresentationFailure(rejected[0].reason);
-    throw rejected[0].reason;
+export function decorateEvidencePresentation(view, actions) {
+  decorateStructure(actions);
+  if (view.evidence.status === 'failed') {
+    showPresentationFailure(view.evidence.error);
+    return;
   }
+  if (view.evidence.status !== 'ready' || !view.evidence.value) return;
+
+  const evidence = view.evidence.value;
+  const evidenceById = new Map((evidence.relationships ?? []).map((item) => [item.id, item]));
+  decorateCenter(evidence);
+  decorateLineRail(view, actions, evidence);
+  decorateSatellites(view, evidenceById);
+  decorateConnectors(evidenceById);
 }

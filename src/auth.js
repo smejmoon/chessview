@@ -1,4 +1,5 @@
 import { debugLog } from './debug.js';
+import { lichessGateway } from './lichess-gateway.js';
 
 const LICHESS_HOST = 'https://lichess.org';
 const CLIENT_ID = 'chessview.smejmoon.github.io';
@@ -113,7 +114,7 @@ export async function completeLichessAuth() {
   debugLog('lichess token exchange', { redirectUri, clientId: CLIENT_ID });
   let response;
   try {
-    response = await fetch(`${LICHESS_HOST}/api/token`, {
+    response = await lichessGateway.request(`${LICHESS_HOST}/api/token`, {
       method: 'POST',
       headers: {
         Accept: 'application/json',

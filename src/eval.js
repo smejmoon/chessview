@@ -1,5 +1,6 @@
 import { canonicalPosition, toPlayableFen } from './graph.js';
 import { getNode, putNode } from './db.js';
+import { lichessGateway } from './lichess-gateway.js';
 
 export const ENGINE_MIN_DEPTH = 18;
 export const ENGINE_DUBIOUS_CP = 50;
@@ -50,12 +51,36 @@ function usableDepth(value) {
   return Number.isFinite(value?.depth) && value.depth >= ENGINE_MIN_DEPTH;
 }
 
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+function requestFailure(error) {
+  return {
+    requestFailed: true,
+    status: Number.isFinite(error?.status) ? error.status : null,
+    message: error?.message ?? String(error),
+  };
+}
+
+export function isEvidenceRequestFailure(value) {
+  return value?.requestFailed === true;
+}
+
+function staleOrFailure(error, cachedValue) {
+  if (error?.name === 'AbortError') throw error;
+  if (cachedValue != null) return cachedValue;
+  return requestFailure(error);
+}
+
 async function mergeNodeFields(key, fields) {
   const current = await getNode(key);
   await putNode({ ...(current ?? {}), key, fen: current?.fen ?? toPlayableFen(key), ...fields });
 }
 
-export async function loadCloudEval(positionKey) {
+export async function loadCloudEval(positionKey, { signal } = {}) {
   const key = canonicalPosition(positionKey);
   if (cloudInFlight.has(key)) return cloudInFlight.get(key);
 
@@ -71,17 +96,17 @@ export async function loadCloudEval(positionKey) {
     url.searchParams.set('multiPv', '5');
 
     try {
-      const response = await fetch(url, { headers: { Accept: 'application/json' } });
+      const response = await lichessGateway.request(url, { signal, headers: { Accept: 'application/json' } });
       if (response.status === 404) {
         await mergeNodeFields(key, { cloudEval: null, cloudEvalFetchedAt: Date.now() });
         return null;
       }
-      if (!response.ok) throw new Error(`Lichess cloud eval returned ${response.status}`);
+      if (!response.ok) throw httpError(response.status, `Lichess cloud eval returned ${response.status}`);
       const value = await response.json();
       await mergeNodeFields(key, { cloudEval: value, cloudEvalFetchedAt: Date.now() });
       return value;
-    } catch {
-      return cached?.cloudEval ?? null;
+    } catch (error) {
+      return staleOrFailure(error, cached?.cloudEval);
     }
   })().finally(() => cloudInFlight.delete(key));
 
@@ -89,7 +114,7 @@ export async function loadCloudEval(positionKey) {
   return promise;
 }
 
-export async function loadMasters(positionKey) {
+export async function loadMasters(positionKey, { signal } = {}) {
   const key = canonicalPosition(positionKey);
   if (mastersInFlight.has(key)) return mastersInFlight.get(key);
 
@@ -105,13 +130,13 @@ export async function loadMasters(positionKey) {
     url.searchParams.set('topGames', '0');
 
     try {
-      const response = await fetch(url, { headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error(`Lichess masters explorer returned ${response.status}`);
+      const response = await lichessGateway.request(url, { signal, headers: { Accept: 'application/json' } });
+      if (!response.ok) throw httpError(response.status, `Lichess masters explorer returned ${response.status}`);
       const value = await response.json();
       await mergeNodeFields(key, { mastersExplorer: value, mastersFetchedAt: Date.now() });
       return value;
-    } catch {
-      return cached?.mastersExplorer ?? null;
+    } catch (error) {
+      return staleOrFailure(error, cached?.mastersExplorer);
     }
   })().finally(() => mastersInFlight.delete(key));
 

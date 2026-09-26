@@ -58,6 +58,25 @@ export async function putEdges(edges) {
   });
 }
 
+export async function putManualEdge(edge) {
+  const db = await openDb();
+  const tx = db.transaction('edges', 'readwrite');
+  const store = tx.objectStore('edges');
+  const existing = await requestAsPromise(store.get(edge.id));
+  const value = {
+    ...edge,
+    ...(existing ?? {}),
+    manual: true,
+    updatedAt: edge.updatedAt ?? existing?.updatedAt ?? Date.now(),
+  };
+  store.put(value);
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve(value);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
 export async function replaceExplorerEdges(source, edges) {
   const db = await openDb();
   const tx = db.transaction('edges', 'readwrite');

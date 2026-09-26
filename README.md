@@ -28,7 +28,7 @@ Pushes to `main` run deterministic tests and a Vite production build. If both pa
 
 Automatic expansion is local to each source position: a move qualifies when it accounts for at least 5% of games at that position and the source sample meets the tunable sample floor. The graph merges positions by canonical chess state, ignoring FEN clocks while retaining future-relevant board state, castling rights, side to move, and relevant en-passant state.
 
-See [`docs/PLAN.md`](docs/PLAN.md) for the canonical **Roots / Lines** terminology, v1 goals, requirements, implementation decisions, and verification plan.
+See [`docs/PLAN.md`](docs/PLAN.md) for the canonical **Roots / Lines** terminology, product commitments, and the component map. Detailed requirements and verification live under [`docs/components/`](docs/components/), with independently maintained architectural boundaries under [`docs/architecture/`](docs/architecture/).
 
 ## License
 

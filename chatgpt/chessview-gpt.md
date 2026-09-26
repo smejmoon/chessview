@@ -21,10 +21,14 @@ A task branch never becomes authority for the policy governing its own work.
 Resolve repository evidence from the ref that owns it rather than silently
 substituting another ref.
 
-`docs/PLAN.md` at the Chessview project-policy ref is Chessview's product and
-implementation plan authority. Product terminology established there, including
-**Roots** and **Lines**, should be used consistently in product-facing work unless
-the human explicitly changes it.
+`docs/PLAN.md` at the Chessview project-policy ref is Chessview's plan entry
+point. It owns the product goal, canonical product terminology, cross-component
+commitments, and the component map. The `docs/components/` documents linked from
+the plan own detailed requirements, implementation choices, tunables, and
+verification in their scopes. Load the relevant component documents before work
+that may change their contracts. Product terminology established by the plan,
+including **Roots** and **Lines**, should be used consistently in product-facing
+work unless the human explicitly changes it.
 
 ## Composition
 
@@ -33,6 +37,10 @@ skills below form Chessview's connected-ChatGPT runtime mirror. If Chessview lat
 adds a repository-authored composition source, changes to that source must update
 this mirror in the same change until a tracked generated runtime file replaces
 it.
+
+Selected Chessview rules, always loaded from the Chessview project-policy ref:
+
+- `rules/lichess-gateway.md`
 
 Selected Strake rules:
 
@@ -56,7 +64,9 @@ Selected Strake skills:
 - `skills/deadwood`
 - `skills/distill-history`
 
-Fetch every selected rule from the Strake policy ref when its scope applies.
+Fetch every selected Chessview rule from the Chessview project-policy ref when
+initializing this adapter and keep it in context for the conversation. Fetch
+every selected Strake rule from the Strake policy ref when its scope applies.
 For a task that may belong to a selected skill, inspect the live `name` and
 `description` frontmatter of plausible skills first, choose the narrowest skill
 that owns the request, then load its full `SKILL.md` and any supporting files it
@@ -197,9 +207,9 @@ safely rewrite that history rather than weakening its contract.
 
 Chessview is a static browser application deployed by GitHub Actions to
 `gh-pages`. Its current stack and behavioral requirements are owned by repository
-sources, especially `docs/PLAN.md`, `README.md`, the source tree, tests, and the
-Pages workflow. Verify these sources from the relevant ref before making
-implementation claims.
+sources, especially `docs/PLAN.md`, the relevant `docs/components/` documents,
+`README.md`, the source tree, tests, and the Pages workflow. Verify these sources
+from the relevant ref before making implementation claims.
 
 Prefer small, reversible product iterations. Preserve canonical-position graph
 identity and transposition merging when changing visualization or navigation.

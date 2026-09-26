@@ -10,7 +10,9 @@ Define and implement evidence-request lifetime and coalescing so an obsolete vie
 
 # Edges:
 
-`backlog/2026-09-25-browser-composition-boundary.md` owns View Cycle/controller composition and may supply generation cancellation context. This outcome owns the evidence-loader subscriber/coalescing semantics needed to use that context safely.
+`backlog/2026-09-26-visible-graph-composition.md` owns the stable visible node/edge/family identity used by Root/Line and evidence presentation. This outcome may consume those identifiers when associating a subscriber with the current view, but request coalescing remains an evidence-loader concern and must not be keyed by rendered order or presentation layout.
+
+`backlog/2026-09-25-browser-composition-boundary.md` owns current-view generation and controller lifecycle. This outcome accepts subscriber obsolescence/lifetime context from that boundary and defines how it participates in shared evidence work; the browser-composition outcome later consumes this abstraction for evidence settlement and superseded-generation integration.
 
 `LichessGateway` continues to own application-wide serialization, cooldown, and pre-send `AbortSignal` enforcement. This outcome must use that boundary rather than introducing a second scheduler or changing chess/evidence cache meaning.
 
@@ -36,7 +38,9 @@ Add failing deterministic cases for shared same-position work with independently
 
 Define the minimum subscriber/request-lifetime abstraction around the existing cloud-eval and Masters in-flight maps.
 
-Thread view-generation cancellation into evidence loading through that abstraction without moving scheduling out of `LichessGateway`.
+Accept explicit subscriber obsolescence from the current-view lifecycle without making the evidence loader own navigation or view-generation policy, and keep scheduling inside `LichessGateway`.
+
+Verify the abstraction against stable visible node/edge association and the browser controller seam, including a superseded view whose equivalent request is still needed by a newer subscriber.
 
 Run evidence, gateway, and view-lifecycle regressions and synchronize this entry around any remaining behavior.
 

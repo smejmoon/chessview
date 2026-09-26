@@ -4,9 +4,9 @@ Finish the visible-graph composition refactor by moving Root and Line presentati
 
 # Because:
 
-`docs/components/position-graph.md` requires one canonical position node with transpositions merged, while `docs/components/interface.md` requires every visible relationship into a convergence to remain legible. Selection now has one shared transient composition model in `src/visible-graph.js`: canonical visible nodes are budgeted once, graph relationships have stable edge identity, and families carry direction-specific presentation state without duplicating persisted graph state.
+`docs/components/position-graph.md` requires one canonical position node with transpositions merged, while `docs/components/interface.md` requires every visible relationship into a convergence to remain legible. Selection has one shared transient composition model in `src/visible-graph.js`: canonical visible nodes are budgeted once, graph relationships have stable edge identity, and families carry direction-specific presentation state without duplicating persisted graph state.
 
-Line selection now retains later relationships into an already-visible canonical position instead of dropping them through a global node `seen` check. Per-family first-move `lineShare` is retained on the visible relationship/family projection. Root selection emits the same composition shape while preserving its shallow-first policy; Line scheduling remains owned by the existing `depth + breadth` frontier policy.
+Line and Root selection retain later relationships into an already-visible canonical position even when the visible-board budget is full. Reaching the budget prevents only creation of another canonical board; zero-cost relationship and family merges into an existing board continue. Per-family first-move `lineShare` remains on the visible relationship/family projection, while Root shallow-first and Line `depth + breadth` scheduling remain distinct.
 
 Presentation has not yet been migrated. `src/main.js` still renders connectors from one node-owned `edge`, so a converged Line board can have all relationships in the explicit projection while the map still draws only one of them. `src/root-pgn.js` still reconstructs Root topology from rendered DOM depth/labels and secondary graph lookups.
 
@@ -26,9 +26,9 @@ A generic family-frontier abstraction remains unearned unless common mechanics a
 
 # Complete:
 
-Root and Line selection both emit the same explicit visible-graph contract. A canonical position appears once while every visible relationship and family reaching it is retained, and board budgeting counts that canonical board once. Deterministic tests cover Line convergence, per-family inherited `lineShare`, stable node/edge/family identity, and the pre-existing distinct frontier behavior. The branch Pages workflow, including its test/build steps, succeeds on the selection checkpoint.
+Root and Line selection emit the same explicit visible-graph contract. A canonical position appears once while every visible relationship and family reaching it is retained, including relationships discovered after the canonical board fills the visible-board budget. Board budgeting counts that canonical board once. Deterministic tests cover Line and Root convergence at the saturation boundary, per-family inherited `lineShare`, family propagation through a shared descendant, stable node/edge/family identity, and the distinct frontier policies.
 
-Still required for this outcome: a shared map-rendering path must consume explicit visible nodes, relationships, families, and merge state; Line convergence must visibly draw every retained connector; Root presentation must stop reconstructing graph meaning from DOM row depth/labels/rendered order and secondary lookups; rendering tests must cover one canonical board with every visible relationship.
+A shared map-rendering path consumes explicit visible nodes, relationships, families, and merge state; Line convergence visibly draws every retained connector; Root presentation no longer reconstructs graph meaning from DOM row depth, labels, rendered order, or secondary graph lookups that exist only to recover selection-known topology. Rendering tests cover one canonical board with every visible relationship, and the current branch's deterministic test/build verification succeeds before close.
 
 # Steps:
 
@@ -38,8 +38,8 @@ Pass the explicit composition into Root presentation and remove DOM-derived rela
 
 Extract only the common board/connector/merge/navigation rendering that remains after direction-specific layout is preserved.
 
-Add deterministic rendering coverage for Line and Root convergence, then verify the resulting branch workflow/preview. If all completion conditions are satisfied, run Backlog Close.
+Add deterministic rendering coverage for Line and Root convergence, run the deterministic suite and build on the resulting branch, and verify the preview. If all completion conditions are satisfied, run Backlog Close.
 
 # Sync:
 
-After any implementation or verification step that changes what remains, and before ending an implementation pass, rewrite this entry around factual remaining work rather than accumulating progress history.
+After any implementation or verification step that changes what remains, and before ending an implementation pass, rewrite this entry around the factual work and verification still open; do not accumulate progress history. If `Complete:` is satisfied, run Backlog Close. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.

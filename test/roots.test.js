@@ -47,6 +47,22 @@ test('Roots merges a transposed ancestor and keeps every visible downstream edge
   assert.equal(shared.merge, true);
 });
 
+test('Roots keep zero-cost convergence relationships when the board budget is full', () => {
+  const incomingByTarget = new Map([
+    ['center', [edge('a', 'center', 'a1a2'), edge('b', 'center', 'b1b2')]],
+    ['a', [edge('shared', 'a', 'c1c2')]],
+    ['b', [edge('shared', 'b', 'c1c3')]],
+  ]);
+
+  const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 3 });
+  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared']);
+
+  const shared = selected.find((item) => item.key === 'shared');
+  assert.deepEqual(shared.branches, ['a', 'b']);
+  assert.deepEqual(shared.edges.map((item) => item.target), ['a', 'b']);
+  assert.equal(selected.length, 3);
+});
+
 test('ancestry above a transposition inherits all converged Root families', () => {
   const incomingByTarget = new Map([
     ['center', [edge('a', 'center', 'a1a2'), edge('b', 'center', 'b1b2')]],

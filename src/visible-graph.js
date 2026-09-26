@@ -97,6 +97,17 @@ export function createVisibleGraph({ center, direction, max = 19 }) {
     return relationship;
   }
 
+  function relationshipsFor(key, { incoming = true, outgoing = true } = {}) {
+    const node = nodesByKey.get(key);
+    if (!node) return [];
+    return node.relationships
+      .map((id) => relationshipsById.get(id))
+      .filter((relationship) => relationship && (
+        (incoming && relationship.target === key)
+        || (outgoing && relationship.source === key)
+      ));
+  }
+
   function result() {
     // Keep the node array iterable for existing board/layout consumers while the
     // explicit composition data moves those consumers off node-owned edges.
@@ -107,6 +118,7 @@ export function createVisibleGraph({ center, direction, max = 19 }) {
     nodes.families = [...families.values()];
     nodes.nodeByKey = nodesByKey;
     nodes.relationshipById = relationshipsById;
+    nodes.relationshipsFor = relationshipsFor;
     return nodes;
   }
 

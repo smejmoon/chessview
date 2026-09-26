@@ -144,7 +144,7 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
 
   const lineFrontiers = [];
   for (const root of roots) {
-    if (visible.boardCount() >= max) break;
+    if (!visible.hasNode(root.target) && visible.boardCount() >= max) continue;
     const family = root.uci;
     const lineShare = root.share ?? 0;
     visible.ensureFamily(family, { direction: 'lines', lineShare, rootEdgeId: edgeId(root) });
@@ -166,11 +166,13 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
     lineFrontiers.push(frontier);
   }
 
-  while (visible.boardCount() < max && hasLineCandidates(lineFrontiers)) {
+  while (hasLineCandidates(lineFrontiers)) {
     let progressed = false;
     for (const frontier of lineFrontiers) {
-      if (visible.boardCount() >= max) break;
-      const next = takeLineCandidate(frontier, (candidate) => !frontier.seenEdges.has(edgeId(candidate.edge)));
+      const next = takeLineCandidate(frontier, (candidate) => (
+        !frontier.seenEdges.has(edgeId(candidate.edge))
+        && (visible.hasNode(candidate.key) || visible.boardCount() < max)
+      ));
       if (!next) continue;
       frontier.seenEdges.add(edgeId(next.edge));
 
@@ -219,8 +221,8 @@ export function chooseRootNeighborhood({ center, incomingByTarget = new Map(), m
     .sort(stableIncomingEdgeOrder);
 
   for (const edge of immediate) {
-    if (visible.boardCount() >= max) break;
     const family = edge.source;
+    if (!visible.hasNode(family) && visible.boardCount() >= max) continue;
     visible.ensureFamily(family, { direction: 'roots', rootEdgeId: edgeId(edge) });
     const result = visible.addNode({
       key: family,
@@ -240,18 +242,17 @@ export function chooseRootNeighborhood({ center, incomingByTarget = new Map(), m
     });
   }
 
-  while (visible.boardCount() < max) {
+  while (frontiers.some((frontier) => frontier.pending.length > 0)) {
     let progressed = false;
 
     for (const frontier of frontiers) {
-      if (visible.boardCount() >= max) break;
-
       while (frontier.pending.length) {
         const candidate = frontier.pending.shift();
         if (!candidate || candidate.key === center) continue;
         const candidateEdgeId = edgeId(candidate.edge);
         if (frontier.seenEdges.has(candidateEdgeId)) continue;
         frontier.seenEdges.add(candidateEdgeId);
+        if (!visible.hasNode(candidate.key) && visible.boardCount() >= max) continue;
 
         const downstream = visible.getNode(candidate.edge.target);
         const families = downstream?.families?.length ? downstream.families : [frontier.branch];
@@ -263,7 +264,7 @@ export function chooseRootNeighborhood({ center, incomingByTarget = new Map(), m
           branches: families,
           families,
         });
-        if (!result.node) break;
+        if (!result.node) continue;
         visible.addRelationship({ edge: candidate.edge, families, distance: candidate.distance });
 
         frontier.pending.push(...rootCandidates(

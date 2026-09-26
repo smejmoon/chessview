@@ -113,11 +113,33 @@ test('Line convergence keeps one board and every visible family relationship', (
   const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 4 });
   assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared', 'after']);
   assert.deepEqual(selected.find((item) => item.key === 'shared')?.families, ['line-a', 'line-b']);
+  assert.deepEqual(selected.find((item) => item.key === 'after')?.families, ['line-a', 'line-b']);
 
   const intoShared = selected.relationships.filter((relationship) => relationship.target === 'shared');
   assert.equal(intoShared.length, 2);
   assert.deepEqual(intoShared.map((relationship) => relationship.lineShare), [0.6, 0.25]);
+  assert.deepEqual(selected.relationshipsFor('shared', { outgoing: false }), intoShared);
+
+  const sharedAfter = selected.relationships.find((relationship) => relationship.id === 'shared|shared-after|after');
+  assert.deepEqual(sharedAfter?.families, ['line-a', 'line-b']);
+  assert.deepEqual(selected.relationshipsFor('shared', { incoming: false }), [sharedAfter]);
   assert.equal(selected.length, 4);
+});
+
+test('Line convergence still records zero-cost relationships when the board budget is full', () => {
+  const outgoingBySource = new Map([
+    ['center', [
+      { source: 'center', target: 'a', uci: 'line-a', share: 0.6, qualifies: true },
+      { source: 'center', target: 'b', uci: 'line-b', share: 0.25, qualifies: true },
+    ]],
+    ['a', [{ source: 'a', target: 'shared', uci: 'a-shared', share: 0.7, qualifies: true }]],
+    ['b', [{ source: 'b', target: 'shared', uci: 'b-shared', share: 0.8, qualifies: true }]],
+  ]);
+
+  const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 3 });
+  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared']);
+  assert.deepEqual(selected.find((item) => item.key === 'shared')?.families, ['line-a', 'line-b']);
+  assert.equal(selected.relationships.filter((relationship) => relationship.target === 'shared').length, 2);
 });
 
 test('visible Line composition exposes stable node edge and family identity', () => {
@@ -130,6 +152,8 @@ test('visible Line composition exposes stable node edge and family identity', ()
   assert.deepEqual(selected.families, [{ id: 'line-a', direction: 'lines', lineShare: 0.6, rootEdgeId: 'center|line-a|a' }]);
   assert.equal(selected.relationships[0].id, 'center|line-a|a');
   assert.equal(selected.nodeByKey.get('a'), selected[0]);
+  assert.deepEqual(selected.relationshipsFor('a'), [selected.relationships[0]]);
+  assert.deepEqual(selected.relationshipsFor('missing'), []);
 });
 
 test('neighborhood selection is deterministic', () => {

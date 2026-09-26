@@ -158,7 +158,7 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
       families: [family],
     });
     if (!result.node) continue;
-    visible.addRelationship({ edge: root, family, distance: 1, lineShare });
+    visible.addRelationship({ edge: root, family, distance: 1 });
 
     const frontier = createLineFrontier(family, null, lineShare);
     frontier.seenEdges = new Set([edgeId(root)]);
@@ -189,7 +189,6 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
         edge: next.edge,
         family: frontier.branch,
         distance: next.distance,
-        lineShare: frontier.lineShare,
       });
       addLineCandidates(frontier, lineChildren(
         outgoingBySource,
@@ -283,12 +282,11 @@ export function chooseRootNeighborhood({ center, incomingByTarget = new Map(), m
   const result = visible.result();
   for (const node of result.nodes) {
     node.branches = [...node.families];
-    node.edges = node.relationships
-      .map((id) => result.relationshipById.get(id)?.edge)
-      .filter(Boolean);
+    node.edges = result.relationshipsFor(node.key, { incoming: false })
+      .map((relationship) => relationship.edge);
     node.edge = node.edges[0] ?? node.edge;
     node.branch = node.branches[0] ?? node.branch;
-    node.merge = node.edges.length > 1 || node.branches.length > 1;
+    node.merge = node.edges.length > 1;
   }
   return result;
 }

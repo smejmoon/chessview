@@ -17,6 +17,8 @@ test('Roots gives each immediate family ancestry before returning to a bushy fam
   assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'aa', 'bb', 'ax']);
   assert.deepEqual(selected.map((item) => item.distance), [1, 1, 2, 2, 2]);
   assert.ok(selected.every((item) => item.relation === 'root'));
+  assert.equal(selected.find((item) => item.key === 'a')?.merge, false);
+  assert.deepEqual(selected.find((item) => item.key === 'a')?.edges.map((item) => item.target), ['center']);
 });
 
 test('Roots stays shallow-first inside each immediate family', () => {
@@ -73,7 +75,10 @@ test('ancestry above a transposition inherits all converged Root families', () =
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 4 });
   assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared', 'upstream']);
-  assert.deepEqual(selected.find((item) => item.key === 'upstream').branches, ['a', 'b']);
+  const upstream = selected.find((item) => item.key === 'upstream');
+  assert.deepEqual(upstream.branches, ['a', 'b']);
+  assert.equal(upstream.merge, false);
+  assert.deepEqual(upstream.edges.map((item) => item.target), ['shared']);
 });
 
 test('Roots selection is deterministic and respects its visible budget', () => {

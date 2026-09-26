@@ -75,6 +75,7 @@ test('branch-balanced neighborhood gives roots space before going deeper', () =>
   const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 4 });
   assert.deepEqual(selected.map((item) => item.key), ['a1', 'b1', 'a2', 'b2']);
   assert.deepEqual(selected.map((item) => item.lineShare), [0.6, 0.3, 0.6, 0.3]);
+  assert.equal(selected.find((item) => item.key === 'a1')?.merge, false);
   assert.equal(selected.length, 4);
 });
 
@@ -114,14 +115,21 @@ test('Line convergence keeps one board and every visible family relationship', (
   assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared', 'after']);
   assert.deepEqual(selected.find((item) => item.key === 'shared')?.families, ['line-a', 'line-b']);
   assert.deepEqual(selected.find((item) => item.key === 'after')?.families, ['line-a', 'line-b']);
+  assert.equal(selected.find((item) => item.key === 'shared')?.merge, true);
+  assert.equal(selected.find((item) => item.key === 'after')?.merge, false);
 
   const intoShared = selected.relationships.filter((relationship) => relationship.target === 'shared');
   assert.equal(intoShared.length, 2);
-  assert.deepEqual(intoShared.map((relationship) => relationship.lineShare), [0.6, 0.25]);
+  assert.deepEqual(intoShared.map((relationship) => relationship.families), [['line-a'], ['line-b']]);
   assert.deepEqual(selected.relationshipsFor('shared', { outgoing: false }), intoShared);
 
   const sharedAfter = selected.relationships.find((relationship) => relationship.id === 'shared|shared-after|after');
   assert.deepEqual(sharedAfter?.families, ['line-a', 'line-b']);
+  assert.deepEqual(
+    sharedAfter?.families.map((family) => selected.familyById.get(family)?.lineShare),
+    [0.6, 0.25],
+  );
+  assert.equal(Object.hasOwn(sharedAfter ?? {}, 'lineShare'), false);
   assert.deepEqual(selected.relationshipsFor('shared', { incoming: false }), [sharedAfter]);
   assert.equal(selected.length, 4);
 });
@@ -150,6 +158,7 @@ test('visible Line composition exposes stable node edge and family identity', ()
   assert.equal(selected.direction, 'lines');
   assert.equal(selected.nodes, selected);
   assert.deepEqual(selected.families, [{ id: 'line-a', direction: 'lines', lineShare: 0.6, rootEdgeId: 'center|line-a|a' }]);
+  assert.equal(selected.familyById.get('line-a'), selected.families[0]);
   assert.equal(selected.relationships[0].id, 'center|line-a|a');
   assert.equal(selected.nodeByKey.get('a'), selected[0]);
   assert.deepEqual(selected.relationshipsFor('a'), [selected.relationships[0]]);

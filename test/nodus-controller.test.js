@@ -109,7 +109,7 @@ test('superseded structure results never become current or publish after a newer
   assert.equal(publications.slice(afterB).some(({ view }) => view.center === 'A'), false);
 });
 
-test('contributors return values and receive no controller publication capabilities', async () => {
+test('contributors return immutable values and receive no controller publication capabilities', async () => {
   let structureInput;
   let evidenceInput;
   const { controller, publications } = fixture({
@@ -134,6 +134,9 @@ test('contributors return values and receive no controller publication capabilit
   assert.ok(Object.isFrozen(controller.snapshot));
   assert.ok(Object.isFrozen(controller.snapshot.navigation));
   assert.ok(Object.isFrozen(controller.snapshot.structure));
+  assert.ok(Object.isFrozen(controller.snapshot.structure.value));
+  assert.ok(Object.isFrozen(controller.snapshot.structure.value.composition));
+  assert.ok(Object.isFrozen(controller.snapshot.evidence.value));
   assert.ok(Object.isFrozen(publications[0].actions));
   assert.equal(typeof publications[0].actions.navigate, 'function');
   assert.equal(typeof publications[0].actions.setMode, 'function');

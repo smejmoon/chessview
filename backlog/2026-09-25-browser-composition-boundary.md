@@ -1,12 +1,14 @@
 # Do:
 
-Finish verification of the Nodus-centered browser composition boundary and, once evidence request lifetime exposes independent subscriber obsolescence, pass current-view participation into evidence loading without making a Nodus generation own a shared request.
+Finish browser-history/URL verification for the Nodus composition boundary and, once evidence request lifetime exposes independent subscriber obsolescence, pass current-view participation into evidence loading without making a Nodus generation own a shared request.
 
 # Because:
 
 `docs/components/interface.md` §Requirements, §Composition direction, and §Verification require stable Roots/Lines navigation, position-based history, stable graph identity in presentation, explicit current-view settlement, and one controller-owned render/navigation lifecycle.
 
-`src/nodus-controller.js` now owns Nodus/view/orientation/history transitions, generation supersession, structural settlement, contributor sequencing, and commands-in/snapshot-out state. `src/main.js` translates native browser inputs and UI intents into that controller; application recentering no longer synthesizes `popstate`, resize is a controller redraw, and `src/view-cycle.js` no longer exposes a browser-event protocol. Root preparation/decorating and evidence presentation now receive explicit scoped current-view state rather than discovering current center/view from DOM. Unexpected evidence presentation failures add a local unavailable summary while remaining supplementary to structural readiness.
+`src/nodus-controller.js` now owns Nodus/view/orientation/history transitions, generation supersession, structural settlement, contributor sequencing, and commands-in/snapshot-out state. `src/main.js` translates native browser inputs and UI intents into that controller; application recentering no longer synthesizes `popstate`, resize is a controller redraw, and `src/view-cycle.js` no longer exposes a browser-event protocol. Root preparation/decorating and evidence presentation receive explicit scoped current-view state rather than discovering current center/view from DOM. Unexpected evidence presentation failures add a local unavailable summary while remaining supplementary to structural readiness.
+
+`test/nodus-controller.test.js` now exercises command/snapshot ownership, history restoration without synthetic navigation, stale-generation rejection, exact visible-composition handoff, encapsulated contributor capabilities, supplementary evidence independence, critical structural failure/recovery, and redraw-versus-refresh generation semantics.
 
 # Edges:
 
@@ -18,9 +20,9 @@ Shared `LichessGateway` serialization/rate-limit policy remains outside this out
 
 # Unsettled:
 
-Decide the smallest evidence subscriber context NodusController should provide after `backlog/2026-09-25-evidence-request-lifetime.md` establishes that abstraction.
+Determine whether URL round-trip and native back/forward need a small pure browser-adapter test seam beyond controller history-restoration coverage, or whether existing URL tests plus deployed preview verification establish that contract without duplicating it.
 
-Determine whether URL round-trip and native back/forward need a small pure browser-adapter test seam beyond the current controller tests, or whether the existing graph URL tests plus deployed preview verification establish that contract without duplicating it.
+Decide the smallest evidence subscriber context NodusController should provide after `backlog/2026-09-25-evidence-request-lifetime.md` establishes that abstraction.
 
 # Complete:
 
@@ -28,15 +30,15 @@ A single NodusController owns current-view state transitions and lifecycle. Nati
 
 Critical structural failures reach the lifecycle as failures. Supplementary evidence hydrates independently, has a compact local presentation-failure summary, and cannot block or downgrade structural readiness.
 
-Deterministic tests cover commands/snapshot ownership, browser-history restoration semantics, superseded generations, explicit contributor context/navigation, structural readiness independent of late/failing evidence, critical structural failure/recovery, explicit refresh/redraw behavior, and preservation of the visible composition supplied to contributors. URL round-trip/back-forward behavior is covered either by a focused adapter test or by equivalent existing deterministic and deployed-preview verification.
+Deterministic tests cover commands/snapshot ownership, browser-history restoration semantics, superseded generations, critical failure/recovery, explicit refresh/redraw behavior, supplementary evidence independence, and preservation of the visible composition supplied to contributors. URL round-trip/back-forward behavior is covered either by a focused adapter test or by equivalent existing deterministic and deployed-preview verification.
 
 Evidence loading consumes independent subscriber obsolescence semantics from `backlog/2026-09-25-evidence-request-lifetime.md` without binding shared request lifetime to a Nodus generation.
 
 # Steps:
 
-Add the remaining NodusController contract cases for critical failure/recovery, refresh/redraw, and composition preservation; run the repository deterministic suite when exact-tip CI can be invoked, in addition to the branch Pages production build.
+Inspect existing URL/history coverage and add only the smallest missing browser-adapter seam needed for deterministic URL round-trip/back-forward verification.
 
-Inspect existing URL/history tests and add only the smallest missing browser-adapter seam needed for deterministic URL round-trip/back-forward coverage.
+Run the repository deterministic suite for the exact branch tip when the CI workflow can be invoked; branch Pages production builds verify bundling but do not run `npm test`.
 
 After the evidence-request-lifetime outcome lands, wire Nodus current-view obsolescence into evidence subscriber participation and verify same-position coalescing remains independent of any one generation.
 

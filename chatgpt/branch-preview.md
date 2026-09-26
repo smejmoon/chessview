@@ -63,15 +63,27 @@ and report any integration or evidence that must be refreshed before merge.
 
 Do not treat readiness as authorization to merge.
 
-## Ship
+## Merge and ship
 
-`ship` authorizes the project's supported merge-and-publish path only after a
-successful preflight. Never invent a merge mechanism or bypass repository/skill
-write constraints. If the available connected-GitHub capabilities cannot perform
-the required safe merge, report the exact handoff instead.
+An explicit request such as `merge <branch> into main` or `ship` authorizes the
+Chessview adapter's task-branch integration exception after a successful fresh
+preflight.
 
-A successful merge to `main` should trigger the canonical production deployment
-owned by the Pages workflow.
+Immediately before mutation, re-resolve both the named task branch and `main`.
+If `main` is still an ancestor of the task branch, prefer a non-force
+fast-forward of `main` to the exact verified task-branch tip. This preserves the
+distilled branch history without manufacturing an extra merge commit.
+
+If `main` has moved or the histories have diverged, do not force-update `main`.
+Use only a repository-supported connected-GitHub merge mechanism that preserves
+both lineages and whose result can be verified. If no such safe mechanism is
+available, stop and report the exact integration handoff rather than guessing or
+rewriting history.
+
+After integration, re-resolve `main` and verify the canonical production
+GitHub Actions test/build/deploy workflow on the resulting `main` tip. A task
+branch's pre-merge CI remains useful preflight evidence, but it does not replace
+post-integration production evidence when the resulting commit identity differs.
 
 ## Cleanup
 

@@ -1,16 +1,8 @@
 import { createViewCycleController } from './view-cycle.js';
 
-function normalizeView(view) {
-  return view === 'roots' ? 'roots' : 'lines';
-}
-
-function normalizeOrientation(orientation) {
-  return orientation === 'black' ? 'black' : 'white';
-}
-
-function normalizeDepth(depth) {
-  return Number.isFinite(depth) && depth >= 0 ? depth : 0;
-}
+const normalizeView = (view) => view === 'roots' ? 'roots' : 'lines';
+const normalizeOrientation = (orientation) => orientation === 'black' ? 'black' : 'white';
+const normalizeDepth = (depth) => Number.isFinite(depth) && depth >= 0 ? depth : 0;
 
 export class NodusController {
   #browser;
@@ -27,22 +19,9 @@ export class NodusController {
   #state;
   #viewCycle;
 
-  constructor({
-    initial,
-    canonicalize,
-    browser,
-    render,
-    prepare = async () => {},
-    decorate = async () => {},
-    evidence = async () => {},
-    discover = null,
-    onPresentation = () => {},
-    log = () => {},
-    cycleOptions = {},
-  }) {
+  constructor({ initial, canonicalize, browser, render, prepare = async () => {}, decorate = async () => {}, evidence = async () => {}, discover = null, onPresentation = () => {}, log = () => {}, cycleOptions = {} }) {
     if (typeof canonicalize !== 'function') throw new TypeError('NodusController requires canonicalize');
     if (typeof render !== 'function') throw new TypeError('NodusController requires render');
-
     this.#canonicalize = canonicalize;
     this.#browser = browser ?? {};
     this.#render = render;
@@ -60,18 +39,11 @@ export class NodusController {
       error: '',
       composition: null,
     };
-    this.#viewCycle = createViewCycleController({
-      ...cycleOptions,
-      onPresentation: () => onPresentation(this.snapshot),
-    });
+    this.#viewCycle = createViewCycleController({ ...cycleOptions, onPresentation: () => onPresentation(this.snapshot) });
   }
 
   get snapshot() {
-    return Object.freeze({
-      ...this.#state,
-      generation: this.#generation,
-      presentation: this.#viewCycle.presentation,
-    });
+    return Object.freeze({ ...this.#state, generation: this.#generation, presentation: this.#viewCycle.presentation });
   }
 
   async start() {
@@ -85,13 +57,11 @@ export class NodusController {
     if (this.#disposed) return false;
     const next = this.#canonicalize(position);
     if (next === this.#state.center) return false;
-
     const previous = this.#state.center;
     this.#state.center = next;
-    this.#state.navDepth = history === 'push' ? this.#state.navDepth + 1 : this.#state.navDepth;
+    if (history === 'push') this.#state.navDepth += 1;
     this.#state.error = '';
-    if (history === 'push') this.#browser.push?.(this.#route());
-    else this.#browser.replace?.(this.#route());
+    (history === 'push' ? this.#browser.push : this.#browser.replace)?.(this.#route());
     this.#log('recenter', { from: previous, to: next, view: this.#state.view, navDepth: this.#state.navDepth });
     await this.#startView('navigate');
     return true;
@@ -149,29 +119,17 @@ export class NodusController {
   }
 
   dispose() {
-    if (this.#disposed) return;
     this.#disposed = true;
     this.#run?.abortController.abort();
     this.#run = null;
   }
 
   #route() {
-    return {
-      center: this.#state.center,
-      view: this.#state.view,
-      navDepth: this.#state.navDepth,
-    };
+    return { center: this.#state.center, view: this.#state.view, navDepth: this.#state.navDepth };
   }
 
   #isCurrent(run) {
-    return Boolean(
-      run
-      && !this.#disposed
-      && this.#run === run
-      && run.generation === this.#generation
-      && run.cycleId === this.#viewCycle.cycleId
-      && !run.abortController.signal.aborted
-    );
+    return Boolean(run && !this.#disposed && this.#run === run && run.generation === this.#generation && run.cycleId === this.#viewCycle.cycleId && !run.abortController.signal.aborted);
   }
 
   #baseScope(run) {
@@ -189,32 +147,21 @@ export class NodusController {
   }
 
   #renderScope(run) {
-    return Object.freeze({
-      ...this.#baseScope(run),
-      actions: Object.freeze({
-        navigate: (position) => this.navigate(position),
-        setView: (view) => this.setView(view),
-        flip: () => this.flip(),
-        back: () => this.back(),
-        redraw: () => this.redraw(),
-      }),
-    });
+    return Object.freeze({ ...this.#baseScope(run), actions: Object.freeze({
+      navigate: (position) => this.navigate(position),
+      setView: (view) => this.setView(view),
+      flip: () => this.flip(),
+      back: () => this.back(),
+      redraw: () => this.redraw(),
+    }) });
   }
 
   #structureScope(run, composition = this.#state.composition) {
-    return Object.freeze({
-      ...this.#baseScope(run),
-      composition,
-      signal: run.abortController.signal,
-    });
+    return Object.freeze({ ...this.#baseScope(run), composition, signal: run.abortController.signal });
   }
 
   #evidenceScope(run, composition = this.#state.composition) {
-    return Object.freeze({
-      ...this.#baseScope(run),
-      composition,
-      navigate: (position) => this.navigate(position),
-    });
+    return Object.freeze({ ...this.#baseScope(run), composition, navigate: (position) => this.navigate(position) });
   }
 
   async #startView(reason) {
@@ -223,34 +170,22 @@ export class NodusController {
     this.#state.loading = this.#state.view === 'lines' && typeof this.#discover === 'function';
     this.#state.error = '';
     this.#state.composition = null;
-
     const expected = ['render', 'structure'];
     if (this.#state.loading) expected.push('discovery');
-    const cycleId = this.#viewCycle.start(expected);
     const run = {
       generation: this.#generation,
-      cycleId,
+      cycleId: this.#viewCycle.start(expected),
       abortController: new AbortController(),
       renderTail: Promise.resolve(),
     };
     this.#run = run;
-    this.#log('view cycle started', {
-      cycleId,
-      generation: run.generation,
-      center: this.#state.center,
-      view: this.#state.view,
-      discovery: this.#state.loading,
-      reason,
-    });
-
+    this.#log('view cycle started', { cycleId: run.cycleId, generation: run.generation, center: this.#state.center, view: this.#state.view, discovery: this.#state.loading, reason });
     await this.#queueRender(run, { hydrateEvidence: !this.#state.loading });
-    if (this.#isCurrent(run) && this.#state.loading) await this.#runDiscovery(run);
+    if (this.#isCurrent(run) && this.#state.loading) void this.#runDiscovery(run);
   }
 
   #queueRender(run, options) {
-    run.renderTail = run.renderTail
-      .catch(() => {})
-      .then(() => this.#renderCurrent(run, options));
+    run.renderTail = run.renderTail.catch(() => {}).then(() => this.#renderCurrent(run, options));
     return run.renderTail;
   }
 
@@ -258,27 +193,16 @@ export class NodusController {
     if (!this.#isCurrent(run)) return;
     const structureTask = this.#viewCycle.begin(run.cycleId, 'structure');
     const renderTask = this.#viewCycle.begin(run.cycleId, 'render');
-    let prepareFailed = null;
-
-    try {
-      await this.#prepare(this.#structureScope(run));
-    } catch (error) {
-      prepareFailed = error;
-      this.#log('structure preparation failed', error);
-    }
+    let preparationError = null;
+    try { await this.#prepare(this.#structureScope(run)); }
+    catch (error) { preparationError = error; this.#log('structure preparation failed', error); }
     if (!this.#isCurrent(run)) return;
 
     let rendered;
-    try {
-      rendered = await this.#render(this.#renderScope(run));
-    } catch (error) {
-      rendered = { failed: true, error };
-    }
+    try { rendered = await this.#render(this.#renderScope(run)); }
+    catch (error) { rendered = { failed: true, error }; }
     if (!this.#isCurrent(run)) return;
-
-    if (rendered?.error && !this.#state.error) {
-      this.#state.error = rendered.error?.message ?? String(rendered.error);
-    }
+    if (rendered?.error && !this.#state.error) this.#state.error = rendered.error?.message ?? String(rendered.error);
     if (rendered?.failed) {
       this.#viewCycle.fail(run.cycleId, 'render', renderTask);
       this.#viewCycle.fail(run.cycleId, 'structure', structureTask);
@@ -287,16 +211,14 @@ export class NodusController {
 
     this.#state.composition = rendered?.composition ?? null;
     this.#viewCycle.settle(run.cycleId, 'render', renderTask);
-
-    if (prepareFailed) {
-      this.#state.error ||= prepareFailed?.message ?? 'Current view structure is unavailable.';
+    if (preparationError) {
+      this.#state.error ||= preparationError?.message ?? 'Current view structure is unavailable.';
       this.#viewCycle.fail(run.cycleId, 'structure', structureTask);
       return;
     }
 
-    try {
-      await this.#decorate(this.#structureScope(run, this.#state.composition));
-    } catch (error) {
+    try { await this.#decorate(this.#structureScope(run, this.#state.composition)); }
+    catch (error) {
       if (!this.#isCurrent(run)) return;
       this.#state.error ||= error?.message ?? 'Current view structure is unavailable.';
       this.#log('structure decoration failed', error);
@@ -305,17 +227,21 @@ export class NodusController {
     }
     if (!this.#isCurrent(run)) return;
     this.#viewCycle.settle(run.cycleId, 'structure', structureTask);
+    if (hydrateEvidence) this.#hydrateEvidence(run, this.#state.composition);
+  }
 
-    if (!hydrateEvidence) return;
+  #hydrateEvidence(run, composition) {
     const evidenceTask = this.#viewCycle.begin(run.cycleId, 'evidence');
-    try {
-      await this.#evidence(this.#evidenceScope(run, this.#state.composition));
-      if (this.#isCurrent(run)) this.#viewCycle.settle(run.cycleId, 'evidence', evidenceTask);
-    } catch (error) {
-      if (!this.#isCurrent(run)) return;
-      this.#log('evidence decoration failed', error);
-      this.#viewCycle.fail(run.cycleId, 'evidence', evidenceTask);
-    }
+    void Promise.resolve()
+      .then(() => this.#evidence(this.#evidenceScope(run, composition)))
+      .then(() => {
+        if (this.#isCurrent(run)) this.#viewCycle.settle(run.cycleId, 'evidence', evidenceTask);
+      })
+      .catch((error) => {
+        if (!this.#isCurrent(run)) return;
+        this.#log('evidence decoration failed', error);
+        this.#viewCycle.fail(run.cycleId, 'evidence', evidenceTask);
+      });
   }
 
   async #runDiscovery(run) {
@@ -323,27 +249,18 @@ export class NodusController {
     const discoveryTask = this.#viewCycle.begin(run.cycleId, 'discovery');
     let result = null;
     try {
-      result = await this.#discover(Object.freeze({
-        ...this.#baseScope(run),
-        signal: run.abortController.signal,
-        onProgress: () => {
-          if (this.#isCurrent(run)) void this.#queueRender(run, { hydrateEvidence: false });
-        },
-      }));
+      result = await this.#discover(Object.freeze({ ...this.#baseScope(run), signal: run.abortController.signal, onProgress: () => {
+        if (this.#isCurrent(run)) void this.#queueRender(run, { hydrateEvidence: false });
+      } }));
     } catch (error) {
       result = { error, criticalFailure: true };
     }
     if (!this.#isCurrent(run)) return;
-
     this.#state.loading = false;
     if (result?.error) this.#state.error = result.error?.message ?? String(result.error);
     await this.#queueRender(run, { hydrateEvidence: true });
     if (!this.#isCurrent(run)) return;
-
-    if (result?.criticalFailure) {
-      this.#viewCycle.fail(run.cycleId, 'discovery', discoveryTask);
-    } else {
-      this.#viewCycle.settle(run.cycleId, 'discovery', discoveryTask);
-    }
+    if (result?.criticalFailure) this.#viewCycle.fail(run.cycleId, 'discovery', discoveryTask);
+    else this.#viewCycle.settle(run.cycleId, 'discovery', discoveryTask);
   }
 }

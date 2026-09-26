@@ -129,7 +129,13 @@ export function createVisibleGraph({ center, direction, max = 19 }) {
     nodes.nodeByKey = nodesByKey;
     nodes.relationshipById = relationshipsById;
     nodes.familyById = families;
-    nodes.relationshipsFor = relationshipsFor;
+    // Compatibility helpers must not participate in value equality: deterministic
+    // selector tests compare two independently composed arrays structurally.
+    Object.defineProperty(nodes, 'relationshipsFor', {
+      value: relationshipsFor,
+      enumerable: false,
+      configurable: true,
+    });
     return nodes;
   }
 

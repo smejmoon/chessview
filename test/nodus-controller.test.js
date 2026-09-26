@@ -9,8 +9,13 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+async function flush(turns = 8) {
+  for (let index = 0; index < turns; index += 1) await Promise.resolve();
+}
+
 function fixture(overrides = {}) {
   const calls = [];
+  const publications = [];
   const routeLedger = {
     push(route) { calls.push(['push', route]); },
     replace(route) { calls.push(['replace', route]); },
@@ -25,36 +30,47 @@ function fixture(overrides = {}) {
     canonicalize: (value) => String(value).toUpperCase(),
     routeLedger,
     preferences,
-    render: async (scope) => {
-      calls.push(['render', scope.center, scope.view, scope.orientation]);
-      return { composition: { center: scope.center, direction: scope.view } };
+    structure: async ({ center, mode }) => {
+      calls.push(['structure', center, mode]);
+      return { composition: { center, direction: mode }, marker: `${center}:${mode}` };
     },
-    decorate: async (scope) => { calls.push(['decorate', scope.center, scope.composition]); },
-    evidence: async (scope) => { calls.push(['evidence', scope.center, scope.composition]); },
-    cycleOptions: { updatingDelayMs: 0, readyHoldMs: 0 },
+    evidence: async ({ center, mode, structure }) => {
+      calls.push(['evidence', center, mode, structure]);
+      return { marker: `evidence:${center}:${mode}` };
+    },
+    publish: (view, actions) => {
+      publications.push({ view, actions });
+      calls.push(['publish', view.center, view.mode, view.structure.status, view.evidence.status]);
+    },
     ...overrides,
   });
-  return { controller, calls };
+  return { controller, calls, publications };
 }
 
-test('commands in, snapshot out', async () => {
+test('commands update one immutable current view while RouteLedger and preferences receive effects', async () => {
   const { controller, calls } = fixture();
   await controller.start();
+  await flush();
   assert.equal(controller.snapshot.center, 'A');
-  assert.equal(controller.snapshot.view, 'roots');
+  assert.equal(controller.snapshot.mode, 'roots');
+  assert.equal(controller.snapshot.navigation.canGoBack, false);
+  assert.equal(controller.snapshot.structure.status, 'ready');
 
   await controller.navigate('b');
   assert.equal(controller.snapshot.center, 'B');
-  assert.equal(controller.snapshot.navDepth, 1);
+  assert.equal(controller.snapshot.navigation.canGoBack, true);
   assert.deepEqual(calls.find(([name]) => name === 'push')?.[1], { center: 'B', view: 'roots', navDepth: 1 });
 
-  await controller.setView('lines');
-  assert.equal(controller.snapshot.view, 'lines');
+  await controller.setMode('lines');
+  assert.equal(controller.snapshot.mode, 'lines');
   assert.ok(calls.some(([name, value]) => name === 'setViewPreference' && value === 'lines'));
 
   await controller.flip();
   assert.equal(controller.snapshot.orientation, 'black');
   assert.ok(calls.some(([name, value]) => name === 'setOrientationPreference' && value === 'black'));
+  assert.equal(Object.hasOwn(controller.snapshot, 'generation'), false);
+  assert.equal(Object.hasOwn(controller.snapshot, 'navDepth'), false);
+  assert.equal(Object.hasOwn(controller.snapshot, 'view'), false);
 });
 
 test('restore consumes RouteLedger history without writing a new entry', async () => {
@@ -63,104 +79,142 @@ test('restore consumes RouteLedger history without writing a new entry', async (
   calls.length = 0;
   await controller.restore({ center: 'c', view: 'lines', navDepth: 4 });
   assert.deepEqual(
-    { center: controller.snapshot.center, view: controller.snapshot.view, navDepth: controller.snapshot.navDepth },
-    { center: 'C', view: 'lines', navDepth: 4 },
+    { center: controller.snapshot.center, mode: controller.snapshot.mode, canGoBack: controller.snapshot.navigation.canGoBack },
+    { center: 'C', mode: 'lines', canGoBack: true },
   );
   assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
 });
 
-test('superseded contributor results cannot publish into the current view', async () => {
+test('superseded structure results never become current or publish after a newer view', async () => {
   const first = deferred();
-  const completed = [];
-  let renderCount = 0;
-  const { controller } = fixture({
-    render: async (scope) => {
-      renderCount += 1;
-      if (renderCount === 1) await first.promise;
-      completed.push(scope.center);
-      return { composition: { center: scope.center, direction: scope.view } };
+  const { controller, publications } = fixture({
+    structure: async ({ center, mode }) => {
+      if (center === 'A') await first.promise;
+      return { composition: { center, direction: mode }, marker: center };
     },
   });
+
   const starting = controller.start();
+  await flush(2);
   const navigating = controller.navigate('b');
+  await navigating;
+  await flush();
+  const afterB = publications.length;
   first.resolve();
-  await Promise.all([starting, navigating]);
+  await starting;
+  await flush();
+
   assert.equal(controller.snapshot.center, 'B');
-  assert.ok(completed.includes('A'));
-  assert.ok(completed.includes('B'));
-  assert.equal(controller.snapshot.composition.center, 'B');
+  assert.equal(controller.snapshot.structure.value.marker, 'B');
+  assert.equal(publications.slice(afterB).some(({ view }) => view.center === 'A'), false);
 });
 
-test('contributors receive the exact visible composition and explicit current-view state', async () => {
-  const composition = { center: 'A', direction: 'roots', relationships: [{ id: 'edge-1' }] };
-  let decorated;
-  let evidenced;
-  const { controller } = fixture({
-    render: async () => ({ composition }),
-    decorate: async (scope) => { decorated = scope; },
-    evidence: async (scope) => { evidenced = scope; },
+test('contributors return values and receive no controller publication capabilities', async () => {
+  let structureInput;
+  let evidenceInput;
+  const { controller, publications } = fixture({
+    structure: async (input) => {
+      structureInput = input;
+      return { composition: { center: input.center, direction: input.mode } };
+    },
+    evidence: async (input) => {
+      evidenceInput = input;
+      return { center: input.center };
+    },
   });
+
   await controller.start();
-  await Promise.resolve();
-  assert.equal(decorated.center, 'A');
-  assert.strictEqual(decorated.composition, composition);
-  assert.strictEqual(evidenced.composition, composition);
+  await flush();
+
+  assert.deepEqual(Object.keys(structureInput).sort(), ['center', 'mode', 'signal']);
+  assert.deepEqual(Object.keys(evidenceInput).sort(), ['center', 'mode', 'signal', 'structure']);
+  assert.equal(Object.hasOwn(structureInput, 'navigate'), false);
+  assert.equal(Object.hasOwn(evidenceInput, 'settle'), false);
+  assert.ok(publications.length > 0);
+  assert.ok(Object.isFrozen(controller.snapshot));
+  assert.ok(Object.isFrozen(controller.snapshot.navigation));
+  assert.ok(Object.isFrozen(controller.snapshot.structure));
+  assert.ok(Object.isFrozen(publications[0].actions));
+  assert.equal(typeof publications[0].actions.navigate, 'function');
+  assert.equal(typeof publications[0].actions.setMode, 'function');
 });
 
-test('contributor scopes provide direct navigation without exposing controller internals', async () => {
-  let evidenceScope;
-  const { controller, calls } = fixture({ evidence: async (scope) => { evidenceScope = scope; } });
-  await controller.start();
-  await Promise.resolve();
-  assert.equal(evidenceScope.center, 'A');
-  assert.equal(evidenceScope.view, 'roots');
-  assert.equal(Object.hasOwn(evidenceScope, 'generation'), false);
-  assert.equal(Object.hasOwn(evidenceScope, 'settle'), false);
-  await evidenceScope.navigate('b');
-  assert.equal(controller.snapshot.center, 'B');
-  assert.ok(calls.some(([name]) => name === 'push'));
-});
-
-test('supplementary evidence neither blocks nor fails structural readiness', async () => {
+test('supplementary evidence publishes later without blocking or downgrading ready structure', async () => {
   const evidence = deferred();
   const { controller } = fixture({ evidence: () => evidence.promise });
   await controller.start();
-  assert.notEqual(controller.snapshot.presentation, 'failed');
-  assert.notEqual(controller.snapshot.presentation, 'updating');
+  assert.equal(controller.snapshot.structure.status, 'ready');
+  assert.equal(controller.snapshot.evidence.status, 'loading');
+
   evidence.reject(new Error('evidence unavailable'));
-  await Promise.resolve();
-  await Promise.resolve();
-  assert.notEqual(controller.snapshot.presentation, 'failed');
+  await flush();
+  assert.equal(controller.snapshot.structure.status, 'ready');
+  assert.equal(controller.snapshot.evidence.status, 'failed');
+  assert.match(controller.snapshot.evidence.error, /evidence unavailable/);
 });
 
-test('critical structural failure is terminal for its generation and refresh can recover', async () => {
+test('evidence values become part of the immutable current view after structural readiness', async () => {
+  const evidence = deferred();
+  const { controller } = fixture({ evidence: () => evidence.promise });
+  await controller.start();
+  evidence.resolve({ evaluation: 'value' });
+  await flush();
+  assert.equal(controller.snapshot.structure.status, 'ready');
+  assert.equal(controller.snapshot.evidence.status, 'ready');
+  assert.deepEqual(controller.snapshot.evidence.value, { evaluation: 'value' });
+});
+
+test('critical structure failure is terminal for that view and refresh can recover', async () => {
   let fail = true;
   const { controller } = fixture({
-    decorate: async () => {
+    structure: async ({ center, mode }) => {
       if (fail) throw new Error('structure unavailable');
+      return { composition: { center, direction: mode } };
     },
   });
   await controller.start();
-  assert.equal(controller.snapshot.presentation, 'failed');
-  const failedGeneration = controller.snapshot.generation;
+  assert.equal(controller.snapshot.structure.status, 'failed');
+  assert.match(controller.snapshot.structure.error, /structure unavailable/);
 
   fail = false;
   await controller.refresh();
-  assert.equal(controller.snapshot.generation, failedGeneration + 1);
-  assert.notEqual(controller.snapshot.presentation, 'failed');
+  assert.equal(controller.snapshot.structure.status, 'ready');
 });
 
-test('redraw preserves generation while refresh supersedes it without changing history', async () => {
-  const { controller, calls } = fixture();
+test('redraw republishes without recomputing while refresh recomputes without changing history', async () => {
+  let structureCalls = 0;
+  const { controller, calls, publications } = fixture({
+    structure: async ({ center, mode }) => {
+      structureCalls += 1;
+      return { composition: { center, direction: mode } };
+    },
+  });
   await controller.start();
+  await flush();
   calls.length = 0;
-  const generation = controller.snapshot.generation;
+  const published = publications.length;
+  const composed = structureCalls;
 
   await controller.redraw();
-  assert.equal(controller.snapshot.generation, generation);
+  assert.equal(structureCalls, composed);
+  assert.equal(publications.length, published + 1);
   assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
 
   await controller.refresh();
-  assert.equal(controller.snapshot.generation, generation + 1);
+  assert.equal(structureCalls, composed + 1);
   assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
+});
+
+test('Lines remain structurally loading until discovery reaches a terminal result', async () => {
+  const discovery = deferred();
+  const { controller } = fixture({
+    initial: { center: 'A', view: 'lines', orientation: 'white', navDepth: 0 },
+    discover: () => discovery.promise,
+  });
+
+  await controller.start();
+  assert.equal(controller.snapshot.structure.status, 'loading');
+  discovery.resolve(null);
+  await flush(16);
+  assert.equal(controller.snapshot.structure.status, 'ready');
 });

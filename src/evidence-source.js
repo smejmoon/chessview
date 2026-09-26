@@ -59,6 +59,15 @@ async function relationshipEvidence(relationship, mode, signal) {
   });
 }
 
+async function visibleRelationshipEvidence(composition, mode, signal) {
+  const result = [];
+  for (const relationship of composition.relationships ?? []) {
+    throwIfAborted(signal);
+    result.push(await relationshipEvidence(relationship, mode, signal));
+  }
+  return immutable(result);
+}
+
 async function lineRailEvidence(center, signal) {
   const [node, outgoing, sourceEval, masters] = await Promise.all([
     getNode(center),
@@ -105,9 +114,7 @@ export async function loadNodusEvidence({ center, mode, structure, signal } = {}
   if (!composition) return immutable({ center: null, relationships: [], rail: { rows: [], masters: null } });
 
   const centerCloudPromise = loadCloudEval(center);
-  const relationshipPromise = Promise.all(
-    (composition.relationships ?? []).map((relationship) => relationshipEvidence(relationship, mode, signal)),
-  );
+  const relationshipPromise = visibleRelationshipEvidence(composition, mode, signal);
   const railPromise = mode === 'lines'
     ? lineRailEvidence(center, signal)
     : Promise.resolve(immutable({ rows: [], masters: null }));

@@ -1,7 +1,9 @@
-import { edgeId } from './graph.js';
-
 function unique(values = []) {
   return [...new Set(values.filter(Boolean))];
+}
+
+function relationshipId(edge) {
+  return `${edge.source}|${edge.uci}|${edge.target}`;
 }
 
 export function createVisibleGraph({ center, direction, max = 19 }) {
@@ -59,11 +61,17 @@ export function createVisibleGraph({ center, direction, max = 19 }) {
   function addRelationship({ edge, family, families: familyIds = [], distance, lineShare = null }) {
     if (!edge) return null;
     const ids = unique([family, ...familyIds]);
-    const id = edgeId(edge);
+    const id = relationshipId(edge);
     const existing = relationshipsById.get(id);
     if (existing) {
       existing.families = unique([...existing.families, ...ids]);
       if (existing.lineShare == null && lineShare != null) existing.lineShare = lineShare;
+      for (const key of [edge.source, edge.target]) {
+        const node = nodesByKey.get(key);
+        if (!node) continue;
+        node.families = unique([...node.families, ...ids]);
+        node.merge = node.families.length > 1 || node.relationships.length > 1;
+      }
       return existing;
     }
 

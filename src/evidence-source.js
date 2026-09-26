@@ -12,14 +12,14 @@ import {
   rootRarity,
 } from './eval.js';
 
-function obsoleteError() {
+function abortError() {
   const error = new Error('Evidence view became obsolete');
   error.name = 'AbortError';
   return error;
 }
 
-function throwIfObsolete(isCurrent) {
-  if (isCurrent && !isCurrent()) throw obsoleteError();
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw abortError();
 }
 
 function immutable(value) {
@@ -32,10 +32,10 @@ function immutable(value) {
   return value;
 }
 
-async function relationshipEvidence(relationship, mode, isCurrent) {
+async function relationshipEvidence(relationship, mode, signal) {
   const edge = relationship.edge;
   const sourceNode = await getNode(edge.source);
-  throwIfObsolete(isCurrent);
+  throwIfAborted(signal);
   // Do not bind the shared evidence request to this view's AbortSignal. The
   // evidence-request-lifetime outcome owns independent subscriber cancellation.
   const [sourceEval, targetEval, masters] = await Promise.all([
@@ -43,7 +43,7 @@ async function relationshipEvidence(relationship, mode, isCurrent) {
     loadCloudEval(edge.target),
     loadMasters(edge.source),
   ]);
-  throwIfObsolete(isCurrent);
+  throwIfAborted(signal);
   const moveEval = moveEvaluation(edge.source, edge, sourceEval, targetEval);
   const lichess = sourceNode?.explorer ?? null;
   return immutable({
@@ -59,14 +59,14 @@ async function relationshipEvidence(relationship, mode, isCurrent) {
   });
 }
 
-async function lineRailEvidence(center, isCurrent) {
+async function lineRailEvidence(center, signal) {
   const [node, outgoing, sourceEval, masters] = await Promise.all([
     getNode(center),
     getOutgoing(center),
     loadCloudEval(center),
     loadMasters(center),
   ]);
-  throwIfObsolete(isCurrent);
+  throwIfAborted(signal);
   const lichess = node?.explorer ?? null;
   const candidates = outgoing
     .slice()
@@ -74,7 +74,7 @@ async function lineRailEvidence(center, isCurrent) {
     .filter((edge) => edge.manual || (edge.games ?? 0) >= HUMAN_SAMPLE_FLOOR || (edge.share ?? 0) > POPULAR_BAD_SHARE);
   const rows = [];
   for (const edge of candidates) {
-    throwIfObsolete(isCurrent);
+    throwIfAborted(signal);
     let targetEval = null;
     let moveEval = moveEvaluation(center, edge, sourceEval, null);
     const fallback = Boolean(sourceEval?.pvs?.length)
@@ -82,7 +82,7 @@ async function lineRailEvidence(center, isCurrent) {
       && sourceEval.depth >= ENGINE_MIN_DEPTH;
     if (!moveEval && fallback) {
       targetEval = await loadCloudEval(edge.target);
-      throwIfObsolete(isCurrent);
+      throwIfAborted(signal);
       moveEval = moveEvaluation(center, edge, sourceEval, targetEval);
     }
     if (!railWorthy({ edge, sourceKey: center, lichessExplorer: lichess, moveQuality: moveEval })) continue;
@@ -99,17 +99,17 @@ async function lineRailEvidence(center, isCurrent) {
   return immutable({ rows, masters });
 }
 
-export async function loadNodusEvidence({ center, mode, structure, isCurrent } = {}) {
-  throwIfObsolete(isCurrent);
+export async function loadNodusEvidence({ center, mode, structure, signal } = {}) {
+  throwIfAborted(signal);
   const composition = structure?.composition;
   if (!composition) return immutable({ center: null, relationships: [], rail: { rows: [], masters: null } });
 
   const centerCloudPromise = loadCloudEval(center);
   const relationshipPromise = Promise.all(
-    (composition.relationships ?? []).map((relationship) => relationshipEvidence(relationship, mode, isCurrent)),
+    (composition.relationships ?? []).map((relationship) => relationshipEvidence(relationship, mode, signal)),
   );
   const railPromise = mode === 'lines'
-    ? lineRailEvidence(center, isCurrent)
+    ? lineRailEvidence(center, signal)
     : Promise.resolve(immutable({ rows: [], masters: null }));
 
   const [centerCloud, relationships, rail] = await Promise.all([
@@ -117,7 +117,7 @@ export async function loadNodusEvidence({ center, mode, structure, isCurrent } =
     relationshipPromise,
     railPromise,
   ]);
-  throwIfObsolete(isCurrent);
+  throwIfAborted(signal);
 
   return immutable({
     center: {

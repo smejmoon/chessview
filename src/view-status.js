@@ -26,7 +26,7 @@ export function createViewStatusPresenter({
   }
 
   function paint() {
-    const element = document.querySelector('#view-status');
+    const element = globalThis.document?.querySelector?.('#view-status');
     if (!element) return;
     const spec = statusSpec(presentation);
     element.className = `view-status is-${presentation}`;

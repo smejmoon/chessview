@@ -317,7 +317,7 @@ function railRowHtml(row, { showMastersFailure = true } = {}) {
   const title = `${edge.san ?? edge.uci}${share ? ` · ${share}` : ''}${edge.games ? ` · ${compactGames(edge.games)} games` : ''}${moveEval ? ` · ${lossLabel(moveEval)} pawn loss vs best` : ''}${engineNote}`;
   return `
     <button class="eval-rail-row eval-${quality}" type="button" data-eval-nav="${escapeHtml(edge.target)}" title="${escapeHtml(title)}">
-      <span class="eval-rail-move">${escapeHtml(edge.san ?? edge.uci)}</span>
+      <span class="eval-rail-move">${escapeHtml(edge.san ?? edge.uci)}${share ? ` · ${escapeHtml(share)}` : ''}</span>
       <span class="eval-badge">${escapeHtml(evalLabel)}</span>
       <span class="eval-human-cell">${mismatch}</span>
       <span class="eval-play">›</span>
@@ -339,8 +339,6 @@ function railRow(edge, moveEval, targetEval, sourceEval, masters, lichess, sourc
 function renderLineRailRows(centerAtStart, run, candidates, rowsById, masters) {
   if (!currentRun(run, centerAtStart)) return false;
   const rows = candidates.map((edge) => rowsById.get(edge.id)).filter(Boolean);
-  const linesCount = document.querySelector('#lines-tab small');
-  if (linesCount) linesCount.textContent = String(rows.length);
   if (currentView() !== 'lines') return true;
 
   const list = document.querySelector('.analysis-rail .rail-explorer .explorer-list');

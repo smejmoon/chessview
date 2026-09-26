@@ -15,6 +15,8 @@ Own Chessview's position-centered navigation model and spatial presentation.
 - Root rarity remains a separate dash/opacity treatment and does not reuse Line thickness.
 - Siblings, cousins, and merged transpositions may occupy lateral context where useful without changing Root/Line direction semantics.
 - The right-side control and evidence surface is the Rail.
+- The `Lines` tab count reports qualifying first-level graph Lines represented by the structural discovery model. Supplementary Rail filtering must not overwrite that count with a broader evidence-row count.
+- The enriched Lines Rail may show additional selectable/evidenced moves that are not automatic Line boards; each such row keeps its rated-Explorer share visible so the distinction from the 5% structural threshold is understandable.
 - Clicking a miniature board recenters immediately.
 - Playing a legal move on the center recenters even when that move is below the automatic-discovery threshold.
 - All visible boards share one global orientation controlled by the flip action.
@@ -49,6 +51,7 @@ Deterministic/browser contract tests should cover:
 - global orientation behavior;
 - stable identity between rendered positions/connectors and their graph edges;
 - Line descendants inheriting the first move's center share for connector-width semantics;
+- the Lines tab retaining its structural first-level-Line count while the evidence Rail hydrates a broader move set;
 - current-view settlement waiting for every critical structural contributor;
 - supplementary evidence hydration not blocking or reopening a successfully settled structural view;
 - stale work from an obsolete generation being unable to settle the current view;
@@ -56,4 +59,4 @@ Deterministic/browser contract tests should cover:
 - critical structural failure ending loading without showing the normal success-style settled state;
 - supplementary request failures remaining locally visible without downgrading structural readiness.
 
-Manual verification should include dense Root and Line neighborhoods, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. It should confirm that every segment of one Line keeps the same popularity thickness even when deeper local move percentages differ, while quality color may change edge by edge. For network-backed structural navigation it should confirm `Updating…` → `Ready` → subtle check; cached structural navigation that settles inside the delay should skip `Updating…` and still acknowledge `Ready` before fading to the check. Supplementary evidence should be allowed to appear afterward without reopening the global loading state.
+Manual verification should include dense Root and Line neighborhoods, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. It should confirm that every segment of one Line keeps the same popularity thickness even when deeper local move percentages differ, while quality color may change edge by edge. It should also confirm that the Lines tab counts structural first-level Lines, while broader Rail-only moves keep their Explorer share visible without changing that tab count. For network-backed structural navigation it should confirm `Updating…` → `Ready` → subtle check; cached structural navigation that settles inside the delay should skip `Updating…` and still acknowledge `Ready` before fading to the check. Supplementary evidence should be allowed to appear afterward without reopening the global loading state.

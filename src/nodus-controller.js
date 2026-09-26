@@ -7,8 +7,18 @@ function errorMessage(error) {
   return error?.message ?? String(error);
 }
 
+function immutable(value) {
+  if (Array.isArray(value)) return Object.freeze(value.map(immutable));
+  if (value && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.freeze(Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [key, immutable(child)]),
+    ));
+  }
+  return value;
+}
+
 function lifecycle(status, value = null, error = null) {
-  return Object.freeze({ status, value, error: errorMessage(error) });
+  return Object.freeze({ status, value: immutable(value), error: errorMessage(error) });
 }
 
 export class NodusController {

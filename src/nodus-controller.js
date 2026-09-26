@@ -5,7 +5,6 @@ const normalizeOrientation = (orientation) => orientation === 'black' ? 'black' 
 const normalizeDepth = (depth) => Number.isFinite(depth) && depth >= 0 ? depth : 0;
 
 export class NodusController {
-  #browser;
   #canonicalize;
   #decorate;
   #discover;
@@ -13,17 +12,20 @@ export class NodusController {
   #evidence;
   #generation = 0;
   #log;
+  #preferences;
   #prepare;
   #render;
+  #routeLedger;
   #run = null;
   #state;
   #viewCycle;
 
-  constructor({ initial, canonicalize, browser, render, prepare = async () => {}, decorate = async () => {}, evidence = async () => {}, discover = null, onPresentation = () => {}, log = () => {}, cycleOptions = {} }) {
+  constructor({ initial, canonicalize, routeLedger, preferences, render, prepare = async () => {}, decorate = async () => {}, evidence = async () => {}, discover = null, onPresentation = () => {}, log = () => {}, cycleOptions = {} }) {
     if (typeof canonicalize !== 'function') throw new TypeError('NodusController requires canonicalize');
     if (typeof render !== 'function') throw new TypeError('NodusController requires render');
     this.#canonicalize = canonicalize;
-    this.#browser = browser ?? {};
+    this.#routeLedger = routeLedger ?? {};
+    this.#preferences = preferences ?? {};
     this.#render = render;
     this.#prepare = prepare;
     this.#decorate = decorate;
@@ -48,7 +50,7 @@ export class NodusController {
 
   async start() {
     if (this.#disposed) return false;
-    this.#browser.replace?.(this.#route());
+    this.#routeLedger.replace?.(this.#route());
     await this.#startView('start');
     return true;
   }
@@ -61,7 +63,7 @@ export class NodusController {
     this.#state.center = next;
     if (history === 'push') this.#state.navDepth += 1;
     this.#state.error = '';
-    (history === 'push' ? this.#browser.push : this.#browser.replace)?.(this.#route());
+    (history === 'push' ? this.#routeLedger.push : this.#routeLedger.replace)?.(this.#route());
     this.#log('recenter', { from: previous, to: next, view: this.#state.view, navDepth: this.#state.navDepth });
     await this.#startView('navigate');
     return true;
@@ -84,8 +86,8 @@ export class NodusController {
     if (next === this.#state.view) return false;
     this.#state.view = next;
     this.#state.error = '';
-    this.#browser.persistView?.(next);
-    this.#browser.replace?.(this.#route());
+    this.#preferences.setView?.(next);
+    this.#routeLedger.replace?.(this.#route());
     this.#log('view changed', { view: next, center: this.#state.center });
     await this.#startView('view');
     return true;
@@ -94,14 +96,14 @@ export class NodusController {
   async flip() {
     if (this.#disposed) return false;
     this.#state.orientation = this.#state.orientation === 'white' ? 'black' : 'white';
-    this.#browser.persistOrientation?.(this.#state.orientation);
+    this.#preferences.setOrientation?.(this.#state.orientation);
     await this.redraw();
     return true;
   }
 
   back() {
     if (this.#disposed || this.#state.navDepth <= 0) return false;
-    this.#browser.back?.();
+    this.#routeLedger.back?.();
     return true;
   }
 

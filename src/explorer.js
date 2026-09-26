@@ -18,7 +18,7 @@ import {
 } from './line-frontier.js';
 import { getNode, getOutgoing, putManualEdge, putNode, replaceExplorerEdges } from './db.js';
 import { debugLog } from './debug.js';
-import { clearLichessAccessToken, requireLichessAccessToken } from './auth.js';
+import { lichessSession } from './lichess-session.js';
 import { lichessGateway } from './lichess-gateway.js';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
@@ -94,7 +94,7 @@ export async function loadExplorer(key, { force = false, signal } = {}) {
   }
 
   const promise = (async () => {
-    const token = await requireLichessAccessToken();
+    const token = await lichessSession.requireAccessToken();
     const url = explorerUrl(canonical);
     debugLog('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
 
@@ -118,7 +118,7 @@ export async function loadExplorer(key, { force = false, signal } = {}) {
       try { body = (await response.text()).slice(0, 500); } catch {}
       debugLog('explorer HTTP error', { position: canonical, status: response.status, body }, 'error');
       if (response.status === 401) {
-        clearLichessAccessToken();
+        lichessSession.clearAccessToken();
         throw httpError(401, 'Lichess authorization expired. Reload to sign in again.');
       }
       if (response.status === 429) {

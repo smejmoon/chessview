@@ -17,8 +17,9 @@ import {
   engineUnavailableLabel,
   humanFailureIndicator,
 } from './evidence-presentation.js';
+import { preferenceStore } from './preference-store.js';
 
-let guideOn = localStorage.getItem('chessview.guide') === '1';
+let guideOn = preferenceStore.getGuide();
 
 function escapeHtml(value = '') {
   return String(value)
@@ -84,8 +85,7 @@ function decorateStructure() {
     button.className = `toolbar-button guide-toggle ${guideOn ? 'is-active' : ''}`;
     button.textContent = 'Guide';
     button.addEventListener('click', () => {
-      guideOn = !guideOn;
-      localStorage.setItem('chessview.guide', guideOn ? '1' : '0');
+      guideOn = preferenceStore.setGuide(!guideOn);
       button.classList.toggle('is-active', guideOn);
       renderGuide();
     });

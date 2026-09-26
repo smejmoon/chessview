@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Chess } from 'chess.js';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import { canonicalPosition, edgeId, moveToChild, START_FEN } from '../src/graph.js';
 
@@ -41,6 +42,32 @@ async function putFreshStartExplorer(explorer = cachedStartExplorer()) {
     explorer,
     explorerFetchedAt: Date.now(),
     games: explorer.white + explorer.draws + explorer.black,
+  });
+}
+
+function positionAfter(sequence) {
+  const chess = new Chess();
+  sequence.forEach((move) => chess.move(move));
+  return { key: canonicalPosition(chess.fen()), fen: chess.fen() };
+}
+
+function explorerWithMoves(moves) {
+  return {
+    white: 50,
+    draws: 20,
+    black: 30,
+    moves: moves.map(([uci, games]) => ({ uci, white: games, draws: 0, black: 0 })),
+  };
+}
+
+async function putFreshExplorer(position, moves) {
+  const explorer = explorerWithMoves(moves);
+  await putNode({
+    key: position.key,
+    fen: position.fen,
+    explorer,
+    explorerFetchedAt: Date.now(),
+    games: 100,
   });
 }
 
@@ -95,6 +122,35 @@ test('aborted discovery stops before requesting descendant positions', async () 
   const controller = new AbortController();
   await discoverForViewport(center, 10, () => controller.abort(), { signal: controller.signal });
   assert.equal(networkCalls, 0);
+});
+
+test('discovery reaches a qualifying sibling instead of collapsing to one descendant spine', async () => {
+  await clearGraph();
+  const e4 = positionAfter(['e4']);
+  const d4 = positionAfter(['d4']);
+  const e4e5 = positionAfter(['e4', 'e5']);
+  const e4c5 = positionAfter(['e4', 'c5']);
+  const d4d5 = positionAfter(['d4', 'd5']);
+  const e4e5nf3 = positionAfter(['e4', 'e5', 'Nf3']);
+
+  await putFreshExplorer({ key: center, fen: START_FEN }, [['e2e4', 60], ['d2d4', 30]]);
+  await putFreshExplorer(e4, [['e7e5', 60], ['c7c5', 30]]);
+  await putFreshExplorer(d4, [['d7d5', 70]]);
+  await putFreshExplorer(e4e5, [['g1f3', 70]]);
+  await putFreshExplorer(d4d5, []);
+  await putFreshExplorer(e4e5nf3, []);
+  await putFreshExplorer(e4c5, [['g1f3', 70]]);
+
+  let networkCalls = 0;
+  globalThis.fetch = async () => {
+    networkCalls += 1;
+    throw new Error('fresh Explorer cache should avoid network');
+  };
+
+  await discoverForViewport(center, 6);
+
+  assert.equal(networkCalls, 0);
+  assert.ok((await getOutgoing(e4c5.key)).some((edge) => edge.uci === 'g1f3'));
 });
 
 test('manually exploring a cached Explorer move preserves its statistics', async () => {

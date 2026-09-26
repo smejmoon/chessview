@@ -78,6 +78,27 @@ test('branch-balanced neighborhood gives roots space before going deeper', () =>
   assert.equal(selected.length, 4);
 });
 
+test('bushy Line siblings remain reachable while first-level Lines stay round-robin', () => {
+  const outgoingBySource = new Map([
+    ['center', [
+      { source: 'center', target: 'a1', uci: 'a', share: 0.6, qualifies: true },
+      { source: 'center', target: 'b1', uci: 'b', share: 0.3, qualifies: true },
+    ]],
+    ['a1', [
+      { source: 'a1', target: 'a2', uci: 'a2', share: 0.7, qualifies: true },
+      { source: 'a1', target: 'ax', uci: 'ax', share: 0.2, qualifies: true },
+    ]],
+    ['a2', [{ source: 'a2', target: 'a3', uci: 'a3', share: 0.8, qualifies: true }]],
+    ['a3', [{ source: 'a3', target: 'a4', uci: 'a4', share: 0.8, qualifies: true }]],
+    ['b1', [{ source: 'b1', target: 'b2', uci: 'b2', share: 0.7, qualifies: true }]],
+    ['b2', [{ source: 'b2', target: 'b3', uci: 'b3', share: 0.7, qualifies: true }]],
+  ]);
+
+  const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 7 });
+  assert.deepEqual(selected.map((item) => item.key), ['a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'ax']);
+  assert.equal(selected.find((item) => item.key === 'ax')?.branch, 'a');
+});
+
 test('neighborhood selection is deterministic', () => {
   const outgoingBySource = new Map([
     ['center', [

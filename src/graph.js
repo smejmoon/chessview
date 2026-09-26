@@ -1,4 +1,10 @@
 import { Chess } from 'chess.js';
+import {
+  addLineCandidates,
+  createLineFrontier,
+  hasLineCandidates,
+  takeLineCandidate,
+} from './line-frontier.js';
 
 export const AUTO_THRESHOLD = 0.05;
 export const AUTO_SAMPLE_FLOOR = 80;
@@ -121,36 +127,49 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
     .slice()
     .sort(stableEdgeOrder);
 
-  const branchQueues = [];
+  const lineFrontiers = [];
   for (const root of roots) {
     if (selected.length >= max) break;
     const lineShare = root.share ?? 0;
     push({ key: root.target, edge: root, relation: 'outgoing', distance: 1, branch: root.uci, lineShare });
-    branchQueues.push({ branch: root.uci, lineShare, current: root.target, distance: 1 });
+    const frontier = createLineFrontier(root.uci, null, lineShare);
+    const children = (outgoingBySource.get(root.target) ?? [])
+      .filter((edge) => edge.qualifies)
+      .slice()
+      .sort(stableEdgeOrder)
+      .map((edge, index) => ({ key: edge.target, edge, distance: 2, depth: 2, breadth: index }));
+    addLineCandidates(frontier, children);
+    lineFrontiers.push(frontier);
   }
 
-  let progressed = true;
-  while (selected.length < max && progressed) {
-    progressed = false;
-    for (const queue of branchQueues) {
+  while (selected.length < max && hasLineCandidates(lineFrontiers)) {
+    let progressed = false;
+    for (const frontier of lineFrontiers) {
       if (selected.length >= max) break;
-      const options = (outgoingBySource.get(queue.current) ?? [])
+      const next = takeLineCandidate(frontier, (candidate) => !seen.has(candidate.key));
+      if (!next) continue;
+      if (!push({
+        ...next,
+        relation: 'descendant',
+        branch: frontier.branch,
+        lineShare: frontier.lineShare,
+      })) continue;
+
+      progressed = true;
+      const children = (outgoingBySource.get(next.key) ?? [])
         .filter((edge) => edge.qualifies)
         .slice()
-        .sort(stableEdgeOrder);
-      const next = options.find((edge) => !seen.has(edge.target));
-      if (!next) continue;
-      queue.current = next.target;
-      queue.distance += 1;
-      progressed = push({
-        key: next.target,
-        edge: next,
-        relation: 'descendant',
-        distance: queue.distance,
-        branch: queue.branch,
-        lineShare: queue.lineShare,
-      }) || progressed;
+        .sort(stableEdgeOrder)
+        .map((edge, index) => ({
+          key: edge.target,
+          edge,
+          distance: next.distance + 1,
+          depth: next.depth + 1,
+          breadth: next.breadth + index,
+        }));
+      addLineCandidates(frontier, children);
     }
+    if (!progressed) break;
   }
 
   return selected;

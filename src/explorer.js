@@ -6,9 +6,16 @@ import {
   decorateExplorerMoves,
   edgeId,
   moveToChild,
+  stableEdgeOrder,
   toPlayableFen,
   totalGames,
 } from './graph.js';
+import {
+  addLineCandidates,
+  createLineFrontier,
+  hasLineCandidates,
+  takeLineCandidate,
+} from './line-frontier.js';
 import { getNode, getOutgoing, putManualEdge, putNode, replaceExplorerEdges } from './db.js';
 import { debugLog } from './debug.js';
 import { clearLichessAccessToken, requireLichessAccessToken } from './auth.js';
@@ -189,34 +196,53 @@ export async function discoverForViewport(centerKey, budget, onProgress, { signa
 
   const roots = (await getOutgoing(center))
     .filter((edge) => edge.qualifies)
-    .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci));
+    .sort(stableEdgeOrder);
 
-  const frontier = roots.map((edge) => ({ key: edge.target, branch: edge.uci, depth: 1 }));
+  const frontiers = roots.map((edge) => createLineFrontier(
+    edge.uci,
+    { key: edge.target, depth: 1, breadth: 0 },
+    edge.share ?? 0,
+  ));
+  const seen = new Set([center]);
   let inspected = 0;
   const requestBudget = Math.max(3, Math.min(14, budget));
 
-  while (frontier.length && inspected < requestBudget && !signal?.aborted) {
-    const item = frontier.shift();
-    const known = await getNode(item.key);
-    if ((known?.games ?? Infinity) < AUTO_SAMPLE_FLOOR && known?.explorer) continue;
-    try {
-      const node = await loadExplorer(item.key, { signal });
-      if (signal?.aborted) break;
-      inspected += 1;
-      onProgress?.();
-      if ((node.games ?? 0) < AUTO_SAMPLE_FLOOR) continue;
-      const next = (await getOutgoing(item.key))
-        .filter((edge) => edge.qualifies)
-        .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci));
-      if (next[0]) frontier.push({ key: next[0].target, branch: item.branch, depth: item.depth + 1 });
-    } catch (error) {
-      if (signal?.aborted) break;
-      if (error?.status === 429) {
-        debugLog('discovery paused by rate limit', { position: item.key, branch: item.branch, depth: item.depth }, 'warn');
-        break;
+  while (hasLineCandidates(frontiers) && inspected < requestBudget && !signal?.aborted) {
+    let progressed = false;
+    for (const frontier of frontiers) {
+      if (inspected >= requestBudget || signal?.aborted) break;
+      const item = takeLineCandidate(frontier, (candidate) => !seen.has(candidate.key));
+      if (!item) continue;
+      seen.add(item.key);
+      progressed = true;
+
+      const known = await getNode(item.key);
+      if ((known?.games ?? Infinity) < AUTO_SAMPLE_FLOOR && known?.explorer) continue;
+      try {
+        const node = await loadExplorer(item.key, { signal });
+        if (signal?.aborted) break;
+        inspected += 1;
+        onProgress?.();
+        if ((node.games ?? 0) < AUTO_SAMPLE_FLOOR) continue;
+        const next = (await getOutgoing(item.key))
+          .filter((edge) => edge.qualifies)
+          .sort(stableEdgeOrder)
+          .map((edge, index) => ({
+            key: edge.target,
+            depth: item.depth + 1,
+            breadth: item.breadth + index,
+          }));
+        addLineCandidates(frontier, next);
+      } catch (error) {
+        if (signal?.aborted) break;
+        if (error?.status === 429) {
+          debugLog('discovery paused by rate limit', { position: item.key, branch: frontier.branch, depth: item.depth }, 'warn');
+          return centerNode;
+        }
+        debugLog('branch discovery failed', { position: item.key, branch: frontier.branch, depth: item.depth, error: error?.message ?? String(error) }, 'warn');
       }
-      debugLog('branch discovery failed', { position: item.key, branch: item.branch, depth: item.depth, error: error?.message ?? String(error) }, 'warn');
     }
+    if (!progressed) break;
   }
 
   debugLog(signal?.aborted ? 'discovery cancelled' : 'discovery complete', { center, inspected, roots: roots.length });

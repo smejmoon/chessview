@@ -11,7 +11,6 @@ import {
   chooseRootNeighborhood,
   legalDestinations,
   omittedShare,
-  positionFromUrl,
   stableEdgeOrder,
   toPlayableFen,
 } from './graph.js';
@@ -26,48 +25,18 @@ import {
   setDebugEnabled,
 } from './debug.js';
 import { NodusController } from './nodus-controller.js';
+import { createRouteLedger } from './route-ledger.js';
+import { preferenceStore } from './preference-store.js';
 import { prepareRootComposition, decorateRootComposition } from './root-pgn.js';
 import { decorateEvidence } from './eval-ui.js';
 
 const app = document.querySelector('#app');
-
-function viewFromUrl() {
-  const explicit = new URLSearchParams(window.location.search).get('view');
-  if (explicit === 'roots' || explicit === 'lines') return explicit;
-  return localStorage.getItem('chessview.view') === 'roots' ? 'roots' : 'lines';
-}
-
-function routeUrl(route) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('fen', route.center);
-  url.searchParams.set('view', route.view);
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
-const browser = {
-  readRoute(historyState = history.state) {
-    return {
-      center: positionFromUrl(),
-      view: viewFromUrl(),
-      navDepth: Number.isFinite(historyState?.cvDepth) ? historyState.cvDepth : 0,
-    };
-  },
-  push(route) {
-    history.pushState({ fen: route.center, cvDepth: route.navDepth }, '', routeUrl(route));
-  },
-  replace(route) {
-    history.replaceState({ fen: route.center, cvDepth: route.navDepth }, '', routeUrl(route));
-  },
-  persistView(view) { localStorage.setItem('chessview.view', view); },
-  persistOrientation(orientation) { localStorage.setItem('chessview.orientation', orientation); },
-  back() { history.back(); },
-};
+const routeLedger = createRouteLedger({ preferences: preferenceStore });
+const initialRoute = routeLedger.read();
 
 const state = {
-  center: positionFromUrl(),
-  view: viewFromUrl(),
-  orientation: localStorage.getItem('chessview.orientation') === 'black' ? 'black' : 'white',
-  navDepth: Number.isFinite(history.state?.cvDepth) ? history.state.cvDepth : 0,
+  ...initialRoute,
+  orientation: preferenceStore.getOrientation(),
   loading: false,
   error: '',
   presentation: 'idle',
@@ -312,9 +281,10 @@ async function discover(scope) {
 }
 
 const controller = new NodusController({
-  initial: { ...browser.readRoute(), orientation: state.orientation },
+  initial: { ...initialRoute, orientation: state.orientation },
   canonicalize: canonicalPosition,
-  browser,
+  routeLedger,
+  preferences: preferenceStore,
   render: renderView,
   prepare: prepareRootComposition,
   decorate: decorateRootComposition,
@@ -324,12 +294,16 @@ const controller = new NodusController({
   log: (message, detail) => debugLog(message, detail),
 });
 
+const stopRouteRestore = routeLedger.onRestore((route) => { void controller.restore(route); });
 debugLog('app start', controller.snapshot);
-window.addEventListener('popstate', (event) => { void controller.restore(browser.readRoute(event.state)); });
+
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => { void controller.redraw(); }, 120);
 });
-window.addEventListener('beforeunload', () => controller.dispose(), { once: true });
+window.addEventListener('beforeunload', () => {
+  stopRouteRestore();
+  controller.dispose();
+}, { once: true });
 await controller.start();

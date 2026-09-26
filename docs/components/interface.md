@@ -38,7 +38,7 @@ The product-level classification of critical, supplementary, and decorative beha
 
 **Commands enter the controller; domain contributors return values; the controller publishes one immutable current view; presentation consumes it.**
 
-`NodusController` is the sole owner allowed to make an asynchronous result current. Internal generation/revision and cancellation mechanics stay private to that boundary. Structural and evidence contributors receive explicit domain inputs and return data keyed by stable node/edge identity; they do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals.
+`NodusController` is the sole owner allowed to make an asynchronous result current. Internal revision identity and publication decisions stay private to that boundary. Structural and evidence contributors receive explicit domain inputs and return data keyed by stable node/edge identity; a contributor may receive a scoped cancellation capability to stop obsolete work, but that capability does not authorize publication or make the contributor own current-view lifetime. Contributors do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals.
 
 The published current view contains the current Nodus-centered view state and the structural/evidence values accepted for that view. Browser history metadata, persistence mechanisms, request scheduling, generation tokens, DOM handles, and Chessground instances remain outside that value. Presentation may retain resource handles needed to update or dispose rendered objects, but it must not keep a second mutable copy of current-view truth.
 

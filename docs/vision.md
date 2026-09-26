@@ -13,7 +13,7 @@ Chessview turns opening knowledge into a spatial map centered on one canonical c
 
 **Roots → Nodus → Lines**
 
-These are product terms. `docs/PLAN.md` and the component documents own their exact behavioral contracts; implementation code may use clearer technical graph or rendering terms.
+These are product terms. `docs/product.md` and the component documents own their exact behavioral contracts; implementation code may use clearer technical graph or rendering terms.
 
 ## User needs
 
@@ -59,6 +59,6 @@ A user notices an alternative Line and compares its human and engine evidence in
 
 A change moves Chessview forward when it makes the structure around a Nodus easier to understand while preserving orientation and keeping the spatial map more important than its supporting machinery. Added information should earn the visual and cognitive space it consumes.
 
-## Relationship to the plan
+## Documentation boundary
 
-This document owns durable product direction and language. `docs/PLAN.md` is the v1 contract and documentation entry point; component documents own detailed behavior and verification.
+This document owns durable product direction and language. `docs/product.md` owns cross-product conditions that must remain true; component and architecture documents own exact behavior and technical boundaries; `backlog/` owns unfinished work.

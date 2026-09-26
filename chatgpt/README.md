@@ -49,5 +49,8 @@ Use:
 
 > This Project works on `smejmoon/chessview` and uses shared Strake policy from `smejmoon/strake`. At the start of a new chat, if the request names no task branch, use Chessview `main` as this-chat branch; otherwise use the human-named branch, resolving it if present and recording the name without creating it if absent. Use Chessview `main` as the project-policy ref. Use Strake `main` as the Strake policy ref unless I explicitly name another Strake policy ref for adapter development. Fetch `chatgpt/chessview-gpt.md` from the Chessview project-policy ref and follow it.
 
-Product requirements and terminology remain in `docs/PLAN.md`; this directory
-only owns ChatGPT runtime composition and repository-work mechanics.
+Product documentation starts at `docs/README.md`: `docs/vision.md` owns durable
+product direction and language, `docs/product.md` owns cross-product conditions,
+and the component and architecture documents own exact behavior and boundaries.
+Unfinished work belongs in `backlog/`. This directory only owns ChatGPT runtime
+composition and repository-work mechanics.

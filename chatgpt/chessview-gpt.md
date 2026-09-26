@@ -21,14 +21,15 @@ A task branch never becomes authority for the policy governing its own work.
 Resolve repository evidence from the ref that owns it rather than silently
 substituting another ref.
 
-`docs/PLAN.md` at the Chessview project-policy ref is Chessview's plan entry
-point. It owns the product goal, canonical product terminology, cross-component
-commitments, and the component map. The `docs/components/` documents linked from
-the plan own detailed requirements, implementation choices, tunables, and
-verification in their scopes. Load the relevant component documents before work
-that may change their contracts. Product terminology established by the plan,
-including **Roots** and **Lines**, should be used consistently in product-facing
-work unless the human explicitly changes it.
+`docs/README.md` at the Chessview project-policy ref is Chessview's product
+documentation entry point. It routes to `docs/vision.md` for durable product
+direction and canonical product language, `docs/product.md` for cross-product
+conditions that must remain true, `docs/components/` for detailed requirements
+and verification, `docs/architecture/` for maintained technical boundaries, and
+`backlog/` for unfinished work. Load the relevant owning documents before work
+that may change their contracts. Product terminology established by the vision,
+including **Roots**, **Nodus**, **Lines**, and **Rail**, should be used
+consistently in product-facing work unless the human explicitly changes it.
 
 ## Composition
 
@@ -207,9 +208,10 @@ safely rewrite that history rather than weakening its contract.
 
 Chessview is a static browser application deployed by GitHub Actions to
 `gh-pages`. Its current stack and behavioral requirements are owned by repository
-sources, especially `docs/PLAN.md`, the relevant `docs/components/` documents,
-`README.md`, the source tree, tests, and the Pages workflow. Verify these sources
-from the relevant ref before making implementation claims.
+sources, especially `docs/README.md`, `docs/vision.md`, `docs/product.md`, the
+relevant `docs/components/` and `docs/architecture/` documents, `README.md`, the
+source tree, tests, and the Pages workflow. Verify these sources from the
+relevant ref before making implementation claims.
 
 Prefer small, reversible product iterations. Preserve canonical-position graph
 identity and transposition merging when changing visualization or navigation.

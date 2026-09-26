@@ -1,14 +1,10 @@
-# Chessview v1
+# Chessview product contract
 
-## Vision and scope
-
-[Chessview vision](vision.md) owns the durable product promise, user needs, representative workflows, product language, and experience principles.
-
-This plan is the v1 product contract and documentation entry point. It translates that vision into the current usability bar, cross-component commitments, and component ownership map.
+[Chessview vision](vision.md) owns the durable product direction and language. This document owns the conditions that must remain true across the product. Detailed behavior and verification belong to the component documents; unfinished outcomes belong in `backlog/`.
 
 ## Product usability bar
 
-Feature criticality answers a different question from v1 scope. A supplementary or decorative feature may still be required for v1, but its absence or failure must not make the core graph unusable or keep the current view permanently unsettled.
+Feature criticality answers a different question from release scope. A supplementary or decorative feature may still be required, but its absence or failure must not make the core graph unusable or keep the current view permanently unsettled.
 
 ### Critical — the product is not usable without this
 
@@ -24,11 +20,11 @@ Chessview's core job is to establish and navigate a trustworthy position graph. 
 - current-view structural work has reached a terminal outcome. Work that can still add, remove, or rearrange visible boards blocks structural readiness until it succeeds, establishes legitimate absence, fails explicitly, or becomes obsolete;
 - recentering and browser history preserve position-centered navigation semantics.
 
-A fresh network response is not inherently critical if existing persisted graph data is already sufficient to establish the visible neighborhood. Conversely, rated Explorer becomes critical when missing or stale graph knowledge means the current Lines cannot yet be determined. Criticality follows the capability needed by the current view, not the name of the endpoint that happened to run.
+A fresh network response is not inherently critical if existing persisted graph data is already sufficient to establish the visible neighborhood. Conversely, rated Explorer becomes critical when missing or stale graph knowledge means the current Lines cannot yet be determined. Criticality follows the capability needed by the current view, not the endpoint that happened to run.
 
 An explicit critical failure ends loading but does not make the product usable. If Chessview cannot establish the visible structural neighborhood, the global state must show a degraded/unavailable outcome rather than the normal success-style `Ready` / check state.
 
-### Supplementary — useful product meaning that must not block core usability
+### Supplementary — useful meaning that must not block core usability
 
 These features enrich an already usable graph and may continue loading after the visible Root/Line structure is settled:
 
@@ -39,33 +35,28 @@ These features enrich an already usable graph and may continue loading after the
 - Root rarity classification;
 - fallback target-position evaluation when source MultiPV does not contain a move;
 - opening names and ECO metadata;
-- persisted evidence caches and other reuse that improve later visits without being necessary to navigate the current established graph;
+- persisted evidence caches and other reuse that improve later visits without being necessary to navigate the established graph;
 - readiness/status explanation, guide affordances, and other supporting UI that improve understanding but are not themselves the graph.
 
 Failure of supplementary evidence reduces richness rather than usability. It should remain locally distinguishable from genuine absence, but it should not by itself keep the global view in `Updating…`, remove the normal settled check, or turn a structurally established graph into an unusable state.
 
 ### Decorative — presentation polish only
 
-Decorative features may make Chessview easier or more pleasant to read, but removing them must not remove unique chess information or navigation capability. Examples include:
+Decorative features may make Chessview easier or more pleasant to read, but removing them must not remove unique chess information or navigation capability. Examples include animation, fades, pulses, hover zoom, shadows, exact glyph/color/dash/opacity treatments, transient settled wording, and purely cosmetic spacing or grouping.
 
-- animation, fades, pulses, hover zoom, shadows, and similar motion/polish;
-- the exact glyph, color, dash, or opacity treatment used to present a signal whose underlying meaning is available elsewhere;
-- transient wording such as the brief `Ready` label before it collapses to a subtle settled mark;
-- purely cosmetic spacing, separators, and visual grouping.
+A treatment stops being decorative when it is the only way a required distinction is communicated. Root rarity, for example, is supplementary evidence while a particular visual treatment for that rarity is decorative; request failure versus genuine absence is meaningful and therefore cannot exist only as an optional cosmetic cue.
 
-A treatment stops being decorative when it is the only way a required distinction is communicated. For example, Root rarity is supplementary evidence, while a particular diamond/dash treatment for that rarity is decorative; request failure versus genuine absence is a meaningful distinction and therefore cannot be represented only by an optional decorative cue.
+## Readiness
 
-### Readiness consequence
-
-Global readiness follows the critical structural layer, not the completion of every supplementary request.
+Global readiness follows the critical structural layer, not completion of every supplementary request.
 
 - `Updating…` means unresolved critical structural work can still materially change which Root/Line boards are present or how they are structurally associated.
-- Normal `Ready` / subtle check means the critical visible structure has been established successfully, including legitimate empty/absent structure where applicable. Supplementary evidence may still be hydrating.
+- Normal `Ready` / subtle check means the critical visible structure has been established successfully, including legitimate empty or absent structure where applicable. Supplementary evidence may still be hydrating.
 - A critical structural failure is terminal for loading but must use a degraded/unavailable global state rather than the normal success-style settled state.
 - Supplementary failures remain visible at their local evidence surface and do not reopen or downgrade an otherwise successfully established structural view.
 - Background work that cannot alter the current visible neighborhood never blocks readiness.
 
-## Cross-component commitments
+## Cross-product commitments
 
 - The graph is built from canonical chess positions connected by single legal moves; transpositions merge.
 - Rated standard Lichess Opening Explorer is the primary human-statistical source. Masters data is a comparison population, and adequate-depth Lichess cloud evaluation supplies engine evidence.
@@ -77,21 +68,6 @@ Global readiness follows the critical structural layer, not the completion of ev
 - Application-issued Lichess API requests are coordinated application-wide through `LichessGateway`; transport failure is not interpreted as absence of chess evidence.
 - Production remains a static GitHub Pages deployment.
 
-## Components
+## Ownership
 
-Detailed requirements, implementation choices, tunables, and verification live with the component that owns them:
-
-- [Position graph](components/position-graph.md) — canonical identity, legal edges, transpositions, and graph persistence.
-- [Discovery](components/discovery.md) — Explorer reconciliation, automatic expansion, and branch-balanced neighborhood selection.
-- [Lichess access](components/lichess-access.md) — OAuth, data endpoints, `LichessGateway`, request policy, and cache/failure semantics.
-- [Evidence](components/evidence.md) — engine quality, Masters/Lichess comparison, Rail filtering, and Root rarity.
-- [Interface](components/interface.md) — Nodus/miniboard interaction, spatial layout, Rail, orientation, and URL navigation.
-- [Delivery](components/delivery.md) — static build, deterministic CI, and GitHub Pages publication.
-
-Architecture that needs an independently maintained boundary lives under `docs/architecture/`. In particular, [LichessGateway architecture](architecture/lichess-gateway.md) governs the Lichess network boundary.
-
-## Maintaining the plan
-
-`docs/vision.md` owns the durable product direction and canonical product language. `PLAN.md` owns the v1 product usability bar, cross-component commitments, and component map. A component document owns the detailed requirements in its scope.
-
-When a change crosses levels, update the owning documents rather than duplicating the same contract in several places. Vision explains why a direction matters; this plan states the current cross-component promises; component documents define exact behavior and verification.
+`docs/vision.md` owns why Chessview exists and its canonical product language. This file owns cross-product conditions that must remain true. `docs/components/` owns exact component behavior and verification, while `docs/architecture/` owns independently maintained technical boundaries. `backlog/` owns work that is still intended but incomplete.

@@ -87,6 +87,21 @@ function connectorPath(source, target, mapRect, familyOffset = 0) {
   return `M ${x1} ${y1} C ${x1 + horizontal * bend + offsetX} ${y1 + offsetY}, ${x2 - horizontal * bend + offsetX} ${y2 + offsetY}, ${x2} ${y2}`;
 }
 
+function retainedEvidenceClasses(svg) {
+  const result = new Map();
+  for (const path of svg.querySelectorAll('path[data-relationship-id]')) {
+    const id = path.dataset.relationshipId;
+    if (!id) continue;
+    const classes = [...path.classList].filter((className) => (
+      className.startsWith('edge-quality-') || className.startsWith('edge-rarity-')
+    ));
+    if (!classes.length) continue;
+    const current = result.get(id) ?? [];
+    result.set(id, [...new Set([...current, ...classes])]);
+  }
+  return result;
+}
+
 export function drawVisibleEdges(map, composition, { direction = composition?.direction } = {}) {
   const svg = map?.querySelector('#edges');
   if (!map || !svg) return [];
@@ -113,13 +128,14 @@ export function drawVisibleEdges(map, composition, { direction = composition?.di
   ].join(':')).join('|')}`;
   if (svg.dataset.visibleEdgesSignature === signature) return paths;
 
+  const evidenceClasses = retainedEvidenceClasses(svg);
   svg.dataset.visibleEdgesSignature = signature;
   svg.setAttribute('viewBox', `0 0 ${mapRect.width} ${mapRect.height}`);
   svg.innerHTML = '';
   for (const item of paths) {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', item.d);
-    path.setAttribute('class', item.className);
+    path.setAttribute('class', [item.className, ...(evidenceClasses.get(item.relationshipId) ?? [])].join(' '));
     path.dataset.relationshipId = item.relationshipId;
     path.dataset.edgeSource = item.source;
     path.dataset.edgeTarget = item.target;

@@ -36,9 +36,13 @@ The product-level classification of critical, supplementary, and decorative beha
 
 ## Composition direction
 
-The durable target is a single application/controller owner for render and navigation lifecycle. Root/transposition/evidence behavior should supply explicit data keyed by stable node/edge identity rather than discovering domain meaning by observing and rewriting shared rendered DOM.
+**Commands enter the controller; domain contributors return values; the controller publishes one immutable current view; presentation consumes it.**
 
-Current-view settlement belongs to that controller lifecycle rather than to Lichess transport or a generic request counter. Critical structural contributors report generation-scoped terminal completion to the controller. Supplementary evidence may hydrate independently after structural readiness and must not reopen global `Updating…` unless it actually changes critical visible structure.
+`NodusController` is the sole owner allowed to make an asynchronous result current. Internal generation/revision and cancellation mechanics stay private to that boundary. Structural and evidence contributors receive explicit domain inputs and return data keyed by stable node/edge identity; they do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals.
+
+The published current view contains the current Nodus-centered view state and the structural/evidence values accepted for that view. Browser history metadata, persistence mechanisms, request scheduling, generation tokens, DOM handles, and Chessground instances remain outside that value. Presentation may retain resource handles needed to update or dispose rendered objects, but it must not keep a second mutable copy of current-view truth.
+
+Critical structural data is published with generation-scoped loading/ready/failed state. Supplementary evidence may publish later without downgrading established structural readiness. The subtle delayed `Updating…` / brief `Ready` / check acknowledgement is presentation behavior derived from structural lifecycle state rather than an independent source of application truth.
 
 This composition refactor is tracked separately in the browser-composition backlog outcome; this component records the product/interface contract it must preserve.
 

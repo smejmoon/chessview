@@ -28,10 +28,10 @@ function fixture(overrides = {}) {
     },
     decorate: async (scope) => { calls.push(['decorate', scope.center, scope.composition]); },
     evidence: async (scope) => { calls.push(['evidence', scope.center, scope.composition]); },
-    cycleOptions: { updatingDelayMs: 0, checkDelayMs: 0 },
+    cycleOptions: { updatingDelayMs: 0, readyHoldMs: 0 },
     ...overrides,
   });
-  return { controller, calls, browser };
+  return { controller, calls };
 }
 
 test('commands in, snapshot out', async () => {
@@ -58,7 +58,6 @@ test('restore consumes browser history without pushing a new entry', async () =>
   const { controller, calls } = fixture();
   await controller.start();
   calls.length = 0;
-
   await controller.restore({ center: 'c', view: 'lines', navDepth: 4 });
   assert.deepEqual(
     { center: controller.snapshot.center, view: controller.snapshot.view, navDepth: controller.snapshot.navDepth },
@@ -67,48 +66,49 @@ test('restore consumes browser history without pushing a new entry', async () =>
   assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
 });
 
-test('superseded contributor work cannot publish into the current view', async () => {
+test('superseded contributor results cannot publish into the current view', async () => {
   const first = deferred();
-  const seen = [];
+  const completed = [];
   let renderCount = 0;
   const { controller } = fixture({
     render: async (scope) => {
       renderCount += 1;
       if (renderCount === 1) await first.promise;
-      seen.push(scope.center);
+      completed.push(scope.center);
       return { composition: { center: scope.center, direction: scope.view } };
     },
   });
-
   const starting = controller.start();
   const navigating = controller.navigate('b');
   first.resolve();
   await Promise.all([starting, navigating]);
-
   assert.equal(controller.snapshot.center, 'B');
-  assert.deepEqual(seen, ['B']);
+  assert.ok(completed.includes('A'));
+  assert.ok(completed.includes('B'));
   assert.equal(controller.snapshot.composition.center, 'B');
 });
 
 test('contributor scopes carry explicit current-view state and direct navigation', async () => {
   let evidenceScope;
-  const { controller, calls } = fixture({
-    evidence: async (scope) => { evidenceScope = scope; },
-  });
+  const { controller, calls } = fixture({ evidence: async (scope) => { evidenceScope = scope; } });
   await controller.start();
+  await Promise.resolve();
   assert.equal(evidenceScope.center, 'A');
   assert.equal(evidenceScope.view, 'roots');
   assert.equal(evidenceScope.composition.center, 'A');
-
   await evidenceScope.navigate('b');
   assert.equal(controller.snapshot.center, 'B');
   assert.ok(calls.some(([name]) => name === 'push'));
 });
 
-test('supplementary evidence failure does not make structural presentation fail', async () => {
-  const { controller } = fixture({
-    evidence: async () => { throw new Error('evidence unavailable'); },
-  });
+test('supplementary evidence neither blocks nor fails structural readiness', async () => {
+  const evidence = deferred();
+  const { controller } = fixture({ evidence: () => evidence.promise });
   await controller.start();
+  assert.notEqual(controller.snapshot.presentation, 'failed');
+  assert.notEqual(controller.snapshot.presentation, 'updating');
+  evidence.reject(new Error('evidence unavailable'));
+  await Promise.resolve();
+  await Promise.resolve();
   assert.notEqual(controller.snapshot.presentation, 'failed');
 });

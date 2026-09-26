@@ -130,9 +130,10 @@ mechanism that preserves both lineages and whose result can be verified; if none
 is available, stop and report the handoff rather than synthesizing or guessing a
 merge result.
 
-After integration, re-resolve `main` and verify the canonical production
-GitHub Actions test/build/deploy workflow on the resulting `main` tip. Branch or
-preview cleanup is a separate mutation and is not implied by merge authorization.
+After integration, re-resolve `main` and verify the required GitHub Actions CI
+workflow and production Pages build/deploy workflow on the resulting `main` tip.
+Branch or preview cleanup is a separate mutation and is not implied by merge
+authorization.
 
 For implementation writes:
 
@@ -140,8 +141,9 @@ For implementation writes:
 - name the target branch explicitly on every write;
 - commit coherent changes as execution checkpoints;
 - after a failed write, inspect repository state before retrying;
-- verify the GitHub Actions test/build/deploy workflow after code-affecting
-  changes and report failures rather than assuming deployment succeeded.
+- verify the applicable GitHub Actions CI and Pages build/deploy workflows after
+  code-affecting changes and report failures rather than assuming deployment
+  succeeded.
 
 Once requested work is complete, recommend `distill-history` when the resulting
 commit boundaries mostly reflect execution mechanics rather than durable changes,
@@ -210,7 +212,7 @@ Chessview is a static browser application deployed by GitHub Actions to
 `gh-pages`. Its current stack and behavioral requirements are owned by repository
 sources, especially `docs/README.md`, `docs/vision.md`, `docs/product.md`, the
 relevant `docs/components/` and `docs/architecture/` documents, `README.md`, the
-source tree, tests, and the Pages workflow. Verify these sources from the
+source tree, tests, and the CI/Pages workflows. Verify these sources from the
 relevant ref before making implementation claims.
 
 Prefer small, reversible product iterations. Preserve canonical-position graph

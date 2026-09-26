@@ -99,6 +99,39 @@ test('bushy Line siblings remain reachable while first-level Lines stay round-ro
   assert.equal(selected.find((item) => item.key === 'ax')?.branch, 'a');
 });
 
+test('Line convergence keeps one board and every visible family relationship', () => {
+  const outgoingBySource = new Map([
+    ['center', [
+      { source: 'center', target: 'a', uci: 'line-a', share: 0.6, qualifies: true },
+      { source: 'center', target: 'b', uci: 'line-b', share: 0.25, qualifies: true },
+    ]],
+    ['a', [{ source: 'a', target: 'shared', uci: 'a-shared', share: 0.7, qualifies: true }]],
+    ['b', [{ source: 'b', target: 'shared', uci: 'b-shared', share: 0.8, qualifies: true }]],
+    ['shared', [{ source: 'shared', target: 'after', uci: 'shared-after', share: 0.9, qualifies: true }]],
+  ]);
+
+  const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 4 });
+  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared', 'after']);
+  assert.deepEqual(selected.find((item) => item.key === 'shared')?.families, ['line-a', 'line-b']);
+
+  const intoShared = selected.relationships.filter((relationship) => relationship.target === 'shared');
+  assert.equal(intoShared.length, 2);
+  assert.deepEqual(intoShared.map((relationship) => relationship.lineShare), [0.6, 0.25]);
+  assert.equal(selected.length, 4);
+});
+
+test('visible Line composition exposes stable node edge and family identity', () => {
+  const outgoingBySource = new Map([
+    ['center', [{ source: 'center', target: 'a', uci: 'line-a', share: 0.6, qualifies: true }]],
+  ]);
+  const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 2 });
+  assert.equal(selected.direction, 'lines');
+  assert.equal(selected.nodes, selected);
+  assert.deepEqual(selected.families, [{ id: 'line-a', direction: 'lines', lineShare: 0.6, rootEdgeId: 'center|line-a|a' }]);
+  assert.equal(selected.relationships[0].id, 'center|line-a|a');
+  assert.equal(selected.nodeByKey.get('a'), selected[0]);
+});
+
 test('neighborhood selection is deterministic', () => {
   const outgoingBySource = new Map([
     ['center', [

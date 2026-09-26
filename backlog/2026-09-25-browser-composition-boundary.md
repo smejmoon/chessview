@@ -1,6 +1,6 @@
 # Do:
 
-Once evidence request lifetime exposes subscriber-specific obsolescence, pass current-Nodus participation into evidence loading without making a Nodus generation own a shared request, then run the deterministic composition suite on the exact branch tip.
+Once evidence request lifetime exposes subscriber-specific obsolescence, connect that subscriber capability to the value-returning evidence source without making a Nodus revision own a shared request, then run the deterministic composition suite on the exact branch tip.
 
 # Blocked:
 
@@ -8,37 +8,43 @@ Evidence request lifetime must first expose a subscriber abstraction that lets o
 
 # Because:
 
-`docs/components/interface.md` §Requirements, §Composition direction, and §Verification require stable Roots/Lines navigation, position-based history, stable graph identity in presentation, explicit current-view settlement, and one controller-owned render/navigation lifecycle.
+`docs/components/interface.md` §Composition direction now records the binding composition rule: commands enter the controller; domain contributors return values; the controller publishes one immutable current view; presentation consumes it. The same component still requires stable Roots/Lines navigation, position-based history, stable graph identity, generation-scoped structural readiness, and supplementary evidence that cannot downgrade established structure.
 
-`src/nodus-controller.js` owns current Nodus/view/orientation transitions, generation supersession, structural settlement, contributor sequencing, and commands-in/snapshot-out state. It now depends on domain-shaped boundaries rather than a generic browser object: `RouteLedger` owns ChessView route ↔ URL/history translation and native `popstate` restoration, while `PreferenceStore` owns durable view/orientation/debug/Guide choices. `LichessSession` separately owns the Lichess OAuth/access-token lifecycle, keeping authentication mechanics out of route and preference concerns.
+`src/nodus-controller.js` is now the sole publication boundary. Its public snapshot contains current `center`, `mode`, orientation, derived back availability, and immutable structural/evidence lifecycle values; internal revision and history-depth mechanics are not exposed. Structural/evidence sources receive explicit inputs and return values. Superseded source results are rejected before publication rather than relying on contributors to settle lifecycle tokens or mutate shared rendered state.
 
-`test/route-ledger.test.js` covers URL/history route reading, preference fallback when `view` is absent, push/replace round-trip, and native `popstate` translation. `test/nodus-controller.test.js` covers command/snapshot ownership, history restoration without synthetic navigation, stale-generation rejection, exact visible-composition handoff, encapsulated contributor capabilities, supplementary evidence independence, critical structural failure/recovery, and redraw-versus-refresh generation semantics. `test/preference-store.test.js` and `test/lichess-session.test.js` cover the new boundary semantics independently.
+`src/nodus-structure.js` owns current visible graph assembly, Root transposition preparation, persisted node enrichment, and Root PGN row metadata. `src/evidence-source.js` owns evidence acquisition/derivation and returns evidence keyed by stable relationship identity. `src/nodus-renderer.js`, `src/root-presentation.js`, and `src/eval-ui.js` consume published values and own DOM/Chessground presentation only. `src/main.js` is composition wiring and no longer mirrors current Nodus/view/orientation/loading/error state into a second mutable application-state object. Structural `loading`/`ready`/`failed` is application truth; `src/view-status.js` derives delayed `Updating…`, brief `Ready`, and check acknowledgement as presentation behavior.
+
+`RouteLedger` owns ChessView route ↔ URL/history translation and native restoration; `PreferenceStore` owns durable choices without becoming live view state; `LichessSession` owns Lichess authentication. These boundaries remain independent of Nodus publication.
+
+`test/nodus-controller.test.js` now covers immutable view publication, command/effect ownership, native-history restoration semantics, stale source rejection, value-returning contributor contracts, supplementary evidence independence, structural failure/recovery, redraw-versus-refresh behavior, and Lines discovery remaining structurally loading until terminal. `test/view-status.test.js` covers presentation-derived readiness timing. RouteLedger, PreferenceStore, and LichessSession retain their focused boundary tests.
 
 # Edges:
 
-The explicit visible-graph model is consumed as the composition passed from the renderer through `NodusController` into Root and evidence contributors; graph selection and stable relationship identity remain owned by the visible-graph/model layer rather than this outcome.
+The visible-graph selectors continue to own stable node/relationship/family identity. `nodus-structure.js` normalizes their result into the immutable structural value published by `NodusController`; presentation consumes that value rather than returning composition back into the controller.
 
-`backlog/2026-09-25-evidence-request-lifetime.md` owns evidence-loader subscriber/coalescing semantics. NodusController deliberately does not pass its structural AbortSignal into evidence requests. Final evidence obsolescence integration should consume the independent subscriber abstraction from that outcome so superseding one view cannot abort useful coalesced work for another subscriber.
+`backlog/2026-09-25-evidence-request-lifetime.md` owns evidence-loader subscriber/coalescing semantics. The current evidence source receives a view-scoped AbortSignal only to stop obsolete derivation between awaits; it deliberately does not pass that signal into shared cloud-eval/Masters loaders because their current in-flight maps still let the first caller effectively own shared request lifetime. Final integration must replace that limitation with independent subscriber participation.
 
 `RouteLedger` owns navigation persistence only; `PreferenceStore` owns durable user choices but not live application state; `LichessSession` owns authentication but not Lichess request scheduling. Shared `LichessGateway` serialization/rate-limit policy remains outside this outcome.
 
 # Unsettled:
 
-Decide the smallest evidence subscriber context NodusController should provide after `backlog/2026-09-25-evidence-request-lifetime.md` establishes that abstraction.
+Decide the smallest subscriber capability that `EvidenceSource` should receive after `backlog/2026-09-25-evidence-request-lifetime.md` establishes independent shared-request participation, while keeping revision identity and publication decisions private to `NodusController`.
 
 # Complete:
 
-A single NodusController owns current-view state transitions and lifecycle. Native browser back/forward remains an external input through RouteLedger; application recentering, view changes, orientation/layout redraw, contributor execution, supersession, and settlement use explicit calls and scoped capabilities rather than synthetic browser events or DOM-derived current-view state.
+A single NodusController owns current-view transitions and is the only boundary that can publish asynchronous structural/evidence results as current. Native browser back/forward remains an external RouteLedger input. Contributors return domain values rather than rendering, settling controller tokens, synthesizing browser events, or discovering current state from shared DOM/module globals.
 
-Critical structural failures reach the lifecycle as failures. Supplementary evidence hydrates independently, has a compact local presentation-failure summary, and cannot block or downgrade structural readiness.
+The published Nodus view is immutable and contains current Nodus/mode/orientation plus accepted structural/evidence values. Navigation depth, revision identity, persistence mechanisms, request scheduling, DOM handles, and Chessground instances remain outside it. Presentation consumes that view and may retain presentation resources only.
 
-Deterministic tests cover commands/snapshot ownership, RouteLedger URL/history round-trip and native restoration, superseded generations, critical failure/recovery, explicit refresh/redraw behavior, supplementary evidence independence, durable preference semantics, Lichess session lifecycle, and preservation of the visible composition supplied to contributors.
+Critical structural failures publish failed structural state. Supplementary evidence hydrates independently, has a compact local presentation-failure summary, and cannot block or downgrade structural readiness. Readiness acknowledgement timing is derived in presentation rather than stored as competing application truth.
 
-Evidence loading consumes independent subscriber obsolescence semantics from `backlog/2026-09-25-evidence-request-lifetime.md` without binding shared request lifetime to a Nodus generation.
+Deterministic tests cover immutable view publication, RouteLedger URL/history round-trip and native restoration, superseded work, critical failure/recovery, refresh/redraw behavior, supplementary evidence independence, presentation-derived readiness timing, durable preference semantics, Lichess session lifecycle, and stable visible composition handoff.
+
+Evidence loading consumes independent subscriber obsolescence semantics from `backlog/2026-09-25-evidence-request-lifetime.md` without binding shared request lifetime to a Nodus revision.
 
 # Steps:
 
-After the evidence-request-lifetime outcome lands, wire Nodus current-view obsolescence into evidence subscriber participation and verify same-position coalescing remains independent of any one generation.
+After the evidence-request-lifetime outcome lands, replace evidence source's view-level abort checks with the subscriber participation contract and verify same-position coalescing remains useful to a newer view after an older view becomes obsolete.
 
 Run the repository deterministic suite for the exact branch tip through the CI workflow or another test-capable repository mechanism; branch Pages publication remains build/preview evidence only.
 

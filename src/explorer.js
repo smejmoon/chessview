@@ -9,7 +9,7 @@ import {
   toPlayableFen,
   totalGames,
 } from './graph.js';
-import { getNode, getOutgoing, putEdges, putNode, replaceExplorerEdges } from './db.js';
+import { getNode, getOutgoing, putManualEdge, putNode, replaceExplorerEdges } from './db.js';
 import { debugLog } from './debug.js';
 import { clearLichessAccessToken, requireLichessAccessToken } from './auth.js';
 import { lichessGateway } from './lichess-gateway.js';
@@ -33,12 +33,52 @@ function httpError(status, message) {
   return error;
 }
 
+async function reconcileExplorerSnapshot(canonical, explorer) {
+  const edges = [];
+  for (const move of decorateExplorerMoves(explorer)) {
+    try {
+      const child = moveToChild(canonical, { uci: move.uci });
+      const edge = {
+        id: '',
+        source: canonical,
+        target: child.key,
+        uci: child.uci,
+        san: move.san || child.san,
+        games: move.games,
+        share: move.share,
+        qualifies: move.qualifies,
+        manual: false,
+        updatedAt: Date.now(),
+      };
+      edge.id = edgeId(edge);
+      edges.push(edge);
+      const previousChild = await getNode(child.key);
+      await putNode({
+        ...(previousChild ?? {}),
+        key: child.key,
+        fen: child.fen,
+      });
+    } catch (error) {
+      debugLog('ignored explorer move', { position: canonical, uci: move.uci, error: error?.message ?? String(error) }, 'warn');
+    }
+  }
+
+  await replaceExplorerEdges(canonical, edges);
+  return edges;
+}
+
 export async function loadExplorer(key, { force = false, signal } = {}) {
   const canonical = canonicalPosition(key);
   const cached = await getNode(canonical);
   const fresh = cached?.explorer && Date.now() - (cached.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS;
   if (!force && fresh) {
-    debugLog('explorer cache hit', { position: canonical, games: cached.games ?? 0 });
+    const edges = await reconcileExplorerSnapshot(canonical, cached.explorer);
+    debugLog('explorer cache hit', {
+      position: canonical,
+      games: cached.games ?? 0,
+      edges: edges.length,
+      qualifying: edges.filter((edge) => edge.qualifies).length,
+    });
     return cached;
   }
   if (inFlight.has(canonical)) {
@@ -93,37 +133,8 @@ export async function loadExplorer(key, { force = false, signal } = {}) {
       games: totalGames(explorer),
     };
 
-    const edges = [];
-    for (const move of decorateExplorerMoves(explorer)) {
-      try {
-        const child = moveToChild(canonical, { uci: move.uci });
-        const edge = {
-          id: '',
-          source: canonical,
-          target: child.key,
-          uci: child.uci,
-          san: move.san || child.san,
-          games: move.games,
-          share: move.share,
-          qualifies: move.qualifies,
-          manual: false,
-          updatedAt: Date.now(),
-        };
-        edge.id = edgeId(edge);
-        edges.push(edge);
-        const previousChild = await getNode(child.key);
-        await putNode({
-          ...(previousChild ?? {}),
-          key: child.key,
-          fen: child.fen,
-        });
-      } catch (error) {
-        debugLog('ignored explorer move', { position: canonical, uci: move.uci, error: error?.message ?? String(error) }, 'warn');
-      }
-    }
-
     await putNode(node);
-    await replaceExplorerEdges(canonical, edges);
+    const edges = await reconcileExplorerSnapshot(canonical, explorer);
     debugLog('explorer stored', { position: canonical, games: node.games, edges: edges.length, qualifying: edges.filter((edge) => edge.qualifies).length });
     return node;
   })().finally(() => inFlight.delete(canonical));
@@ -160,11 +171,11 @@ export async function ensureManualEdge(sourceKey, from, to, promotion = 'q') {
     updatedAt: Date.now(),
   };
   edge.id = edgeId(edge);
-  await putEdges([edge]);
+  const storedEdge = await putManualEdge(edge);
   const existing = await getNode(target);
   await putNode({ ...(existing ?? {}), key: target, fen: chess.fen() });
   debugLog('manual move stored', { san: played.san, uci: edge.uci, source: edge.source, target });
-  return { edge, target };
+  return { edge: storedEdge, target };
 }
 
 export async function discoverForViewport(centerKey, budget, onProgress, { signal } = {}) {

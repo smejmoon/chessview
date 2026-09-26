@@ -12,7 +12,9 @@ Own Chessview's durable chess-state model: what a node means, what an edge means
 - Halfmove and fullmove counters do not participate in position identity.
 - Positions reached by different move orders merge into the same node.
 - Incoming edges provide Root context; outgoing edges provide Line context.
-- Explicitly explored/manual edges survive refreshes of automatically discovered Explorer edges.
+- Edge identity is independent of how the edge became known. Explorer, manual exploration, and derived/transposition provenance may coexist on one edge rather than replacing one another.
+- Promoting an already-known edge to manual/explicit preserves its existing Explorer games, share, qualification, and other evidence fields.
+- Explicitly explored/manual edges survive refreshes of automatically discovered Explorer edges; Explorer refresh may update statistical evidence while preserving manual/derived provenance.
 - Graph state persists in IndexedDB so navigation and previously discovered transpositions survive reloads.
 
 ## Implementation
@@ -31,7 +33,8 @@ Deterministic tests should cover:
 - legal one-move edge creation;
 - transposition merge behavior;
 - persistence of nodes and edges;
-- preservation of manual/explicit graph edges when Explorer-derived edges are reconciled.
+- promotion of an Explorer-backed edge to manual without losing its statistical evidence;
+- preservation of manual/explicit graph provenance when Explorer-derived edges are reconciled, while refreshed Explorer statistics replace stale statistical values.
 
 ## Related components
 

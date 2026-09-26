@@ -7,6 +7,7 @@ Own how Chessview learns useful nearby graph structure and chooses a branch-bala
 ## Requirements
 
 - Opening Explorer statistics are fetched for a position when the required cached data is stale or missing.
+- A fresh cached Explorer snapshot is reconciled into persisted outgoing edges before discovery relies on those edges, so cached source data can repair missing or corrupted materialized graph state without another network request.
 - Refreshing a source position reconciles its Explorer-derived edges against the latest response: stale automatic edges are removed while manual/explicit and derived edges are preserved.
 - A move qualifies for automatic expansion when it accounts for at least 5% of games at its immediate source position and the source has a meaningful sample.
 - Qualification is local to each source position; percentages are not multiplied cumulatively from the center.
@@ -23,7 +24,7 @@ Own how Chessview learns useful nearby graph structure and chooses a branch-bala
 
 1. Canonicalize and persist the current center position.
 2. Load the center's rated Explorer data through the Lichess access component when needed.
-3. Reconcile Explorer-derived outgoing edges while preserving non-automatic graph knowledge.
+3. Reconcile either the fresh cached Explorer snapshot or a newly fetched response into Explorer-derived outgoing edges while preserving non-automatic graph knowledge.
 4. Mark locally qualifying moves using the threshold and sample floor.
 5. Advance deterministic per-first-level-Line frontiers while useful capacity remains.
 6. Stop a frontier when its source sample becomes too small or its work becomes obsolete.
@@ -44,6 +45,7 @@ Deterministic tests should cover:
 - local 5% qualification;
 - sample-floor stopping;
 - Explorer edge reconciliation, including stale automatic-edge removal and manual-edge preservation;
+- fresh cached Explorer snapshots repairing persisted outgoing-edge state without a network request;
 - cancellation of stale discovery work;
 - deterministic branch ordering;
 - fair first slots across multiple first-level Lines;

@@ -1,9 +1,8 @@
-const STORAGE_KEY = 'chessview.debug';
+import { preferenceStore } from './preference-store.js';
+
 const MAX_ENTRIES = 160;
 const entries = [];
-
-const storage = globalThis.localStorage;
-let enabled = storage?.getItem(STORAGE_KEY) === '1';
+let enabled = preferenceStore.getDebug();
 
 function normalizeDetail(detail) {
   if (detail == null) return null;
@@ -41,8 +40,7 @@ export function isDebugEnabled() {
 }
 
 export function setDebugEnabled(value) {
-  enabled = Boolean(value);
-  storage?.setItem(STORAGE_KEY, enabled ? '1' : '0');
+  enabled = preferenceStore.setDebug(Boolean(value));
   debugLog(enabled ? 'debug enabled' : 'debug disabled');
   return enabled;
 }

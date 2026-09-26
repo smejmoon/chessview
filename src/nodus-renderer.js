@@ -16,7 +16,7 @@ import {
 } from './debug.js';
 import { decorateEvidencePresentation } from './eval-ui.js';
 import { decorateRootPresentation } from './root-presentation.js';
-import { createViewStatusPresenter, viewStatusSpec } from './view-status.js';
+import { viewStatusSpec } from './view-status.js';
 
 function percent(value) { return `${Math.round((value ?? 0) * 100)}%`; }
 function compactGames(value = 0) { return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value); }
@@ -119,7 +119,6 @@ function bindControls(actions) {
 export function createNodusRenderer({ app = document.querySelector('#app') } = {}) {
   if (!app) throw new Error('Nodus renderer requires an app element');
   const boards = new Set();
-  const statusPresenter = createViewStatusPresenter();
 
   function disposeBoards() {
     for (const api of boards) api?.destroy?.();
@@ -156,20 +155,19 @@ export function createNodusRenderer({ app = document.querySelector('#app') } = {
     }
   }
 
-  function render(view, actions) {
-    statusPresenter.update(view);
+  function render(view, actions, presentation = 'hidden') {
     disposeBoards();
     const structure = view.structure.value ?? emptyStructure(view.center);
     const centerNode = structure.centerNode ?? { key: view.center };
     const explorer = centerNode.explorer;
-    const status = viewStatusSpec(statusPresenter.presentation);
+    const status = viewStatusSpec(presentation);
     const turn = view.center.split(' ')[1] === 'b' ? 'black' : 'white';
     const rootCount = structure.incomingCount ?? 0;
     const lineCount = structure.lineEdges?.length ?? 0;
     const structuralError = view.structure.error;
     const debug = isDebugEnabled();
 
-    app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${statusPresenter.presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map mode-${view.mode}" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="center-position position" data-key="${escapeHtml(view.center)}" style="left:${mapCenterX()}%"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">${view.mode === 'roots' ? 'Known move orders converge here.' : 'Drag a legal move, or choose a Line.'}</div></div><div id="satellites"></div>${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</section><aside class="analysis-rail"><div class="rail-position"><div class="eyebrow">${centerNode.opening ? `${escapeHtml(centerNode.opening.eco ?? '')} · opening` : 'current position'}</div><h1>${escapeHtml(centerNode.opening?.name ?? 'Explore from here')}</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span>${view.mode === 'lines' && explorer && omittedShare(explorer) >= 0.005 ? `<span>other · ${percent(omittedShare(explorer))}</span>` : ''}</div></div><div class="mode-tabs" role="tablist"><button id="roots-tab" class="mode-tab ${view.mode === 'roots' ? 'is-active' : ''}" type="button">Roots <small>${rootCount}</small></button><button id="lines-tab" class="mode-tab ${view.mode === 'lines' ? 'is-active' : ''}" type="button">Lines <small>${lineCount}</small></button></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>${view.mode === 'roots' ? 'Root Explorer' : 'Opening Explorer'}</strong></div></div>${railExplorerHtml(view, structure)}</section>${debugRailHtml()}</aside></div></main>`;
+    app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map mode-${view.mode}" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="center-position position" data-key="${escapeHtml(view.center)}" style="left:${mapCenterX()}%"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">${view.mode === 'roots' ? 'Known move orders converge here.' : 'Drag a legal move, or choose a Line.'}</div></div><div id="satellites"></div>${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</section><aside class="analysis-rail"><div class="rail-position"><div class="eyebrow">${centerNode.opening ? `${escapeHtml(centerNode.opening.eco ?? '')} · opening` : 'current position'}</div><h1>${escapeHtml(centerNode.opening?.name ?? 'Explore from here')}</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span>${view.mode === 'lines' && explorer && omittedShare(explorer) >= 0.005 ? `<span>other · ${percent(omittedShare(explorer))}</span>` : ''}</div></div><div class="mode-tabs" role="tablist"><button id="roots-tab" class="mode-tab ${view.mode === 'roots' ? 'is-active' : ''}" type="button">Roots <small>${rootCount}</small></button><button id="lines-tab" class="mode-tab ${view.mode === 'lines' ? 'is-active' : ''}" type="button">Lines <small>${lineCount}</small></button></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>${view.mode === 'roots' ? 'Root Explorer' : 'Opening Explorer'}</strong></div></div>${railExplorerHtml(view, structure)}</section>${debugRailHtml()}</aside></div></main>`;
 
     const centerApi = Chessground(document.querySelector('#center-board'), {
       fen: toPlayableFen(view.center),
@@ -199,13 +197,20 @@ export function createNodusRenderer({ app = document.querySelector('#app') } = {
     renderSatellites(view, structure, actions);
     decorateRootPresentation(view);
     decorateEvidencePresentation(view, actions);
-    statusPresenter.paint();
+  }
+
+  function renderFailure(view, actions, error, presentation = 'failed') {
+    disposeBoards();
+    const status = viewStatusSpec(presentation);
+    const detail = error?.message ?? String(error ?? 'Presentation failed');
+    app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view?.navigation?.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button" id="presentation-retry" type="button">Retry</button></div></header><div class="workspace"><section class="map"><div class="toast" title="${escapeHtml(detail)}">Chessview could not present this view.</div></section></div></main>`;
+    app.querySelector('#back')?.addEventListener('click', actions.back);
+    app.querySelector('#presentation-retry')?.addEventListener('click', () => { void actions.redraw(); });
   }
 
   function dispose() {
-    statusPresenter.dispose();
     disposeBoards();
   }
 
-  return Object.freeze({ render, dispose });
+  return Object.freeze({ render, renderFailure, dispose });
 }

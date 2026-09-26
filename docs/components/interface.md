@@ -38,11 +38,15 @@ The product-level classification of critical, supplementary, and decorative beha
 
 **Commands enter the controller; domain contributors return values; the controller publishes one immutable current view; presentation consumes it.**
 
-`NodusController` is the sole owner allowed to make an asynchronous result current. Internal revision identity and publication decisions stay private to that boundary. Structural and evidence contributors receive explicit domain inputs and return data keyed by stable node/edge identity; a contributor may receive a scoped cancellation capability to stop obsolete work, but that capability does not authorize publication or make the contributor own current-view lifetime. Contributors do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals.
+`NodusController` is the sole owner allowed to make an asynchronous domain result current. Internal revision identity and publication decisions stay private to that boundary. Structural and evidence contributors receive explicit domain inputs and return data keyed by stable node/edge identity; a contributor may receive a scoped cancellation capability to stop obsolete participation, but that capability does not authorize publication or make the contributor own current-view lifetime. Contributors do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals.
 
 The published current view contains the current Nodus-centered view state and the structural/evidence values accepted for that view. Browser history metadata, persistence mechanisms, request scheduling, generation tokens, DOM handles, and Chessground instances remain outside that value. Presentation may retain resource handles needed to update or dispose rendered objects, but it must not keep a second mutable copy of current-view truth.
 
+Presentation consumes the current view through a lifecycle-aware presenter. The controller distinguishes the start of a new current-view lifecycle from later publications within that lifecycle without exposing revision identity. This boundary lets delayed presentation timing reset for a replacement view even when its structural status string is the same as the superseded view. Presentation failures are handled at that boundary: normal rendering must fail closed to a degraded/unavailable surface rather than rewriting valid structural domain data or leaving a success presentation visible; failure of the degraded fallback itself is not swallowed.
+
 Critical structural data is published with generation-scoped loading/ready/failed state. Supplementary evidence may publish later without downgrading established structural readiness. The subtle delayed `Updating…` / brief `Ready` / check acknowledgement is presentation behavior derived from structural lifecycle state rather than an independent source of application truth.
+
+Reusable graph enrichment has producer lifetime independent of a single current view. In particular, shared Root transposition enrichment may continue producing durable graph state after one view becomes obsolete; a view-scoped cancellation signal detaches that caller from waiting on the shared work but does not make the first caller own or cancel the producer. Structural projection consumes the resulting graph and remains cancellable for the current view.
 
 This composition refactor is tracked separately in the browser-composition backlog outcome; this component records the product/interface contract it must preserve.
 
@@ -60,13 +64,16 @@ Deterministic/browser contract tests should cover:
 - fair visual representation of multiple immediate Root families before one family consumes deeper ancestry;
 - Root transpositions rendering one shared canonical board with connectors to every visible downstream parent;
 - ancestry above a Root convergence remaining shared rather than duplicating the same canonical positions per family;
+- same-target Root enrichment remaining useful to a replacement view after an older caller becomes obsolete;
 - Line descendants inheriting the first move's Nodus share for connector-width semantics;
 - the Lines tab retaining its structural first-level-Line count while the evidence Rail hydrates a broader move set;
 - current-view settlement waiting for every critical structural contributor;
 - supplementary evidence hydration not blocking or reopening a successfully settled structural view;
 - stale work from an obsolete generation being unable to settle the current view;
+- a replacement lifecycle resetting delayed status timing even when both old and new views are structurally `loading`;
 - fast cached structural work avoiding a distracting `Updating…` flash while still acknowledging `Ready`;
 - critical structural failure ending loading without showing the normal success-style settled state;
+- normal presentation failure falling back to a degraded/unavailable surface without changing structural truth;
 - supplementary request failures remaining locally visible without downgrading structural readiness.
 
 Manual verification should include dense Root and Line neighborhoods, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. In Roots view, it should include a position reachable through several move orders (for example a Panov Attack position) and confirm that immediate Root families remain legible, visible convergence produces one shared board with multiple incoming-to-Nodus routes, and ancestry above the merge remains shared. It should confirm that every segment of one Line keeps the same popularity thickness even when deeper local move percentages differ, while quality color may change edge by edge. It should also confirm that the Lines tab counts structural first-level Lines, while broader Rail-only moves keep their Explorer share visible without changing that tab count. For network-backed structural navigation it should confirm `Updating…` → `Ready` → subtle check; cached structural navigation that settles inside the delay should skip `Updating…` and still acknowledge `Ready` before fading to the check. Supplementary evidence should be allowed to appear afterward without reopening the global loading state.

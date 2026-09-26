@@ -25,6 +25,16 @@ function fixture(overrides = {}) {
     setView(view) { calls.push(['setViewPreference', view]); },
     setOrientation(orientation) { calls.push(['setOrientationPreference', orientation]); },
   };
+  const presenter = {
+    start(view, actions) {
+      publications.push({ kind: 'start', view, actions });
+      calls.push(['presentStart', view.center, view.mode, view.structure.status, view.evidence.status]);
+    },
+    update(view, actions) {
+      publications.push({ kind: 'update', view, actions });
+      calls.push(['presentUpdate', view.center, view.mode, view.structure.status, view.evidence.status]);
+    },
+  };
   const controller = new NodusController({
     initial: { center: 'A', view: 'roots', orientation: 'white', navDepth: 0 },
     canonicalize: (value) => String(value).toUpperCase(),
@@ -38,10 +48,7 @@ function fixture(overrides = {}) {
       calls.push(['evidence', center, mode, structure]);
       return { marker: `evidence:${center}:${mode}` };
     },
-    publish: (view, actions) => {
-      publications.push({ view, actions });
-      calls.push(['publish', view.center, view.mode, view.structure.status, view.evidence.status]);
-    },
+    presenter,
     ...overrides,
   });
   return { controller, calls, publications };
@@ -73,6 +80,24 @@ test('commands update one immutable current view while RouteLedger and preferenc
   assert.equal(Object.hasOwn(controller.snapshot, 'view'), false);
 });
 
+test('new view lifecycles use presenter.start while redraw and accepted results use presenter.update', async () => {
+  const { controller, publications } = fixture();
+  await controller.start();
+  await flush();
+  assert.equal(publications[0].kind, 'start');
+  assert.ok(publications.slice(1).every(({ kind }) => kind === 'update'));
+
+  publications.length = 0;
+  await controller.redraw();
+  assert.deepEqual(publications.map(({ kind }) => kind), ['update']);
+
+  publications.length = 0;
+  await controller.refresh();
+  await flush();
+  assert.equal(publications[0].kind, 'start');
+  assert.ok(publications.slice(1).every(({ kind }) => kind === 'update'));
+});
+
 test('restore consumes RouteLedger history without writing a new entry', async () => {
   const { controller, calls } = fixture();
   await controller.start();
@@ -85,7 +110,7 @@ test('restore consumes RouteLedger history without writing a new entry', async (
   assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
 });
 
-test('superseded structure results never become current or publish after a newer view', async () => {
+test('superseded structure results never become current or present after a newer view', async () => {
   const first = deferred();
   const { controller, publications } = fixture({
     structure: async ({ center, mode }) => {
@@ -142,7 +167,7 @@ test('contributors return immutable values and receive no controller publication
   assert.equal(typeof publications[0].actions.setMode, 'function');
 });
 
-test('supplementary evidence publishes later without blocking or downgrading ready structure', async () => {
+test('supplementary evidence presents later without blocking or downgrading ready structure', async () => {
   const evidence = deferred();
   const { controller } = fixture({ evidence: () => evidence.promise });
   await controller.start();
@@ -184,7 +209,7 @@ test('critical structure failure is terminal for that view and refresh can recov
   assert.equal(controller.snapshot.structure.status, 'ready');
 });
 
-test('redraw republishes without recomputing while refresh recomputes without changing history', async () => {
+test('redraw presents without recomputing while refresh recomputes without changing history', async () => {
   let structureCalls = 0;
   const { controller, calls, publications } = fixture({
     structure: async ({ center, mode }) => {
@@ -195,12 +220,12 @@ test('redraw republishes without recomputing while refresh recomputes without ch
   await controller.start();
   await flush();
   calls.length = 0;
-  const published = publications.length;
+  const presented = publications.length;
   const composed = structureCalls;
 
   await controller.redraw();
   assert.equal(structureCalls, composed);
-  assert.equal(publications.length, published + 1);
+  assert.equal(publications.length, presented + 1);
   assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
 
   await controller.refresh();

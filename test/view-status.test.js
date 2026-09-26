@@ -42,6 +42,22 @@ test('Updating is delayed and Ready fades to a persistent check', () => {
   assert.equal(presenter.presentation, 'check');
 });
 
+test('starting a new loading lifecycle resets prior loading presentation and delay', () => {
+  const timers = fakeTimers();
+  const presenter = createViewStatusPresenter({ ...timers });
+  presenter.start(view('loading'));
+  timers.run(180);
+  assert.equal(presenter.presentation, 'updating');
+
+  presenter.start(view('loading'));
+  assert.equal(presenter.presentation, 'hidden');
+  presenter.update(view('ready'));
+  assert.equal(presenter.presentation, 'ready');
+
+  timers.run(180);
+  assert.equal(presenter.presentation, 'ready');
+});
+
 test('fast structural settlement skips Updating but still acknowledges Ready', () => {
   const timers = fakeTimers();
   const presenter = createViewStatusPresenter({ ...timers });
@@ -61,6 +77,16 @@ test('critical structure failure presents unavailable and cannot fade to success
   assert.equal(presenter.presentation, 'updating');
 
   presenter.update(view('failed'));
+  assert.equal(presenter.presentation, 'failed');
+  timers.run(1_200);
+  assert.equal(presenter.presentation, 'failed');
+});
+
+test('presentation failure cancels structural timers and stays unavailable', () => {
+  const timers = fakeTimers();
+  const presenter = createViewStatusPresenter({ ...timers });
+  presenter.update(view('ready'));
+  presenter.fail();
   assert.equal(presenter.presentation, 'failed');
   timers.run(1_200);
   assert.equal(presenter.presentation, 'failed');

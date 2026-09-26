@@ -12,6 +12,7 @@ import { NodusController } from './nodus-controller.js';
 import { composeNodusStructure } from './nodus-structure.js';
 import { loadNodusEvidence } from './evidence-source.js';
 import { createNodusRenderer } from './nodus-renderer.js';
+import { createNodusPresenter } from './nodus-presenter.js';
 import { createRouteLedger } from './route-ledger.js';
 import { preferenceStore } from './preference-store.js';
 
@@ -26,6 +27,10 @@ function boardBudget() {
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
 const initialRoute = routeLedger.read();
 const renderer = createNodusRenderer({ app: document.querySelector('#app') });
+const presenter = createNodusPresenter({
+  renderer,
+  log: (message, detail) => debugLog(message, detail, 'error'),
+});
 
 async function discover({ center, signal, onProgress }) {
   try {
@@ -53,7 +58,7 @@ const controller = new NodusController({
   }),
   evidence: loadNodusEvidence,
   discover,
-  publish: (view, actions) => renderer.render(view, actions),
+  presenter,
   log: (message, detail) => debugLog(message, detail),
 });
 
@@ -68,7 +73,7 @@ window.addEventListener('resize', () => {
 window.addEventListener('beforeunload', () => {
   stopRouteRestore();
   controller.dispose();
-  renderer.dispose();
+  presenter.dispose();
 }, { once: true });
 
 await controller.start();

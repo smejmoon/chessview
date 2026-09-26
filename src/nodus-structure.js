@@ -8,11 +8,9 @@ import {
   toPlayableFen,
 } from './graph.js';
 import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
-import { expandMoveOrderTranspositions } from './transpositions.js';
+import { rootTranspositionEnricher } from './root-enrichment.js';
 
 const START = canonicalPosition(START_FEN);
-const expandedTargets = new Set();
-const expandingTargets = new Map();
 
 function abortError() {
   const error = new Error('Nodus structure composition aborted');
@@ -114,23 +112,6 @@ async function collectIncomingToStart(target, { maxDepth = 32, signal } = {}) {
   return incomingByTarget;
 }
 
-async function expandCurrentRootTranspositions(target, signal) {
-  throwIfAborted(signal);
-  if (!target || expandedTargets.has(target)) return;
-  if (expandingTargets.has(target)) return expandingTargets.get(target);
-  const promise = (async () => {
-    const incomingByTarget = await collectIncomingToStart(target, { signal });
-    throwIfAborted(signal);
-    const referencePath = reconstructPgnPath(target, incomingByTarget, START);
-    if (!referencePath?.length) return;
-    await expandMoveOrderTranspositions(referencePath, target, { maxPaths: 256, maxStates: 75_000 });
-    throwIfAborted(signal);
-    expandedTargets.add(target);
-  })().finally(() => expandingTargets.delete(target));
-  expandingTargets.set(target, promise);
-  return promise;
-}
-
 async function rootRows(composition, signal) {
   const rows = await Promise.all(composition.nodes.map(async (node) => {
     throwIfAborted(signal);
@@ -150,7 +131,7 @@ async function rootRows(composition, signal) {
 
 export async function composeNodusStructure({ center, mode, max = 19, signal } = {}) {
   throwIfAborted(signal);
-  if (mode === 'roots') await expandCurrentRootTranspositions(center, signal);
+  if (mode === 'roots') await rootTranspositionEnricher.ensure(center, { signal });
   throwIfAborted(signal);
 
   const [incomingEdges, outgoingEdges] = await Promise.all([

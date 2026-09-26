@@ -43,31 +43,49 @@ export function createViewStatusPresenter({
     paint();
   }
 
-  function update(view) {
-    const next = view?.structure?.status ?? 'idle';
-    if (next !== structuralStatus) {
-      structuralStatus = next;
-      transition += 1;
-      const id = transition;
-      clearTimers();
-      if (next === 'loading') {
-        presentation = 'hidden';
-        updatingTimer = setTimeoutFn(() => {
-          updatingTimer = null;
-          if (id === transition && structuralStatus === 'loading') present('updating');
-        }, updatingDelayMs);
-      } else if (next === 'ready') {
-        presentation = 'ready';
-        readyTimer = setTimeoutFn(() => {
-          readyTimer = null;
-          if (id === transition && structuralStatus === 'ready') present('check');
-        }, readyHoldMs);
-      } else if (next === 'failed') {
-        presentation = 'failed';
-      } else {
-        presentation = 'hidden';
-      }
+  function transitionTo(next, { force = false } = {}) {
+    if (!force && next === structuralStatus) {
+      paint();
+      return presentation;
     }
+    structuralStatus = next;
+    transition += 1;
+    const id = transition;
+    clearTimers();
+    if (next === 'loading') {
+      presentation = 'hidden';
+      updatingTimer = setTimeoutFn(() => {
+        updatingTimer = null;
+        if (id === transition && structuralStatus === 'loading') present('updating');
+      }, updatingDelayMs);
+    } else if (next === 'ready') {
+      presentation = 'ready';
+      readyTimer = setTimeoutFn(() => {
+        readyTimer = null;
+        if (id === transition && structuralStatus === 'ready') present('check');
+      }, readyHoldMs);
+    } else if (next === 'failed') {
+      presentation = 'failed';
+    } else {
+      presentation = 'hidden';
+    }
+    paint();
+    return presentation;
+  }
+
+  function start(view) {
+    return transitionTo(view?.structure?.status ?? 'idle', { force: true });
+  }
+
+  function update(view) {
+    return transitionTo(view?.structure?.status ?? 'idle');
+  }
+
+  function fail() {
+    transition += 1;
+    clearTimers();
+    structuralStatus = 'idle';
+    presentation = 'failed';
     paint();
     return presentation;
   }
@@ -77,7 +95,9 @@ export function createViewStatusPresenter({
   }
 
   return Object.freeze({
+    start,
     update,
+    fail,
     paint,
     dispose,
     get presentation() { return presentation; },

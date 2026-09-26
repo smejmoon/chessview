@@ -29,7 +29,7 @@ export class NodusController {
   #evidence;
   #log;
   #preferences;
-  #publish;
+  #presenter;
   #revision = 0;
   #routeLedger;
   #run = null;
@@ -44,19 +44,21 @@ export class NodusController {
     structure,
     evidence = null,
     discover = null,
-    publish = () => {},
+    presenter,
     log = () => {},
   }) {
     if (typeof canonicalize !== 'function') throw new TypeError('NodusController requires canonicalize');
     if (typeof structure !== 'function') throw new TypeError('NodusController requires structure');
-    if (typeof publish !== 'function') throw new TypeError('NodusController requires publish');
+    if (typeof presenter?.start !== 'function' || typeof presenter?.update !== 'function') {
+      throw new TypeError('NodusController requires presenter.start and presenter.update');
+    }
     this.#canonicalize = canonicalize;
     this.#routeLedger = routeLedger ?? {};
     this.#preferences = preferences ?? {};
     this.#structure = structure;
     this.#evidence = evidence;
     this.#discover = discover;
-    this.#publish = publish;
+    this.#presenter = presenter;
     this.#log = log;
     this.#state = {
       center: canonicalize(initial?.center),
@@ -133,7 +135,7 @@ export class NodusController {
     if (this.#disposed) return false;
     this.#state.orientation = this.#state.orientation === 'white' ? 'black' : 'white';
     this.#preferences.setOrientation?.(this.#state.orientation);
-    await this.#publishCurrent();
+    await this.#presentCurrent('update');
     return true;
   }
 
@@ -151,7 +153,7 @@ export class NodusController {
 
   async redraw() {
     if (this.#disposed) return false;
-    await this.#publishCurrent();
+    await this.#presentCurrent('update');
     return true;
   }
 
@@ -175,15 +177,10 @@ export class NodusController {
     );
   }
 
-  async #publishCurrent() {
+  async #presentCurrent(kind) {
     if (this.#disposed) return false;
-    try {
-      await this.#publish(this.snapshot, this.#actions);
-      return true;
-    } catch (error) {
-      this.#log('presentation publish failed', error);
-      return false;
-    }
+    await this.#presenter[kind](this.snapshot, this.#actions);
+    return true;
   }
 
   async #startView(reason) {
@@ -203,7 +200,7 @@ export class NodusController {
       mode: this.#state.mode,
       reason,
     });
-    await this.#publishCurrent();
+    await this.#presentCurrent('start');
 
     const hasDiscovery = this.#state.mode === 'lines' && typeof this.#discover === 'function';
     const composed = await this.#queueComposition(run, {
@@ -236,12 +233,12 @@ export class NodusController {
       this.#state.structure = lifecycle('failed', null, structureError);
       this.#state.evidence = lifecycle('idle');
       this.#log('Nodus structure failed', structureError);
-      await this.#publishCurrent();
+      await this.#presentCurrent('update');
       return false;
     }
     if (!this.#isCurrent(run)) return false;
     this.#state.structure = lifecycle(status, value, error);
-    await this.#publishCurrent();
+    await this.#presentCurrent('update');
     return true;
   }
 
@@ -272,7 +269,7 @@ export class NodusController {
   async #hydrateEvidence(run) {
     if (!this.#isCurrent(run) || typeof this.#evidence !== 'function') return;
     this.#state.evidence = lifecycle('loading');
-    await this.#publishCurrent();
+    await this.#presentCurrent('update');
     let value;
     try {
       value = await this.#evidence(Object.freeze({
@@ -285,11 +282,11 @@ export class NodusController {
       if (!this.#isCurrent(run) || error?.name === 'AbortError') return;
       this.#state.evidence = lifecycle('failed', null, error);
       this.#log('Nodus evidence failed', error);
-      await this.#publishCurrent();
+      await this.#presentCurrent('update');
       return;
     }
     if (!this.#isCurrent(run)) return;
     this.#state.evidence = lifecycle('ready', value);
-    await this.#publishCurrent();
+    await this.#presentCurrent('update');
   }
 }

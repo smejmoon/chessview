@@ -1,6 +1,6 @@
 import './eval-ui.css';
 import { canonicalPosition } from './graph.js';
-import { getIncoming, getNode, getOutgoing } from './db.js';
+import { getNode, getOutgoing } from './db.js';
 import {
   ENGINE_MIN_DEPTH,
   HUMAN_SAMPLE_FLOOR,
@@ -76,8 +76,20 @@ function currentRun(run, centerAtStart) {
   return run === generation && currentCenter() === centerAtStart;
 }
 
-function positionElement(key) {
-  return document.querySelector(`.position[data-key="${CSS.escape(key)}"]`);
+function visibleRelationshipsFor(composition, key, { incoming = true, outgoing = true } = {}) {
+  if (typeof composition?.relationshipsFor === 'function') {
+    return composition.relationshipsFor(key, { incoming, outgoing });
+  }
+  return (composition?.relationships ?? []).filter((relationship) => (
+    (incoming && relationship.target === key)
+    || (outgoing && relationship.source === key)
+  ));
+}
+
+function nodeFor(composition, key) {
+  return composition?.nodeByKey?.get?.(key)
+    ?? composition?.nodes?.find?.((node) => node.key === key)
+    ?? null;
 }
 
 function recenterFromRail(key) {
@@ -203,19 +215,25 @@ async function evidenceForEdge(edge, centerAtStart, run) {
   };
 }
 
-async function edgeForSatellite(element, view, centerAtStart, run) {
+function relationshipForSatellite(element, view, composition) {
   const key = element.dataset.key;
   const move = element.querySelector('.mini-label strong')?.textContent?.trim() ?? '';
   if (!key) return null;
 
-  const candidates = view === 'roots' ? await getOutgoing(key) : await getIncoming(key);
-  if (!currentRun(run, centerAtStart)) return null;
-  const visible = candidates.filter((edge) => {
-    const neighbor = view === 'roots' ? edge.target : edge.source;
-    return Boolean(positionElement(neighbor));
-  });
-  const byMove = visible.find((edge) => (edge.san ?? edge.uci) === move);
+  const visible = view === 'roots'
+    ? visibleRelationshipsFor(composition, key, { incoming: false })
+    : visibleRelationshipsFor(composition, key, { outgoing: false });
+  const byMove = visible.find((relationship) => (
+    (relationship.edge?.san ?? relationship.edge?.uci) === move
+  ));
   return byMove ?? visible[0] ?? null;
+}
+
+function evidenceForRelationship(relationship, centerAtStart, run, cache) {
+  if (!relationship) return Promise.resolve(null);
+  const id = relationship.id ?? `${relationship.source}|${relationship.edge?.uci ?? ''}|${relationship.target}`;
+  if (!cache.has(id)) cache.set(id, evidenceForEdge(relationship.edge, centerAtStart, run));
+  return cache.get(id);
 }
 
 function decorateSatelliteUi(element, edge, evidence, view) {
@@ -275,34 +293,45 @@ function decorateSatelliteUi(element, edge, evidence, view) {
   }
 }
 
-async function decorateSatellites(centerAtStart, run) {
+async function decorateSatellites(centerAtStart, run, composition, evidenceCache) {
   const view = currentView();
   const satellites = [...document.querySelectorAll('.satellite[data-key]')];
   for (const element of satellites) {
     if (!currentRun(run, centerAtStart) || !element.isConnected) return;
-    const edge = await edgeForSatellite(element, view, centerAtStart, run);
-    if (!edge) continue;
-    const evidence = await evidenceForEdge(edge, centerAtStart, run);
+    const relationship = relationshipForSatellite(element, view, composition);
+    if (!relationship) continue;
+    const evidence = await evidenceForRelationship(relationship, centerAtStart, run, evidenceCache);
     if (!evidence || !currentRun(run, centerAtStart) || !element.isConnected) return;
-    decorateSatelliteUi(element, edge, evidence, view);
+    decorateSatelliteUi(element, relationship.edge, evidence, view);
   }
 }
 
-function decorateConnectorQuality() {
+async function decorateConnectors(centerAtStart, run, composition, evidenceCache) {
   const map = currentMap();
-  if (!map) return;
-  const paths = [...map.querySelectorAll('#edges path')];
-  const satellites = [...map.querySelectorAll('.satellite[data-key]')];
+  if (!map || !composition?.relationships?.length) return;
   const roots = currentView() === 'roots';
-  for (let index = 0; index < paths.length; index += 1) {
-    const path = paths[index];
-    const satellite = satellites[index] ?? null;
-    const quality = ['good', 'dubious', 'bad', 'unknown'].find((value) => satellite?.classList.contains(`eval-${value}`));
-    const rarity = roots
-      ? ['rare', 'very-rare'].find((value) => satellite?.classList.contains(`rarity-${value}`))
-      : null;
-    setClass(path, 'edge-quality-', quality ?? null);
-    setClass(path, 'edge-rarity-', rarity ?? null);
+  const paths = [...map.querySelectorAll('#edges path[data-relationship-id]')];
+  const pathsByRelationship = new Map();
+  for (const path of paths) {
+    const id = path.dataset.relationshipId;
+    if (!id) continue;
+    if (!pathsByRelationship.has(id)) pathsByRelationship.set(id, []);
+    pathsByRelationship.get(id).push(path);
+  }
+
+  for (const relationship of composition.relationships) {
+    if (!currentRun(run, centerAtStart)) return;
+    const targets = pathsByRelationship.get(relationship.id) ?? [];
+    if (!targets.length) continue;
+    const evidence = await evidenceForRelationship(relationship, centerAtStart, run, evidenceCache);
+    if (!evidence || !currentRun(run, centerAtStart)) return;
+    const quality = qualityLabel(evidence.moveEval);
+    const rarity = roots ? rootRarity(relationship.edge, evidence.sourceNode) : null;
+    for (const path of targets) {
+      if (!path.isConnected) continue;
+      setClass(path, 'edge-quality-', quality ?? null);
+      setClass(path, 'edge-rarity-', rarity ?? null);
+    }
   }
 }
 
@@ -423,40 +452,39 @@ async function decorateLineRail(centerAtStart, run) {
   }
 }
 
-function rootRowDepth(row) {
-  const text = row.querySelector('.root-depth')?.textContent?.trim().toLowerCase() ?? '';
-  if (text === 'root') return 1;
-  const match = text.match(/\d+/);
-  return match ? Number(match[0]) : null;
-}
-
-async function edgeForRootRow(row, centerAtStart, depthByKey, run) {
+function relationshipForRootRow(row, centerAtStart, composition) {
   const key = row.dataset.navKey;
-  const depth = rootRowDepth(row);
+  const node = nodeFor(composition, key);
   const move = row.querySelector('.explorer-move')?.textContent?.trim() ?? '';
-  if (!key || !Number.isFinite(depth)) return null;
-  const outgoing = await getOutgoing(key);
-  if (!currentRun(run, centerAtStart)) return null;
-  return outgoing
-    .filter((edge) => depth === 1 ? edge.target === centerAtStart : depthByKey.get(edge.target) === depth - 1)
+  if (!key || !Number.isFinite(node?.distance)) return null;
+
+  return visibleRelationshipsFor(composition, key, { incoming: false })
+    .filter((relationship) => (
+      node.distance === 1
+        ? relationship.target === centerAtStart
+        : nodeFor(composition, relationship.target)?.distance === node.distance - 1
+    ))
+    .slice()
     .sort((a, b) => {
-      const aMove = (a.san ?? a.uci ?? '') === move ? 0 : 1;
-      const bMove = (b.san ?? b.uci ?? '') === move ? 0 : 1;
-      return aMove - bMove || (b.games ?? 0) - (a.games ?? 0) || (a.uci ?? '').localeCompare(b.uci ?? '');
+      const aMove = (a.edge?.san ?? a.edge?.uci ?? '') === move ? 0 : 1;
+      const bMove = (b.edge?.san ?? b.edge?.uci ?? '') === move ? 0 : 1;
+      return aMove - bMove
+        || (b.edge?.games ?? 0) - (a.edge?.games ?? 0)
+        || (a.edge?.uci ?? '').localeCompare(b.edge?.uci ?? '');
     })[0] ?? null;
 }
 
-async function decorateRootRail(centerAtStart, run) {
+async function decorateRootRail(centerAtStart, run, composition, evidenceCache) {
   if (currentView() !== 'roots') return;
   const rows = [...document.querySelectorAll('.roots-row[data-nav-key]')];
   if (!rows.length) return;
-  const depthByKey = new Map(rows.map((row) => [row.dataset.navKey, rootRowDepth(row)]));
 
   for (const row of rows) {
     if (!currentRun(run, centerAtStart) || !row.isConnected) return;
-    const edge = await edgeForRootRow(row, centerAtStart, depthByKey, run);
-    if (!edge) continue;
-    const evidence = await evidenceForEdge(edge, centerAtStart, run);
+    const relationship = relationshipForRootRow(row, centerAtStart, composition);
+    if (!relationship) continue;
+    const edge = relationship.edge;
+    const evidence = await evidenceForRelationship(relationship, centerAtStart, run, evidenceCache);
     if (!evidence || !currentRun(run, centerAtStart) || !row.isConnected) return;
 
     const quality = qualityLabel(evidence.moveEval);
@@ -514,6 +542,8 @@ async function decorateCenter(centerAtStart, run) {
 async function decorate(detail) {
   const run = ++generation;
   const centerAtStart = detail.center;
+  const composition = detail.composition;
+  const evidenceCache = new Map();
   try {
     decorateStructure();
     if (!currentRun(run, centerAtStart)) return;
@@ -521,14 +551,13 @@ async function decorate(detail) {
     const results = await Promise.allSettled([
       decorateCenter(centerAtStart, run),
       decorateLineRail(centerAtStart, run),
-      decorateRootRail(centerAtStart, run),
-      decorateSatellites(centerAtStart, run),
+      decorateRootRail(centerAtStart, run, composition, evidenceCache),
+      decorateSatellites(centerAtStart, run, composition, evidenceCache),
+      decorateConnectors(centerAtStart, run, composition, evidenceCache),
     ]);
     for (const result of results) {
       if (result.status === 'rejected') console.error('Chessview evidence decoration failed', result.reason);
     }
-    if (!currentRun(run, centerAtStart)) return;
-    decorateConnectorQuality();
   } catch (error) {
     console.error('Chessview evidence decoration failed', error);
   } finally {

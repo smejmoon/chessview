@@ -76,24 +76,52 @@ unless this environment actually executed it.
 
 Load Strake `chatgpt/github.md` from the Strake policy ref for its read-only
 inspection, Git-operation, evidence, failed-write recovery, and search-recovery
-mechanics. Chessview workflow sequencing and the Chessview-specific direct-main
-exception below remain owned by this adapter.
+mechanics. Chessview workflow sequencing and the Chessview-specific Git
+exceptions below remain owned by this adapter.
 
 If this adapter and Strake `chatgpt/github.md` disagree, stop and report the
-conflict instead of silently choosing the more permissive interpretation.
-The only intentional standing exception is the Chessview direct-main write rule
-stated below; it overrides only Strake's named-task-branch requirement and does
-not weaken any skill-specific write contract.
+conflict instead of silently choosing the more permissive interpretation, except
+for the intentional standing exceptions stated below. Those exceptions override
+only the specific Strake write restrictions they name and do not weaken any
+skill-specific write contract.
 
 Use code search as a locator, not branch-tip authority. Fetch matched files from
 the required ref before relying on their contents. If search is stale or
 incompletely indexed, load and follow Strake's
 `chatgpt/github-search-recovery.md` from the Strake policy ref.
 
-Chessview intentionally permits direct writes to `main` when the human has
-explicitly authorized implementation work in the current conversation and no
-other task branch has been established. If the human names a task branch, keep
-writes on that branch until they explicitly change the target.
+### Direct-main implementation exception
+
+Chessview intentionally permits direct implementation writes to `main` when the
+human has explicitly authorized implementation work in the current conversation
+and no other task branch has been established. This overrides Strake's
+named-task-branch requirement for that case only. If the human names a task
+branch, keep ordinary implementation writes on that branch until they explicitly
+change the target.
+
+### Task-branch integration exception
+
+Chessview intentionally permits connected GitHub to move `main` when the human
+explicitly asks to merge or ship a named task branch into `main`. This narrowly
+overrides Strake's rule that writes remain on the this-chat branch and its
+prohibition on moving `main`; it applies only to the integration operation and
+does not authorize unrelated main-branch edits or cleanup.
+
+Before integration, load and follow `chatgpt/branch-preview.md` from the current
+Chessview project-policy ref. Re-resolve the named task branch and `main`, verify
+the required current CI/preview evidence, and inspect their ancestry. Immediately
+before the write, re-resolve both refs again.
+
+When `main` is an ancestor of the exact verified task-branch tip, prefer a
+non-force fast-forward of `main` to that tip. Never force-update `main`. If the
+histories have diverged, use only a repository-supported connected-GitHub merge
+mechanism that preserves both lineages and whose result can be verified; if none
+is available, stop and report the handoff rather than synthesizing or guessing a
+merge result.
+
+After integration, re-resolve `main` and verify the canonical production
+GitHub Actions test/build/deploy workflow on the resulting `main` tip. Branch or
+preview cleanup is a separate mutation and is not implied by merge authorization.
 
 For implementation writes:
 

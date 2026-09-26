@@ -37,6 +37,34 @@
   opacity: 0.94;
 }
 
+.map.mode-roots .satellite.is-shared-root-ancestry .mini-board {
+  box-shadow: 0 12px 30px rgba(0,0,0,.38), 0 0 0 1px rgba(179,210,103,.22);
+}
+
+.map.mode-roots .satellite.is-transposition-merge .mini-board {
+  box-shadow: 0 16px 38px rgba(0,0,0,.44), 0 0 0 2px rgba(179,210,103,.58);
+}
+
+.map.mode-roots .edge.edge-merge {
+  stroke: #b3d267;
+  opacity: .92;
+}
+
+.root-merge-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 15px;
+  padding: 0 5px;
+  border: 1px solid rgba(179,210,103,.36);
+  border-radius: 999px;
+  background: rgba(179,210,103,.10);
+  color: #c5d99a;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
 .root-tree {
   display: grid;
   gap: 0;
@@ -91,6 +119,15 @@
 .root-tree .explorer-share,
 .root-tree .explorer-games {
   font-size: 9px;
+}
+
+.root-tree .roots-row.is-transposition-merge {
+  background: rgba(179,210,103,.055);
+  box-shadow: inset 2px 0 0 rgba(179,210,103,.38);
+}
+
+.root-tree .roots-row.is-transposition-merge .root-name {
+  color: #c5d99a;
 }
 
 .roots-row.is-related-highlight {

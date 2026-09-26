@@ -106,6 +106,14 @@ export function stableEdgeOrder(a, b) {
   return (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci) || a.target.localeCompare(b.target);
 }
 
+function stableIncomingEdgeOrder(a, b) {
+  return (b.games ?? 0) - (a.games ?? 0)
+    || (b.share ?? 0) - (a.share ?? 0)
+    || (a.uci ?? '').localeCompare(b.uci ?? '')
+    || a.source.localeCompare(b.source)
+    || a.target.localeCompare(b.target);
+}
+
 export function chooseNeighborhood({ center, incoming = [], outgoingBySource = new Map(), max = 19 }) {
   const selected = [];
   const seen = new Set([center]);
@@ -175,32 +183,95 @@ export function chooseNeighborhood({ center, incoming = [], outgoingBySource = n
   return selected;
 }
 
+function mergeRootEntry(entry, edge, branches) {
+  if (edge && !entry.edges.some((known) => edgeId(known) === edgeId(edge))) entry.edges.push(edge);
+  for (const branch of branches ?? []) {
+    if (branch && !entry.branches.includes(branch)) entry.branches.push(branch);
+  }
+  entry.branch = entry.branches[0] ?? entry.branch;
+  entry.merge = entry.edges.length > 1 || entry.branches.length > 1;
+  return entry;
+}
+
+function rootCandidates(incomingByTarget, target, distance) {
+  return (incomingByTarget.get(target) ?? [])
+    .slice()
+    .sort(stableIncomingEdgeOrder)
+    .map((edge) => ({ key: edge.source, edge, distance }));
+}
+
 export function chooseRootNeighborhood({ center, incomingByTarget = new Map(), max = 19 }) {
   const selected = [];
-  const seen = new Set([center]);
-  const frontier = [{ target: center, distance: 0, branch: null }];
+  const selectedByKey = new Map();
+  const frontiers = [];
 
-  while (frontier.length && selected.length < max) {
-    const current = frontier.shift();
-    const edges = (incomingByTarget.get(current.target) ?? [])
-      .slice()
-      .sort((a, b) => (b.games ?? 0) - (a.games ?? 0) || (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci) || a.source.localeCompare(b.source));
+  const add = ({ key, edge, distance, branches }) => {
+    const existing = selectedByKey.get(key);
+    if (existing) return { item: mergeRootEntry(existing, edge, branches), added: false };
+    if (selected.length >= max || key === center) return { item: null, added: false };
 
-    for (const edge of edges) {
+    const item = {
+      key,
+      edge,
+      edges: edge ? [edge] : [],
+      relation: 'root',
+      distance,
+      branch: branches?.[0] ?? key,
+      branches: [...new Set((branches ?? [key]).filter(Boolean))],
+      merge: false,
+    };
+    selected.push(item);
+    selectedByKey.set(key, item);
+    return { item, added: true };
+  };
+
+  const immediate = (incomingByTarget.get(center) ?? [])
+    .slice()
+    .sort(stableIncomingEdgeOrder);
+
+  for (const edge of immediate) {
+    if (selected.length >= max) break;
+    const branch = edge.source;
+    const result = add({ key: branch, edge, distance: 1, branches: [branch] });
+    if (!result.item || !result.added) continue;
+    frontiers.push({
+      branch,
+      pending: rootCandidates(incomingByTarget, branch, 2),
+    });
+  }
+
+  while (selected.length < max) {
+    let progressed = false;
+
+    for (const frontier of frontiers) {
       if (selected.length >= max) break;
-      if (seen.has(edge.source)) continue;
-      seen.add(edge.source);
-      const distance = current.distance + 1;
-      const branch = current.branch ?? edge.source;
-      selected.push({
-        key: edge.source,
-        edge,
-        relation: 'root',
-        distance,
-        branch,
-      });
-      frontier.push({ target: edge.source, distance, branch });
+
+      while (frontier.pending.length) {
+        const candidate = frontier.pending.shift();
+        if (!candidate || candidate.key === center) continue;
+
+        const downstream = selectedByKey.get(candidate.edge.target);
+        const branches = downstream?.branches?.length ? downstream.branches : [frontier.branch];
+        const existing = selectedByKey.get(candidate.key);
+        if (existing) {
+          mergeRootEntry(existing, candidate.edge, branches);
+          continue;
+        }
+
+        const result = add({ ...candidate, branches });
+        if (!result.item) break;
+
+        frontier.pending.push(...rootCandidates(
+          incomingByTarget,
+          candidate.key,
+          candidate.distance + 1,
+        ));
+        progressed = true;
+        break;
+      }
     }
+
+    if (!progressed) break;
   }
 
   return selected;

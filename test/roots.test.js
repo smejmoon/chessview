@@ -6,28 +6,58 @@ function edge(source, target, uci, games = 0) {
   return { source, target, uci, san: uci, games, share: 0.1 };
 }
 
-test('Roots expands breadth-first from known incoming positions', () => {
+test('Roots gives each immediate family ancestry before returning to a bushy family', () => {
   const incomingByTarget = new Map([
     ['center', [edge('a', 'center', 'a1a2', 100), edge('b', 'center', 'b1b2', 80)]],
-    ['a', [edge('aa', 'a', 'a2a3', 70)]],
-    ['b', [edge('bb', 'b', 'b2b3', 60)]],
+    ['a', [edge('aa', 'a', 'a2a3', 70), edge('ax', 'a', 'a2a4', 60)]],
+    ['b', [edge('bb', 'b', 'b2b3', 50)]],
   ]);
 
-  const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 4 });
-  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'aa', 'bb']);
-  assert.deepEqual(selected.map((item) => item.distance), [1, 1, 2, 2]);
+  const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 5 });
+  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'aa', 'bb', 'ax']);
+  assert.deepEqual(selected.map((item) => item.distance), [1, 1, 2, 2, 2]);
   assert.ok(selected.every((item) => item.relation === 'root'));
 });
 
-test('Roots merges a transposed ancestor instead of rendering it twice', () => {
+test('Roots stays shallow-first inside each immediate family', () => {
+  const incomingByTarget = new Map([
+    ['center', [edge('a', 'center', 'a1a2', 100), edge('b', 'center', 'b1b2', 80)]],
+    ['a', [edge('aa', 'a', 'a2a3', 70), edge('ax', 'a', 'a2a4', 60)]],
+    ['aa', [edge('aaa', 'aa', 'a3a4', 50)]],
+    ['b', [edge('bb', 'b', 'b2b3', 40)]],
+  ]);
+
+  const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 6 });
+  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'aa', 'bb', 'ax', 'aaa']);
+});
+
+test('Roots merges a transposed ancestor and keeps every visible downstream edge', () => {
   const incomingByTarget = new Map([
     ['center', [edge('a', 'center', 'a1a2'), edge('b', 'center', 'b1b2')]],
     ['a', [edge('shared', 'a', 'c1c2')]],
-    ['b', [edge('shared', 'b', 'c1c2')]],
+    ['b', [edge('shared', 'b', 'c1c3')]],
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 8 });
   assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared']);
+
+  const shared = selected.find((item) => item.key === 'shared');
+  assert.deepEqual(shared.branches, ['a', 'b']);
+  assert.deepEqual(shared.edges.map((item) => item.target), ['a', 'b']);
+  assert.equal(shared.merge, true);
+});
+
+test('ancestry above a transposition inherits all converged Root families', () => {
+  const incomingByTarget = new Map([
+    ['center', [edge('a', 'center', 'a1a2'), edge('b', 'center', 'b1b2')]],
+    ['a', [edge('shared', 'a', 'c1c2')]],
+    ['b', [edge('shared', 'b', 'c1c3')]],
+    ['shared', [edge('upstream', 'shared', 'd1d2')]],
+  ]);
+
+  const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 4 });
+  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared', 'upstream']);
+  assert.deepEqual(selected.find((item) => item.key === 'upstream').branches, ['a', 'b']);
 });
 
 test('Roots selection is deterministic and respects its visible budget', () => {

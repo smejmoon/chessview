@@ -72,35 +72,6 @@ function relationDepth(element) {
   return match ? Number(match[0]) : null;
 }
 
-function layoutRootSatellites() {
-  const map = document.querySelector('.map.mode-roots');
-  const center = map?.querySelector('.center-position');
-  if (!map || !center) return;
-
-  const satellites = [...map.querySelectorAll('.satellite.relation-root')]
-    .map((element) => ({ element, depth: relationDepth(element) }))
-    .filter((item) => Number.isFinite(item.depth));
-  if (!satellites.length) return;
-
-  const mapRect = map.getBoundingClientRect();
-  const centerRect = center.getBoundingClientRect();
-  const maxDepth = Math.max(...satellites.map((item) => item.depth));
-  const firstLevel = satellites.filter((item) => item.depth === 1);
-  const lastLevel = satellites.filter((item) => item.depth === maxDepth);
-  const firstHalf = Math.max(38, ...firstLevel.map((item) => item.element.getBoundingClientRect().width / 2));
-  const lastHalf = Math.max(28, ...lastLevel.map((item) => item.element.getBoundingClientRect().width / 2));
-
-  const startX = centerRect.left - mapRect.left - firstHalf - 18;
-  const endX = lastHalf + 18;
-  const span = Math.max(0, startX - endX);
-
-  for (const item of satellites) {
-    const progress = maxDepth <= 1 ? 0 : (item.depth - 1) / (maxDepth - 1);
-    const x = Math.max(endX, startX - span * progress);
-    item.element.style.setProperty('--x', `${x}px`);
-  }
-}
-
 function visiblePositions(map) {
   const result = new Map();
   const center = map.querySelector('.center-position[data-key]');
@@ -130,21 +101,122 @@ function edgeSortForLabel(label) {
   };
 }
 
-async function visibleEdgeFor(satellite, mode, positions) {
+async function visibleEdgesFor(satellite, mode, positions) {
   const key = satellite.dataset.key;
   const depth = relationDepth(satellite);
-  if (!key || !Number.isFinite(depth) || depth < 1) return null;
+  if (!key || !Number.isFinite(depth) || depth < 1) return [];
 
   const label = satellite.querySelector('.mini-label strong')?.textContent?.trim() ?? '';
   if (mode === 'roots') {
     return (await getOutgoing(key))
       .filter((edge) => positions.get(edge.target)?.depth === depth - 1)
-      .sort(edgeSortForLabel(label))[0] ?? null;
+      .sort(edgeSortForLabel(label));
   }
 
   return (await getIncoming(key))
     .filter((edge) => positions.get(edge.source)?.depth === depth - 1)
-    .sort(edgeSortForLabel(label))[0] ?? null;
+    .sort(edgeSortForLabel(label));
+}
+
+async function resolveRootStructure(map) {
+  const positions = visiblePositions(map);
+  const satellites = [...map.querySelectorAll('.satellite.relation-root[data-key]')];
+  const entries = await Promise.all(satellites.map(async (satellite) => {
+    const key = satellite.dataset.key;
+    const depth = relationDepth(satellite);
+    const edges = await visibleEdgesFor(satellite, 'roots', positions);
+    return { satellite, key, depth, edges, branches: [], isMerge: false, isShared: false };
+  }));
+
+  const branchSets = new Map();
+  for (const entry of entries.slice().sort((a, b) => a.depth - b.depth)) {
+    if (entry.depth === 1) {
+      entry.branches = [entry.key];
+    } else {
+      const branches = [];
+      for (const edge of entry.edges) {
+        for (const branch of branchSets.get(edge.target) ?? []) {
+          if (!branches.includes(branch)) branches.push(branch);
+        }
+      }
+      entry.branches = branches;
+    }
+    entry.isMerge = entry.edges.length > 1;
+    entry.isShared = entry.branches.length > 1;
+    branchSets.set(entry.key, entry.branches);
+  }
+
+  return {
+    map,
+    positions,
+    entries,
+    entriesByKey: new Map(entries.map((entry) => [entry.key, entry])),
+  };
+}
+
+function rootLaneY(index, count) {
+  if (count <= 1) return 50;
+  return 16 + (68 * index) / Math.max(1, count - 1);
+}
+
+function layoutRootSatellites(structure) {
+  const { map, entries } = structure ?? {};
+  const center = map?.querySelector('.center-position');
+  if (!map || !center || !entries?.length) return;
+
+  const mapRect = map.getBoundingClientRect();
+  const centerRect = center.getBoundingClientRect();
+  const maxDepth = Math.max(...entries.map((entry) => entry.depth));
+  const firstLevel = entries.filter((entry) => entry.depth === 1);
+  const lastLevel = entries.filter((entry) => entry.depth === maxDepth);
+  const firstHalf = Math.max(38, ...firstLevel.map((entry) => entry.satellite.getBoundingClientRect().width / 2));
+  const lastHalf = Math.max(28, ...lastLevel.map((entry) => entry.satellite.getBoundingClientRect().width / 2));
+  const startX = centerRect.left - mapRect.left - firstHalf - 18;
+  const endX = lastHalf + 18;
+  const span = Math.max(0, startX - endX);
+
+  const familyY = new Map();
+  firstLevel.forEach((entry, index) => familyY.set(entry.key, rootLaneY(index, firstLevel.length)));
+
+  const groups = new Map();
+  for (const entry of entries) {
+    const progress = maxDepth <= 1 ? 0 : (entry.depth - 1) / (maxDepth - 1);
+    const x = Math.max(endX, startX - span * progress);
+    entry.satellite.style.setProperty('--x', `${x}px`);
+
+    const ys = entry.branches.map((branch) => familyY.get(branch)).filter(Number.isFinite);
+    const baseY = ys.length ? ys.reduce((sum, value) => sum + value, 0) / ys.length : 50;
+    const signature = `${entry.depth}:${entry.branches.join('|')}`;
+    if (!groups.has(signature)) groups.set(signature, []);
+    groups.get(signature).push({ entry, baseY });
+  }
+
+  for (const group of groups.values()) {
+    group.forEach(({ entry, baseY }, index) => {
+      const offset = (index - (group.length - 1) / 2) * 8;
+      const y = Math.max(8, Math.min(92, baseY + offset));
+      entry.satellite.style.setProperty('--y', `${y}%`);
+    });
+  }
+
+  for (const entry of entries) {
+    entry.satellite.classList.toggle('is-transposition-merge', entry.isMerge);
+    entry.satellite.classList.toggle('is-shared-root-ancestry', entry.isShared && !entry.isMerge);
+    entry.satellite.dataset.rootFamilies = entry.branches.join('|');
+
+    const label = entry.satellite.querySelector('.mini-label');
+    let badge = label?.querySelector('.root-merge-badge');
+    if (entry.isMerge) {
+      if (!badge && label) {
+        badge = document.createElement('span');
+        badge.className = 'root-merge-badge';
+        label.appendChild(badge);
+      }
+      if (badge) badge.textContent = `merge · ${Math.max(2, entry.branches.length)}`;
+    } else {
+      badge?.remove();
+    }
+  }
 }
 
 function squareCenter(square, orientation) {
@@ -193,24 +265,28 @@ function drawRootEdges(map, positions, resolved) {
 
   const mapRect = map.getBoundingClientRect();
   const paths = [];
-  for (const { edge } of resolved) {
-    if (!edge) continue;
-    const source = positions.get(edge.source)?.element;
-    const target = positions.get(edge.target)?.element;
-    if (!source || !target) continue;
+  for (const { edges = [] } of resolved) {
+    for (const edge of edges) {
+      const source = positions.get(edge.source)?.element;
+      const target = positions.get(edge.target)?.element;
+      if (!source || !target) continue;
 
-    const a = source.getBoundingClientRect();
-    const b = target.getBoundingClientRect();
-    const x1 = a.left + a.width / 2 - mapRect.left;
-    const y1 = a.top + a.height / 2 - mapRect.top;
-    const x2 = b.left + b.width / 2 - mapRect.left;
-    const y2 = b.top + b.height / 2 - mapRect.top;
-    const horizontal = x2 >= x1 ? 1 : -1;
-    const bend = Math.max(28, Math.abs(x2 - x1) * 0.36);
-    paths.push({
-      d: `M ${x1} ${y1} C ${x1 + horizontal * bend} ${y1}, ${x2 - horizontal * bend} ${y2}, ${x2} ${y2}`,
-      className: (edge.share ?? 0) >= 0.2 ? 'edge edge-strong' : 'edge',
-    });
+      const a = source.getBoundingClientRect();
+      const b = target.getBoundingClientRect();
+      const x1 = a.left + a.width / 2 - mapRect.left;
+      const y1 = a.top + a.height / 2 - mapRect.top;
+      const x2 = b.left + b.width / 2 - mapRect.left;
+      const y2 = b.top + b.height / 2 - mapRect.top;
+      const horizontal = x2 >= x1 ? 1 : -1;
+      const bend = Math.max(28, Math.abs(x2 - x1) * 0.36);
+      const classes = ['edge'];
+      if ((edge.share ?? 0) >= 0.2) classes.push('edge-strong');
+      if (edges.length > 1) classes.push('edge-merge');
+      paths.push({
+        d: `M ${x1} ${y1} C ${x1 + horizontal * bend} ${y1}, ${x2 - horizontal * bend} ${y2}, ${x2} ${y2}`,
+        className: classes.join(' '),
+      });
+    }
   }
 
   const signature = `${mapRect.width}x${mapRect.height}|${paths.map((item) => `${item.className}:${item.d}`).join('|')}`;
@@ -227,29 +303,32 @@ function drawRootEdges(map, positions, resolved) {
   }
 }
 
-async function decorateMoveCues() {
+async function decorateMoveCues(rootStructure = null) {
   const run = ++cueGeneration;
   const map = document.querySelector('.map');
   if (!map) return;
 
   const mode = map.classList.contains('mode-roots') ? 'roots' : 'lines';
-  const positions = visiblePositions(map);
+  const positions = rootStructure?.positions ?? visiblePositions(map);
   const satellites = [...map.querySelectorAll('.satellite[data-key]')];
-  const resolved = await Promise.all(satellites.map(async (satellite) => ({
-    satellite,
-    edge: await visibleEdgeFor(satellite, mode, positions),
-  })));
+  const resolved = mode === 'roots' && rootStructure
+    ? rootStructure.entries.map((entry) => ({ satellite: entry.satellite, edges: entry.edges }))
+    : await Promise.all(satellites.map(async (satellite) => ({
+      satellite,
+      edges: await visibleEdgesFor(satellite, mode, positions),
+    })));
 
   if (run !== cueGeneration || !map.isConnected) return;
   const orientation = localStorage.getItem('chessview.orientation') === 'black' ? 'black' : 'white';
   const kind = mode === 'roots' ? 'next' : 'last';
 
-  for (const { satellite, edge } of resolved) {
+  for (const { satellite, edges = [] } of resolved) {
     if (!satellite.isConnected) continue;
     const board = satellite.querySelector('.mini-board');
     if (!board) continue;
 
     const existing = board.querySelector('.move-cue');
+    const edge = mode === 'roots' && edges.length !== 1 ? null : edges[0] ?? null;
     if (!edge) {
       if (existing) existing.remove();
       delete board.dataset.moveCueSignature;
@@ -272,7 +351,7 @@ async function decorateMoveCues() {
   if (mode === 'roots') drawRootEdges(map, positions, resolved);
 }
 
-async function decorateRootRows() {
+async function decorateRootRows(rootStructure = null) {
   const run = ++generation;
   const rows = [...document.querySelectorAll('.roots-row[data-nav-key]')];
 
@@ -280,6 +359,9 @@ async function decorateRootRows() {
     const target = row.dataset.navKey;
     const label = row.querySelector('.root-name');
     if (!target || !label) continue;
+
+    const structureEntry = rootStructure?.entriesByKey.get(target);
+    row.classList.toggle('is-transposition-merge', structureEntry?.isMerge === true);
 
     const incomingByTarget = await collectIncomingToStart(target);
     if (run !== generation || !row.isConnected) return;
@@ -289,10 +371,14 @@ async function decorateRootRows() {
 
     if (!label.dataset.originalLabel) label.dataset.originalLabel = label.textContent?.trim() ?? '';
     const full = path.length ? formatPgnMoves(path) : 'start position';
-    const display = path.length ? formatPgnSuffix(path, 6) : 'start position';
-    const title = label.dataset.originalLabel && label.dataset.originalLabel !== 'known position'
+    const pathDisplay = path.length ? formatPgnSuffix(path, 6) : 'start position';
+    const display = structureEntry?.isMerge ? `↗ ${pathDisplay}` : pathDisplay;
+    const baseTitle = label.dataset.originalLabel && label.dataset.originalLabel !== 'known position'
       ? `${label.dataset.originalLabel} · ${full}`
       : full;
+    const title = structureEntry?.isMerge
+      ? `Transposition merge from ${Math.max(2, structureEntry.branches.length)} Roots · ${baseTitle}`
+      : baseTitle;
 
     label.style.textAlign = 'right';
     if (label.textContent !== display) label.textContent = display;
@@ -426,10 +512,16 @@ async function decorateForView(detail) {
       return;
     }
 
-    layoutRootSatellites();
-    await decorateMoveCues();
+    const map = document.querySelector('.map');
+    const rootStructure = map?.classList.contains('mode-roots')
+      ? await resolveRootStructure(map)
+      : null;
     if (run !== structureGeneration || !currentViewMatches(detail)) return;
-    await decorateRootRows();
+
+    if (rootStructure) layoutRootSatellites(rootStructure);
+    await decorateMoveCues(rootStructure);
+    if (run !== structureGeneration || !currentViewMatches(detail)) return;
+    await decorateRootRows(rootStructure);
     if (run !== structureGeneration || !currentViewMatches(detail)) return;
     await unflattenRootRows();
     if (run !== structureGeneration || !currentViewMatches(detail)) return;

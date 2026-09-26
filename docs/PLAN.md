@@ -1,21 +1,10 @@
 # Chessview v1
 
-## Goal
+## Vision and scope
 
-Build a static, browser-only chess opening explorer where a canonical chess position is the center of a spatial graph and nearby positions are rendered as smaller chessboards. The map should make continuations, known incoming positions, siblings/cousins, and transpositions visually understandable without turning the experience into a move-list dashboard.
+[Chessview vision](vision.md) owns the durable product promise, user needs, representative workflows, product language, and experience principles.
 
-## Product language
-
-Chessview uses **Roots** and **Lines** as the canonical user-facing terms for the two directions around the current position:
-
-- **Root** — a known position that reaches the current position by one legal move. A position may have multiple Roots when different move orders transpose into the same canonical position. When ancestry is expanded, the **Roots** view includes the upstream move-order tree feeding those immediate Roots.
-- **Line** — a known position reached from the current position by one legal move. Deeper continuation positions belong to that Line as it extends forward.
-- **Roots** answer **“How can this position be reached?”**
-- **Lines** answer **“Where can play go from here?”**
-
-These are product/UI terms. Implementation code may use graph terms such as `incoming` / `outgoing`, `source` / `target`, and predecessor / successor where those are clearer technically.
-
-The right-side control and evidence surface is the **Rail**.
+This plan is the v1 product contract and documentation entry point. It translates that vision into the current usability bar, cross-component commitments, and component ownership map.
 
 ## Product usability bar
 
@@ -25,7 +14,7 @@ Feature criticality answers a different question from v1 scope. A supplementary 
 
 Chessview's core job is to establish and navigate a trustworthy position graph. The product is usable only when all of the following hold for the current view:
 
-- the center is a valid canonical chess position and legal moves can recenter it;
+- the Nodus is a valid canonical chess position and legal moves can recenter it;
 - graph identity and one-move edges are correct, including transposition merging;
 - the visible Root/Line neighborhood is established well enough that the boards the visitor is expected to navigate are known and rendered;
 - known Roots come from trustworthy incoming graph edges;
@@ -43,7 +32,7 @@ An explicit critical failure ends loading but does not make the product usable. 
 
 These features enrich an already usable graph and may continue loading after the visible Root/Line structure is settled:
 
-- cloud evaluation and center evaluation;
+- cloud evaluation and Nodus evaluation;
 - pawn-loss values and move-quality classification;
 - Masters comparison data;
 - rated-Lichess/engine and Masters/engine mismatch markers;
@@ -82,8 +71,8 @@ Global readiness follows the critical structural layer, not the completion of ev
 - Rated standard Lichess Opening Explorer is the primary human-statistical source. Masters data is a comparison population, and adequate-depth Lichess cloud evaluation supplies engine evidence.
 - Automatic graph expansion is local to each source position: sufficiently sampled moves at or above 5% qualify for automatic discovery.
 - The visible neighborhood is branch-balanced rather than dominated by one broad Line.
-- The current position is a large playable board; surrounding boards are navigation surfaces. Root context is left of center and Line context is right of center.
-- Recentring is position-based. The URL identifies the current position, not the path used to reach it.
+- The Nodus is a large playable board; surrounding boards are navigation surfaces. Root context is left of the Nodus and Line context is right of it.
+- Recentring is position-based. The URL identifies the Nodus, not the path used to reach it.
 - Discovered graph and evidence data persist in the browser.
 - Application-issued Lichess API requests are coordinated application-wide through `LichessGateway`; transport failure is not interpreted as absence of chess evidence.
 - Production remains a static GitHub Pages deployment.
@@ -96,11 +85,13 @@ Detailed requirements, implementation choices, tunables, and verification live w
 - [Discovery](components/discovery.md) — Explorer reconciliation, automatic expansion, and branch-balanced neighborhood selection.
 - [Lichess access](components/lichess-access.md) — OAuth, data endpoints, `LichessGateway`, request policy, and cache/failure semantics.
 - [Evidence](components/evidence.md) — engine quality, Masters/Lichess comparison, Rail filtering, and Root rarity.
-- [Interface](components/interface.md) — center/miniboard interaction, spatial layout, Rail, orientation, and URL navigation.
+- [Interface](components/interface.md) — Nodus/miniboard interaction, spatial layout, Rail, orientation, and URL navigation.
 - [Delivery](components/delivery.md) — static build, deterministic CI, and GitHub Pages publication.
 
 Architecture that needs an independently maintained boundary lives under `docs/architecture/`. In particular, [LichessGateway architecture](architecture/lichess-gateway.md) governs the Lichess network boundary.
 
 ## Maintaining the plan
 
-`PLAN.md` owns the product goal, product language, product usability bar, cross-component commitments, and the component map. A component document owns the detailed requirements in its scope. When a change crosses components, update each affected owner rather than duplicating one component's detailed contract here.
+`docs/vision.md` owns the durable product direction and canonical product language. `PLAN.md` owns the v1 product usability bar, cross-component commitments, and component map. A component document owns the detailed requirements in its scope.
+
+When a change crosses levels, update the owning documents rather than duplicating the same contract in several places. Vision explains why a direction matters; this plan states the current cross-component promises; component documents define exact behavior and verification.

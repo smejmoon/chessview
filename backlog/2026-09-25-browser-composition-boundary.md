@@ -1,48 +1,44 @@
 # Do:
 
-Finish browser composition so one application controller owns render/navigation lifecycle and Root, Line, transposition, and evidence contributors receive explicit current-view state through controller APIs instead of coordinating through rendered DOM or synthetic browser events.
+Finish verification of the Nodus-centered browser composition boundary and, once evidence request lifetime exposes independent subscriber obsolescence, pass current-view participation into evidence loading without making a Nodus generation own a shared request.
 
 # Because:
 
-`audits/2026-09-25-17-30-00-gpt-5.6-sol-chatgpt.md`, finding “UI composition is an implicit multi-writer DOM protocol,” records the original shared-DOM coupling. `docs/components/interface.md` §Requirements, §Composition direction, and §Verification require stable Roots/Lines navigation, position-based history, stable graph-edge identity in presentation, explicit current-view settlement, and a single controller-owned render/navigation lifecycle.
+`docs/components/interface.md` §Requirements, §Composition direction, and §Verification require stable Roots/Lines navigation, position-based history, stable graph identity in presentation, explicit current-view settlement, and one controller-owned render/navigation lifecycle.
 
-Current composition already has one HTML application entrypoint and controller-issued View Cycle tokens/events for structural settlement. Supplementary evidence hydrates independently of readiness and Line discovery, and critical render/structure failure has an explicit degraded terminal state. The remaining lifecycle boundary is still implicit in places: Rail navigation synthesizes `popstate`, contributor refresh can still depend on browser/DOM events rather than explicit controller calls, unexpected supplementary contributor exceptions can remain console-only at their local surface, and the real controller↔contributor seam lacks automated contract coverage.
+`src/nodus-controller.js` now owns Nodus/view/orientation/history transitions, generation supersession, structural settlement, contributor sequencing, and commands-in/snapshot-out state. `src/main.js` translates native browser inputs and UI intents into that controller; application recentering no longer synthesizes `popstate`, resize is a controller redraw, and `src/view-cycle.js` no longer exposes a browser-event protocol. Root preparation/decorating and evidence presentation now receive explicit scoped current-view state rather than discovering current center/view from DOM. Unexpected evidence presentation failures add a local unavailable summary while remaining supplementary to structural readiness.
 
 # Edges:
 
-`backlog/2026-09-26-visible-graph-composition.md` owns the shared Root/Line visible-graph contract, canonical convergence representation, stable node/edge rendering identity, and removal of DOM-derived graph relationships. This outcome consumes that explicit model at the controller/contributor boundary rather than recreating graph selection or presentation semantics. Controller integration should be based on that contract once it is established.
+The explicit visible-graph model is already consumed as the composition passed from the renderer through `NodusController` into Root and evidence contributors; graph selection and stable relationship identity remain owned by the visible-graph/model layer rather than this outcome.
 
-`backlog/2026-09-25-evidence-request-lifetime.md` owns evidence-loader subscriber/coalescing semantics. This outcome owns current-view generation/lifecycle context and may define that controller surface independently, but final evidence integration and superseded-generation coverage should consume the subscriber abstraction produced there rather than binding request lifetime directly to one view's `AbortSignal`.
+`backlog/2026-09-25-evidence-request-lifetime.md` owns evidence-loader subscriber/coalescing semantics. NodusController deliberately does not pass its structural AbortSignal into evidence requests. Final evidence obsolescence integration should consume the independent subscriber abstraction from that outcome so superseding one view cannot abort useful coalesced work for another subscriber.
 
-Shared `LichessGateway` serialization/rate-limit policy remains outside this outcome. Data-loading APIs may be adapted only as needed to expose explicit state to the controller.
+Shared `LichessGateway` serialization/rate-limit policy remains outside this outcome.
 
 # Unsettled:
 
-Choose the smallest explicit controller API for recentering, browser back/forward restoration, contributor refresh, orientation/layout refresh, and current-view settlement without creating a second hidden application state machine.
+Decide the smallest evidence subscriber context NodusController should provide after `backlog/2026-09-25-evidence-request-lifetime.md` establishes that abstraction.
 
-Choose the smallest integration-test seam that exercises real controller/contributor settlement, superseded navigation, critical failure/recovery, history/recentering, supplementary evidence arriving after readiness, and stable node/edge association without turning the suite into pixel/layout snapshots or adding a browser harness unless one is earned.
-
-Decide whether unexpected supplementary presentation-code exceptions need a compact local unavailable summary beyond the existing source/evidence failure indicators; they must not downgrade an otherwise established structural view.
+Determine whether URL round-trip and native back/forward need a small pure browser-adapter test seam beyond the current controller tests, or whether the existing graph URL tests plus deployed preview verification establish that contract without duplicating it.
 
 # Complete:
 
-A single application owner controls the `#app` render/navigation lifecycle. Browser back/forward remains native, while application-initiated recentering, refresh, layout/orientation updates, and contributor settlement use explicit controller APIs rather than synthetic `resize`/`popstate` or equivalent DOM/browser events as an internal protocol.
+A single NodusController owns current-view state transitions and lifecycle. Native browser back/forward remains an external input; application recentering, view changes, orientation/layout redraw, contributor execution, supersession, and settlement use explicit calls and scoped capabilities rather than synthetic browser events or DOM-derived current-view state.
 
-Root, Line, transposition, and evaluation contributors receive explicit current-view model references and generation context from the controller. Critical structural contributor failures produce an explicit degraded terminal state; supplementary evidence failures remain locally visible without blocking or downgrading structural readiness.
+Critical structural failures reach the lifecycle as failures. Supplementary evidence hydrates independently, has a compact local presentation-failure summary, and cannot block or downgrade structural readiness.
 
-Deterministic automated tests exercise the real product-critical composition boundary, including structural readiness independent of supplementary evidence, superseded generations, critical failure/recovery, URL round-tripping, representative recenter/history behavior, late evidence hydration, explicit contributor refresh, and stable position/edge association supplied by the visible-graph model.
+Deterministic tests cover commands/snapshot ownership, browser-history restoration semantics, superseded generations, explicit contributor context/navigation, structural readiness independent of late/failing evidence, critical structural failure/recovery, explicit refresh/redraw behavior, and preservation of the visible composition supplied to contributors. URL round-trip/back-forward behavior is covered either by a focused adapter test or by equivalent existing deterministic and deployed-preview verification.
+
+Evidence loading consumes independent subscriber obsolescence semantics from `backlog/2026-09-25-evidence-request-lifetime.md` without binding shared request lifetime to a Nodus generation.
 
 # Steps:
 
-Consume the explicit visible-graph contract produced by `backlog/2026-09-26-visible-graph-composition.md` and define the controller/contributor API around current-view generation, navigation, refresh, and settlement.
+Add the remaining NodusController contract cases for critical failure/recovery, refresh/redraw, and composition preservation; run the repository deterministic suite when exact-tip CI can be invoked, in addition to the branch Pages production build.
 
-Replace synthetic navigation/lifecycle browser events with explicit controller calls while preserving native browser back/forward behavior and current URL semantics.
+Inspect existing URL/history tests and add only the smallest missing browser-adapter seam needed for deterministic URL round-trip/back-forward coverage.
 
-Once `backlog/2026-09-25-evidence-request-lifetime.md` supplies independent subscriber lifetime semantics, wire current-view obsolescence into evidence participation without making one view own a shared same-position request.
-
-Route structural and supplementary contributor settlement/failure through the controller boundary without coupling supplementary evidence back into global readiness.
-
-Add focused composition-contract tests around the real controller/contributor seam, remove obsolete synthetic-event/implicit-lifecycle coupling, and decide any remaining local summary needed for unexpected supplementary presentation failures.
+After the evidence-request-lifetime outcome lands, wire Nodus current-view obsolescence into evidence subscriber participation and verify same-position coalescing remains independent of any one generation.
 
 # Sync:
 

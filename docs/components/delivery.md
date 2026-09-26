@@ -14,18 +14,28 @@ Own Chessview's static application boundary, reproducible build, automated verif
 
 ## Continuous integration
 
-The GitHub Actions Pages workflow is the executable authority for CI/deployment mechanics. It must:
+`.github/workflows/ci.yml` is the executable authority for repository verification. It uses read-only repository contents access and must:
 
 - install the locked dependency graph with `npm ci`;
-- run deterministic tests before publication;
-- build the Vite production bundle;
-- publish `dist/` to the configured `gh-pages` target only after tests and build succeed.
+- run deterministic tests with `npm test`;
+- build the Vite production bundle with `npm run build`.
 
-Documentation should describe this behavior, but `.github/workflows/pages.yml` owns the exact commands and publication mechanics.
+CI runs for pull requests targeting `main`, pushes to `main`, and explicit manual dispatch. Its `Verify` job is the stable verification signal used for merge-readiness evidence.
+
+`.github/workflows/pages.yml` owns GitHub Pages publication. It must:
+
+- install the locked dependency graph;
+- determine the production or branch-preview Pages target;
+- build the Vite bundle with the target base path;
+- publish only to the intended `gh-pages` production root or `previews/` subtree.
+
+Branch previews are development artifacts and may publish independently of CI. A successful preview does not by itself establish merge readiness.
 
 ## Verification
 
 - `npm test` is the deterministic repository test gate.
 - `npm run build` is the production build gate.
-- Changes that affect application code, build inputs, or the Pages workflow require a successful GitHub Actions run on the resulting commit before the change is treated as verified for deployment.
-- Branch preview publication follows the repository's branch-preview workflow rather than redefining deployment policy here.
+- Changes that affect application code, build inputs, or CI behavior require successful CI evidence for the relevant resulting commit before they are treated as verified for integration.
+- After integration to `main`, both CI and the production Pages build/deploy must succeed on the resulting `main` tip.
+- Changes to Pages publication mechanics require a successful Pages run on the resulting commit.
+- Branch preview publication follows the repository's branch-preview workflow rather than redefining integration policy here.

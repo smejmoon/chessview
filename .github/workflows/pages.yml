@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run deterministic tests
+        run: npm test
+
       - name: Determine Pages target
         id: pages
         run: node scripts/pages-target.js

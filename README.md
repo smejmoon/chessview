@@ -22,7 +22,9 @@ npm run build
 
 ## Deployment
 
-Pushes to `main` run deterministic tests and a Vite production build. If both pass, the workflow publishes `dist/` to the `gh-pages` branch. Configure GitHub Pages to serve the root of `gh-pages`.
+Verification and publication are separate GitHub Actions concerns. The CI workflow runs the deterministic tests and production build for pull requests targeting `main`, pushes to `main`, and manual dispatch. The Pages workflow builds and publishes `main` at the production root and other pushed branches under their branch-preview target. A successful preview is a development artifact, not a substitute for CI evidence.
+
+Configure GitHub Pages to serve the root of `gh-pages`.
 
 ## Graph behavior
 

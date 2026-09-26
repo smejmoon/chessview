@@ -1,20 +1,4 @@
-export const VIEW_RENDERED_EVENT = 'chessview:view-rendered';
-export const VIEW_WORK_SETTLED_EVENT = 'chessview:view-work-settled';
-export const VIEW_REFRESH_REQUESTED_EVENT = 'chessview:view-refresh-requested';
-
 const SUPPLEMENTARY_WORK = new Set(['evidence']);
-
-export function announceViewRendered(detail) {
-  window.dispatchEvent(new CustomEvent(VIEW_RENDERED_EVENT, { detail }));
-}
-
-export function reportViewWorkSettled(detail) {
-  window.dispatchEvent(new CustomEvent(VIEW_WORK_SETTLED_EVENT, { detail }));
-}
-
-export function requestViewRefresh(detail) {
-  window.dispatchEvent(new CustomEvent(VIEW_REFRESH_REQUESTED_EVENT, { detail }));
-}
 
 export function createViewCycleController({
   onPresentation = () => {},
@@ -41,10 +25,7 @@ export function createViewCycleController({
   }
 
   function snapshot() {
-    return {
-      presentation,
-      pending: [...pending.keys()],
-    };
+    return { presentation, pending: [...pending.keys()] };
   }
 
   function present(next) {
@@ -63,9 +44,8 @@ export function createViewCycleController({
 
   function assign(label) {
     const token = `${cycleId}:${++taskSerial}`;
-    if (SUPPLEMENTARY_WORK.has(label)) {
-      supplementary.set(label, token);
-    } else {
+    if (SUPPLEMENTARY_WORK.has(label)) supplementary.set(label, token);
+    else {
       failed.delete(label);
       pending.set(label, token);
     }
@@ -74,14 +54,10 @@ export function createViewCycleController({
 
   function finish(id) {
     if (id !== cycleId || pending.size) return false;
-    if (updatingTimer != null) {
-      clearTimeoutFn(updatingTimer);
-      updatingTimer = null;
-    }
-    if (readyTimer != null) {
-      clearTimeoutFn(readyTimer);
-      readyTimer = null;
-    }
+    if (updatingTimer != null) clearTimeoutFn(updatingTimer);
+    if (readyTimer != null) clearTimeoutFn(readyTimer);
+    updatingTimer = null;
+    readyTimer = null;
     hasSettled = true;
     if (failed.size) {
       present('failed');
@@ -99,10 +75,8 @@ export function createViewCycleController({
     if (id !== cycleId || !label) return null;
     if (SUPPLEMENTARY_WORK.has(label)) return assign(label);
     if (pending.size === 0 && hasSettled) {
-      if (readyTimer != null) {
-        clearTimeoutFn(readyTimer);
-        readyTimer = null;
-      }
+      if (readyTimer != null) clearTimeoutFn(readyTimer);
+      readyTimer = null;
       present('hidden');
       scheduleUpdating(id);
     }
@@ -150,12 +124,8 @@ export function createViewCycleController({
     begin,
     settle,
     fail,
-    get cycleId() {
-      return cycleId;
-    },
-    get presentation() {
-      return presentation;
-    },
+    get cycleId() { return cycleId; },
+    get presentation() { return presentation; },
     snapshot,
   };
 }

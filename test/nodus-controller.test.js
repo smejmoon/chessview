@@ -88,14 +88,31 @@ test('superseded contributor results cannot publish into the current view', asyn
   assert.equal(controller.snapshot.composition.center, 'B');
 });
 
-test('contributor scopes carry explicit current-view state and direct navigation', async () => {
+test('contributors receive the exact visible composition and explicit current-view state', async () => {
+  const composition = { center: 'A', direction: 'roots', relationships: [{ id: 'edge-1' }] };
+  let decorated;
+  let evidenced;
+  const { controller } = fixture({
+    render: async () => ({ composition }),
+    decorate: async (scope) => { decorated = scope; },
+    evidence: async (scope) => { evidenced = scope; },
+  });
+  await controller.start();
+  await Promise.resolve();
+  assert.equal(decorated.center, 'A');
+  assert.strictEqual(decorated.composition, composition);
+  assert.strictEqual(evidenced.composition, composition);
+});
+
+test('contributor scopes provide direct navigation without exposing controller internals', async () => {
   let evidenceScope;
   const { controller, calls } = fixture({ evidence: async (scope) => { evidenceScope = scope; } });
   await controller.start();
   await Promise.resolve();
   assert.equal(evidenceScope.center, 'A');
   assert.equal(evidenceScope.view, 'roots');
-  assert.equal(evidenceScope.composition.center, 'A');
+  assert.equal(Object.hasOwn(evidenceScope, 'generation'), false);
+  assert.equal(Object.hasOwn(evidenceScope, 'settle'), false);
   await evidenceScope.navigate('b');
   assert.equal(controller.snapshot.center, 'B');
   assert.ok(calls.some(([name]) => name === 'push'));
@@ -111,4 +128,36 @@ test('supplementary evidence neither blocks nor fails structural readiness', asy
   await Promise.resolve();
   await Promise.resolve();
   assert.notEqual(controller.snapshot.presentation, 'failed');
+});
+
+test('critical structural failure is terminal for its generation and refresh can recover', async () => {
+  let fail = true;
+  const { controller } = fixture({
+    decorate: async () => {
+      if (fail) throw new Error('structure unavailable');
+    },
+  });
+  await controller.start();
+  assert.equal(controller.snapshot.presentation, 'failed');
+  const failedGeneration = controller.snapshot.generation;
+
+  fail = false;
+  await controller.refresh();
+  assert.equal(controller.snapshot.generation, failedGeneration + 1);
+  assert.notEqual(controller.snapshot.presentation, 'failed');
+});
+
+test('redraw preserves generation while refresh supersedes it without changing history', async () => {
+  const { controller, calls } = fixture();
+  await controller.start();
+  calls.length = 0;
+  const generation = controller.snapshot.generation;
+
+  await controller.redraw();
+  assert.equal(controller.snapshot.generation, generation);
+  assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
+
+  await controller.refresh();
+  assert.equal(controller.snapshot.generation, generation + 1);
+  assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
 });

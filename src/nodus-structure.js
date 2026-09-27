@@ -130,7 +130,20 @@ async function rootRows(composition, signal) {
   return immutable(rows.filter(Boolean));
 }
 
-export async function composeNodusStructure({ center, mode, max = 19, signal } = {}) {
+/** @typedef {'roots' | 'lines'} NodusMode */
+
+/**
+ * @typedef {Object} ComposeNodusStructureOptions
+ * @property {string} center
+ * @property {NodusMode} mode
+ * @property {number} [max]
+ * @property {AbortSignal} [signal]
+ */
+
+/**
+ * @param {ComposeNodusStructureOptions} options
+ */
+export async function composeNodusStructure({ center, mode, max = 19, signal }) {
   throwIfAborted(signal);
   if (mode === 'roots') await rootTranspositionEnricher.ensure(center, { signal });
   throwIfAborted(signal);

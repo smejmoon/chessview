@@ -1,7 +1,7 @@
 import { createViewStatusPresenter } from './view-status.js';
 
 export function createNodusPresenter({
-  renderer,
+  renderer = null,
   statusPresenter = null,
   log = (..._args) => {},
 } = {}) {

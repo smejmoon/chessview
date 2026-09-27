@@ -5,7 +5,6 @@ import './style.css';
 import './debug.css';
 
 import { canonicalPosition } from './graph.js';
-import { getNode } from './db.js';
 import { discoverForViewport } from './explorer.js';
 import { debugLog } from './debug.js';
 import { NodusController } from './nodus-controller.js';
@@ -15,6 +14,7 @@ import { createNodusRenderer } from './nodus-renderer.js';
 import { createNodusPresenter } from './nodus-presenter.js';
 import { createRouteLedger } from './route-ledger.js';
 import { preferenceStore } from './preference-store.js';
+import { positionRepository } from './position-repository.js';
 
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
@@ -40,7 +40,7 @@ async function discover({ center, signal, onProgress }) {
     if (signal.aborted) return null;
     debugLog('discovery failed', { center, error: error?.message ?? String(error) }, 'error');
     let hasPersistedExplorer = false;
-    try { hasPersistedExplorer = Boolean((await getNode(center))?.explorer); } catch {}
+    try { hasPersistedExplorer = Boolean((await positionRepository.get(center))?.explorer); } catch {}
     return { error, criticalFailure: !hasPersistedExplorer };
   }
 }

@@ -48,8 +48,6 @@ Critical structural data is published with generation-scoped loading/ready/faile
 
 Reusable graph enrichment has producer lifetime independent of a single current view. In particular, shared Root transposition enrichment may continue producing durable graph state after one view becomes obsolete; a view-scoped cancellation signal detaches that caller from waiting on the shared work but does not make the first caller own or cancel the producer. Structural projection consumes the resulting graph and remains cancellable for the current view.
 
-This composition refactor is tracked separately in the browser-composition backlog outcome; this component records the product/interface contract it must preserve.
-
 ## Verification
 
 Deterministic/browser contract tests should cover:

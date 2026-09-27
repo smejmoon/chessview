@@ -1,4 +1,5 @@
 import { Chessground } from '@lichess-org/chessground';
+import './chessground-overrides.css';
 import {
   legalDestinations,
   omittedShare,
@@ -15,10 +16,10 @@ import {
 } from './debug.js';
 import { decorateEvidencePresentation } from './eval-ui.js';
 import { decorateRootPresentation } from './root-presentation.js';
+import { createPromotionChooser } from './promotion-chooser.js';
 import {
   bindRecenterTarget,
   createBoardMoveRecenterHandler,
-  promptPromotion,
 } from './recenter-input.js';
 import { viewStatusSpec } from './view-status.js';
 
@@ -108,6 +109,7 @@ export function createNodusRenderer({
   const document = app.ownerDocument ?? globalThis.document;
   const window = document?.defaultView ?? globalThis.window;
   const boards = new Set();
+  const promotionChooser = createPromotionChooser({ app });
 
   function disposeBoards() {
     for (const api of boards) api?.destroy?.();
@@ -213,7 +215,13 @@ export function createNodusRenderer({
           after: createBoardMoveRecenterHandler({
             source: view.center,
             actions,
-            choosePromotion: (choices) => promptPromotion(window, choices),
+            choosePromotion: (choices, { to }) => promotionChooser.choose({
+              center: view.center,
+              to,
+              choices,
+              orientation: view.orientation,
+              color: turn,
+            }),
           }),
         },
       },
@@ -226,9 +234,11 @@ export function createNodusRenderer({
     renderSatellites(view, structure, actions);
     decorateRootPresentation(app, view);
     decorateEvidencePresentation(app, view, actions, { showGuide: guide });
+    promotionChooser.sync({ center: view.center, orientation: view.orientation, color: turn });
   }
 
   function renderFailure(view, actions, error, presentation = 'failed') {
+    promotionChooser.cancel();
     disposeBoards();
     const status = viewStatusSpec(presentation);
     const detail = error?.message ?? String(error ?? 'Presentation failed');
@@ -238,6 +248,7 @@ export function createNodusRenderer({
   }
 
   function dispose() {
+    promotionChooser.dispose();
     disposeBoards();
   }
 

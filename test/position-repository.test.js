@@ -73,10 +73,13 @@ test('last obsolete caller aborts the producer and a replacement starts fresh wo
   const second = new AbortController();
   let producerCalls = 0;
   let firstSignal;
+  let markStarted;
+  const started = new Promise((resolve) => { markStarted = resolve; });
   const producer = ({ signal }) => {
     producerCalls += 1;
     if (producerCalls > 1) return Promise.resolve('replacement');
     firstSignal = signal;
+    markStarted();
     return new Promise((resolve, reject) => {
       signal.addEventListener('abort', () => {
         const error = new Error('aborted');
@@ -88,6 +91,7 @@ test('last obsolete caller aborts the producer and a replacement starts fresh wo
 
   const firstResult = repository.load(key, 'masters', producer, { signal: first.signal });
   const secondResult = repository.load(key, 'masters', producer, { signal: second.signal });
+  await started;
   const firstRejected = assert.rejects(firstResult, (error) => error?.name === 'AbortError');
   const secondRejected = assert.rejects(secondResult, (error) => error?.name === 'AbortError');
 

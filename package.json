@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --test",
+    "typecheck": "npx --yes --package=typescript@6.0.3 tsc --project tsconfig.json"
   },
   "dependencies": {
     "@lichess-org/chessground": "10.2.0",

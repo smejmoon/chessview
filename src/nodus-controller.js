@@ -47,7 +47,7 @@ export class NodusController {
     discover = null,
     materializeMove = null,
     presenter,
-    log = () => {},
+    log = (..._args) => {},
   }) {
     if (typeof canonicalize !== 'function') throw new TypeError('NodusController requires canonicalize');
     if (typeof structure !== 'function') throw new TypeError('NodusController requires structure');

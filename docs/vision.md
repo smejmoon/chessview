@@ -6,14 +6,11 @@ Chessview turns opening knowledge into a spatial map centered on one canonical c
 
 ## Product language
 
-- **Nodus** — the position currently organizing the map.
-- **Root** — upstream context showing how play can reach the Nodus.
-- **Line** — downstream continuation showing where play can go from the Nodus.
-- **Rail** — supporting controls and evidence beside the map.
+Canonical definitions live in the [Chessview glossary](glossary.md): [Nodus](glossary.md#nodus), [Root](glossary.md#root), [Line](glossary.md#line), and [Rail](glossary.md#rail).
 
 **Roots → Nodus → Lines**
 
-These are product terms. `docs/product.md` and the component documents own their exact behavioral contracts; implementation code may use clearer technical graph or rendering terms.
+This document explains why those terms matter to the product. `docs/product.md` and the component documents own their behavioral contracts; implementation code may use clearer technical graph or rendering terms.
 
 ## User needs
 
@@ -61,4 +58,4 @@ A change moves Chessview forward when it makes the structure around a Nodus easi
 
 ## Documentation boundary
 
-This document owns durable product direction and language. `docs/product.md` owns cross-product conditions that must remain true; component and architecture documents own exact behavior and technical boundaries; `backlog/` owns unfinished work.
+The [glossary](glossary.md) owns canonical term definitions. This document owns durable product direction and why the product language matters. `docs/product.md` owns cross-product conditions that must remain true; component and architecture documents own exact behavior and technical boundaries; `backlog/` owns unfinished work.

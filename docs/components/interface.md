@@ -4,6 +4,8 @@
 
 Own Chessview's position-centered navigation model and spatial presentation.
 
+Terminology follows the [Chessview glossary](../glossary.md), especially [Nodus](../glossary.md#nodus), [Recenter](../glossary.md#recenter), [visible relationship](../glossary.md#visible-relationship), and [move cue](../glossary.md#move-cue).
+
 ## Requirements
 
 - The Nodus is a large playable Chessground board.
@@ -20,8 +22,10 @@ Own Chessview's position-centered navigation model and spatial presentation.
 - The right-side control and evidence surface is the Rail.
 - The `Lines` tab count reports qualifying first-level graph Lines represented by the structural discovery model. Supplementary Rail filtering must not overwrite that count with a broader evidence-row count.
 - The enriched Lines Rail may show additional selectable/evidenced moves that are not automatic Line boards; each such row keeps its rated-Explorer share visible so the distinction from the 5% structural threshold is understandable.
-- Clicking a miniature board recenters immediately.
-- Playing a legal move on the Nodus recenters even when that move is below the automatic-discovery threshold.
+- Clicking a miniature board requests a Recenter to that board's canonical position and recenters immediately.
+- Playing a legal Move on the Nodus requests a Recenter whose target is first materialized from that Move, even when the Move is below the automatic-discovery threshold.
+- A Recenter is the user/application command that selects another Nodus; a caller supplies either a known target position or a Move to materialize into a target.
+- Browser history restoration is distinct from Recenter: it replays previously recorded position-centered state and must not create a new history entry.
 - All visible boards share one global orientation controlled by the flip action.
 - The URL identifies the canonical Nodus, not the navigation path used to reach it.
 - Browser history navigation restores position-centered state consistently.
@@ -38,7 +42,9 @@ The product-level classification of critical, supplementary, and decorative beha
 
 **Current-view commands enter the controller; domain contributors return values; the controller publishes one immutable current view; presentation consumes it.**
 
-`NodusController` is the sole owner allowed to make an asynchronous domain result current. Internal revision identity and publication decisions stay private to that boundary. Structural, evidence, and manual-move contributors receive explicit domain inputs and return values keyed by stable position/node/edge identity; a contributor may receive a scoped cancellation capability to stop obsolete participation, but that capability does not authorize publication or make the contributor own current-view lifetime. Contributors do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals. Commands that can replace the current Nodus, including a legal move played on the board, enter through the controller so an obsolete command result cannot recenter a replacement view.
+`NodusController` is the sole owner allowed to make an asynchronous domain result current. Internal revision identity and publication decisions stay private to that boundary. Structural and evidence contributors receive explicit domain inputs and return values keyed by stable position/node/edge identity. Move materialization is a Position-Graph operation supplied to the controller: it may establish durable graph knowledge and return a target, but it does not decide whether that target becomes current. Contributors do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals.
+
+Every user recenter command enters the controller as a Recenter. A known-board click supplies a target directly; a played Move supplies Move coordinates that must first be materialized. The controller checks that an asynchronous materialization still belongs to the originating current view before accepting its target, so stale completion cannot recenter a replacement view. Browser-history restoration enters separately as recorded route state and does not push another route entry.
 
 The published current view contains the current Nodus-centered view state and the structural/evidence values accepted for that view. Browser history metadata, persistence mechanisms, request scheduling, generation tokens, DOM handles, and Chessground instances remain outside that value. Presentation-only controls such as Guide and Debug may persist their own durable preferences and request a redraw without becoming current-view truth.
 
@@ -55,10 +61,10 @@ Reusable graph enrichment has producer lifetime independent of a single current 
 Deterministic/browser contract tests should cover:
 
 - URL round-tripping for canonical positions;
-- recentering by mini-board click;
-- recentering after a legal Nodus move, including a sub-threshold move;
-- stale completion from a legal Nodus move being unable to recenter a replacement view;
-- browser back/forward navigation;
+- Recenter to a known target by mini-board click;
+- Recenter after a legal Nodus Move, including a sub-threshold Move;
+- stale Move materialization being unable to Recenter a replacement view;
+- browser back/forward restoration without adding a new history entry;
 - Root-left / Line-right directional semantics;
 - global orientation behavior;
 - stable identity between rendered positions/connectors and their graph edges;

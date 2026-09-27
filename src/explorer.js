@@ -1,11 +1,10 @@
-import { Chess } from 'chess.js';
 import {
   AUTO_SAMPLE_FLOOR,
   EXPLORER_TTL_MS,
   canonicalPosition,
   decorateExplorerMoves,
   edgeId,
-  moveToChild,
+  resolveMove,
   stableEdgeOrder,
   toPlayableFen,
   totalGames,
@@ -16,7 +15,7 @@ import {
   hasLineCandidates,
   takeLineCandidate,
 } from './line-frontier.js';
-import { getOutgoing, putManualEdge, replaceExplorerEdges } from './db.js';
+import { getOutgoing, replaceExplorerEdges } from './db.js';
 import { debugLog } from './debug.js';
 import { lichessSession } from './lichess-session.js';
 import { lichessGateway } from './lichess-gateway.js';
@@ -44,13 +43,13 @@ async function reconcileExplorerSnapshot(canonical, explorer) {
   const edges = [];
   for (const move of decorateExplorerMoves(explorer)) {
     try {
-      const child = moveToChild(canonical, { uci: move.uci });
+      const resolved = resolveMove(canonical, { uci: move.uci });
       const edge = {
         id: '',
         source: canonical,
-        target: child.key,
-        uci: child.uci,
-        san: move.san || child.san,
+        target: resolved.target,
+        uci: resolved.uci,
+        san: move.san || resolved.san,
         games: move.games,
         share: move.share,
         qualifies: move.qualifies,
@@ -59,7 +58,7 @@ async function reconcileExplorerSnapshot(canonical, explorer) {
       };
       edge.id = edgeId(edge);
       edges.push(edge);
-      await positionRepository.merge(child.key, { fen: child.fen });
+      await positionRepository.merge(resolved.target, { fen: resolved.fen });
     } catch (error) {
       debugLog('ignored explorer move', { position: canonical, uci: move.uci, error: error?.message ?? String(error) }, 'warn');
     }
@@ -134,40 +133,6 @@ export function loadExplorer(key, { force = false, signal } = {}) {
     debugLog('explorer stored', { position: canonical, games: node.games, edges: edges.length, qualifying: edges.filter((edge) => edge.qualifies).length });
     return node;
   }, { signal });
-}
-
-export async function ensureManualEdge(sourceKey, from, to, promotion = 'q') {
-  const chess = new Chess(toPlayableFen(sourceKey));
-  let played;
-  debugLog('manual move attempt', { source: canonicalPosition(sourceKey), from, to, promotion, turn: chess.turn() });
-  try {
-    played = chess.move({ from, to, promotion });
-  } catch (error) {
-    debugLog('manual move rejected', { source: canonicalPosition(sourceKey), from, to, error: error?.message ?? String(error) }, 'warn');
-    return null;
-  }
-  if (!played) {
-    debugLog('manual move rejected', { source: canonicalPosition(sourceKey), from, to }, 'warn');
-    return null;
-  }
-
-  const target = canonicalPosition(chess.fen());
-  const edge = {
-    source: canonicalPosition(sourceKey),
-    target,
-    uci: `${played.from}${played.to}${played.promotion ?? ''}`,
-    san: played.san,
-    games: 0,
-    share: 0,
-    qualifies: false,
-    manual: true,
-    updatedAt: Date.now(),
-  };
-  edge.id = edgeId(edge);
-  const storedEdge = await putManualEdge(edge);
-  await positionRepository.merge(target, { fen: chess.fen() });
-  debugLog('manual move stored', { san: played.san, uci: edge.uci, source: edge.source, target });
-  return { edge: storedEdge, target };
 }
 
 export async function discoverForViewport(centerKey, budget, onProgress, { signal } = {}) {

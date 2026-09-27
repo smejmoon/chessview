@@ -30,7 +30,7 @@ export function canonicalPosition(fen) {
   return `${placement} ${turn} ${castling || '-'} ${relevantEp}`;
 }
 
-export function moveToChild(sourceKey, move) {
+export function resolveMove(sourceKey, move) {
   const chess = new Chess(toPlayableFen(sourceKey));
   const uciPromotion = move.uci?.slice(4) || undefined;
   const played = chess.move({
@@ -40,10 +40,20 @@ export function moveToChild(sourceKey, move) {
   });
   if (!played) throw new Error(`Illegal move from graph source: ${move.uci ?? ''}`);
   return {
-    key: canonicalPosition(chess.fen()),
+    target: canonicalPosition(chess.fen()),
     fen: chess.fen(),
     san: played.san,
     uci: `${played.from}${played.to}${played.promotion ?? ''}`,
+  };
+}
+
+export function moveToChild(sourceKey, move) {
+  const resolved = resolveMove(sourceKey, move);
+  return {
+    key: resolved.target,
+    fen: resolved.fen,
+    san: resolved.san,
+    uci: resolved.uci,
   };
 }
 

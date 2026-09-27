@@ -5,8 +5,9 @@ import './style.css';
 import './debug.css';
 
 import { canonicalPosition } from './graph.js';
-import { discoverForViewport, ensureManualEdge } from './explorer.js';
+import { discoverForViewport } from './explorer.js';
 import { debugLog } from './debug.js';
+import { materializeMove } from './move-materialization.js';
 import { NodusController } from './nodus-controller.js';
 import { composeNodusStructure } from './nodus-structure.js';
 import { loadNodusEvidence } from './evidence-source.js';
@@ -61,7 +62,7 @@ const controller = new NodusController({
   }),
   evidence: loadNodusEvidence,
   discover,
-  manualMove: ({ source, from, to, promotion }) => ensureManualEdge(source, from, to, promotion),
+  materializeMove,
   presenter,
   log: (message, detail) => debugLog(message, detail),
 });

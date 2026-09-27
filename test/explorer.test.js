@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
-import { canonicalPosition, edgeId, moveToChild, START_FEN } from '../src/graph.js';
+import { canonicalPosition, edgeId, resolveMove, START_FEN } from '../src/graph.js';
 
 globalThis.indexedDB = fakeIndexedDB;
 
@@ -19,7 +19,7 @@ globalThis.window = { location: { href: 'https://example.test/chessview/', searc
 globalThis.history = { state: null, replaceState() {} };
 
 const { clearGraph, getOutgoing, putEdges, putNode } = await import('../src/db.js');
-const { discoverForViewport, ensureManualEdge, loadExplorer } = await import('../src/explorer.js');
+const { discoverForViewport, loadExplorer } = await import('../src/explorer.js');
 
 const center = canonicalPosition(START_FEN);
 
@@ -153,40 +153,17 @@ test('discovery reaches a qualifying sibling instead of collapsing to one descen
   assert.ok((await getOutgoing(e4c5.key)).some((edge) => edge.uci === 'g1f3'));
 });
 
-test('manually exploring a cached Explorer move preserves its statistics', async () => {
-  await clearGraph();
-  await putFreshStartExplorer();
-  globalThis.fetch = async () => {
-    throw new Error('fresh Explorer cache should avoid network');
-  };
-
-  await loadExplorer(center);
-  const before = (await getOutgoing(center)).find((edge) => edge.uci === 'e2e4');
-  assert.ok(before);
-  assert.equal(before.games, 600);
-  assert.equal(before.share, 0.6);
-  assert.equal(before.qualifies, true);
-
-  await ensureManualEdge(center, 'e2', 'e4');
-  const after = (await getOutgoing(center)).find((edge) => edge.uci === 'e2e4');
-  assert.ok(after);
-  assert.equal(after.manual, true);
-  assert.equal(after.games, 600);
-  assert.equal(after.share, 0.6);
-  assert.equal(after.qualifies, true);
-});
-
 test('fresh cached Explorer snapshot repairs a corrupted manual edge without network', async () => {
   await clearGraph();
   const explorer = cachedStartExplorer();
   await putFreshStartExplorer(explorer);
-  const child = moveToChild(center, { uci: 'e2e4' });
+  const resolved = resolveMove(center, { uci: 'e2e4' });
   const corrupted = {
     id: '',
     source: center,
-    target: child.key,
-    uci: child.uci,
-    san: child.san,
+    target: resolved.target,
+    uci: resolved.uci,
+    san: resolved.san,
     games: 0,
     share: 0,
     qualifies: false,

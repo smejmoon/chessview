@@ -63,7 +63,7 @@ test('commands update one immutable current view while RouteLedger and preferenc
   assert.equal(controller.snapshot.navigation.canGoBack, false);
   assert.equal(controller.snapshot.structure.status, 'ready');
 
-  await controller.navigate('b');
+  await controller.recenter({ target: 'b' });
   assert.equal(controller.snapshot.center, 'B');
   assert.equal(controller.snapshot.navigation.canGoBack, true);
   assert.deepEqual(calls.find(([name]) => name === 'push')?.[1], { center: 'B', view: 'roots', navDepth: 1 });
@@ -121,8 +121,8 @@ test('superseded structure results never become current or present after a newer
 
   const starting = controller.start();
   await flush(2);
-  const navigating = controller.navigate('b');
-  await navigating;
+  const recentering = controller.recenter({ target: 'b' });
+  await recentering;
   await flush();
   const afterB = publications.length;
   first.resolve();
@@ -153,7 +153,7 @@ test('contributors return immutable values and receive no controller publication
 
   assert.deepEqual(Object.keys(structureInput).sort(), ['center', 'mode', 'signal']);
   assert.deepEqual(Object.keys(evidenceInput).sort(), ['center', 'mode', 'signal', 'structure']);
-  assert.equal(Object.hasOwn(structureInput, 'navigate'), false);
+  assert.equal(Object.hasOwn(structureInput, 'recenter'), false);
   assert.equal(Object.hasOwn(evidenceInput, 'settle'), false);
   assert.ok(publications.length > 0);
   assert.ok(Object.isFrozen(controller.snapshot));
@@ -163,8 +163,10 @@ test('contributors return immutable values and receive no controller publication
   assert.ok(Object.isFrozen(controller.snapshot.structure.value.composition));
   assert.ok(Object.isFrozen(controller.snapshot.evidence.value));
   assert.ok(Object.isFrozen(publications[0].actions));
-  assert.equal(typeof publications[0].actions.navigate, 'function');
-  assert.equal(typeof publications[0].actions.setMode, 'function');
+  assert.equal(typeof publications[0].actions.recenter, 'function');
+  assert.equal(Object.hasOwn(publications[0].actions, 'transition'), false);
+  assert.equal(Object.hasOwn(publications[0].actions, 'navigate'), false);
+  assert.equal(Object.hasOwn(publications[0].actions, 'playMove'), false);
 });
 
 test('supplementary evidence presents later without blocking or downgrading ready structure', async () => {

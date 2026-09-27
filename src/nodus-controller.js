@@ -28,7 +28,7 @@ export class NodusController {
   #disposed = false;
   #evidence;
   #log;
-  #manualMove;
+  #materializeMove;
   #preferences;
   #presenter;
   #revision = 0;
@@ -45,7 +45,7 @@ export class NodusController {
     structure,
     evidence = null,
     discover = null,
-    manualMove = null,
+    materializeMove = null,
     presenter,
     log = () => {},
   }) {
@@ -60,7 +60,7 @@ export class NodusController {
     this.#structure = structure;
     this.#evidence = evidence;
     this.#discover = discover;
-    this.#manualMove = manualMove;
+    this.#materializeMove = materializeMove;
     this.#presenter = presenter;
     this.#log = log;
     this.#state = {
@@ -72,8 +72,7 @@ export class NodusController {
       evidence: lifecycle('idle'),
     };
     this.#actions = Object.freeze({
-      navigate: (position) => this.navigate(position),
-      playMove: (from, to, promotion) => this.playMove(from, to, promotion),
+      recenter: (request) => this.recenter(request),
       setMode: (mode) => this.setMode(mode),
       flip: () => this.flip(),
       back: () => this.back(),
@@ -100,39 +99,40 @@ export class NodusController {
     return true;
   }
 
-  async navigate(position, { history = 'push' } = {}) {
+  async recenter(request) {
     if (this.#disposed) return false;
-    const next = this.#canonicalize(position);
-    if (next === this.#state.center) return false;
-    const previous = this.#state.center;
-    this.#state.center = next;
-    if (history === 'push') this.#state.navDepth += 1;
-    (history === 'push' ? this.#routeLedger.push : this.#routeLedger.replace)?.(this.#route());
-    this.#log('recenter', { from: previous, to: next, mode: this.#state.mode, navDepth: this.#state.navDepth });
-    await this.#startView('navigate');
-    return true;
-  }
+    const hasTarget = request != null && request.target != null;
+    const hasMove = request?.move != null;
+    if (hasTarget === hasMove) return false;
 
-  async playMove(from, to, promotion = 'q') {
-    if (this.#disposed || typeof this.#manualMove !== 'function') return false;
+    if (hasTarget) return this.#commitRecenter(request.target);
+    if (typeof this.#materializeMove !== 'function') return false;
+
     const run = this.#run;
     const source = this.#state.center;
+    const move = Object.freeze({
+      from: request.move?.from,
+      to: request.move?.to,
+      promotion: request.move?.promotion,
+    });
+
     let result = null;
     try {
-      result = await this.#manualMove(Object.freeze({ source, from, to, promotion }));
+      result = await this.#materializeMove(Object.freeze({ source, move }));
     } catch (error) {
       if (this.#isCurrent(run) && this.#state.center === source) {
-        this.#log('manual move failed', { source, from, to, promotion, error: errorMessage(error) });
+        this.#log('move materialization failed', { source, move, error: errorMessage(error) });
         await this.#presentCurrent('update');
       }
       return false;
     }
+
     if (!this.#isCurrent(run) || this.#state.center !== source) return false;
     if (!result?.target) {
       await this.#presentCurrent('update');
       return false;
     }
-    return this.navigate(result.target);
+    return this.#commitRecenter(result.target);
   }
 
   async restore(route) {
@@ -201,6 +201,18 @@ export class NodusController {
       && run.revision === this.#revision
       && !run.abortController.signal.aborted
     );
+  }
+
+  async #commitRecenter(position) {
+    const next = this.#canonicalize(position);
+    if (next === this.#state.center) return false;
+    const previous = this.#state.center;
+    this.#state.center = next;
+    this.#state.navDepth += 1;
+    this.#routeLedger.push?.(this.#route());
+    this.#log('recenter', { from: previous, to: next, mode: this.#state.mode, navDepth: this.#state.navDepth });
+    await this.#startView('recenter');
+    return true;
   }
 
   async #presentCurrent(kind) {

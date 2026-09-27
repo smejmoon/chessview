@@ -4,6 +4,7 @@ import {
   engineUnavailableLabel,
   humanFailureIndicator,
 } from './evidence-presentation.js';
+import { bindRecenterTarget } from './recenter-input.js';
 
 function escapeHtml(value = '') {
   return String(value)
@@ -135,7 +136,7 @@ function decorateLineRail(root, view, actions, evidence) {
     ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span>Human${mastersFailure ? ' !' : ''}</span><span></span></div>${rows.map(railRowHtml).join('')}`
     : '<div class="rail-empty">No Rail-worthy Lines yet.</div>';
   list.querySelectorAll('[data-eval-nav]').forEach((button) => {
-    button.addEventListener('click', () => actions.navigate(button.dataset.evalNav));
+    bindRecenterTarget(button, actions, () => button.dataset.evalNav);
   });
 }
 

@@ -1,6 +1,6 @@
 # Chessview product contract
 
-[Chessview vision](vision.md) owns the durable product direction and language. This document owns the conditions that must remain true across the product. Detailed behavior and verification belong to the component documents; unfinished outcomes belong in `backlog/`.
+[Chessview vision](vision.md) owns durable product direction; the [glossary](glossary.md) owns canonical term definitions. This document owns the conditions that must remain true across the product. Detailed behavior and verification belong to the component documents; unfinished outcomes belong in `backlog/`.
 
 ## Product usability bar
 
@@ -58,16 +58,16 @@ Global readiness follows the critical structural layer, not completion of every 
 
 ## Cross-product commitments
 
-- The graph is built from canonical chess positions connected by single legal moves; transpositions merge.
+- The graph is built from canonical chess positions connected by single legal [Moves](glossary.md#move) represented as directed [graph edges](glossary.md#graph-edge); transpositions merge.
 - Rated standard Lichess Opening Explorer is the primary human-statistical source. Masters data is a comparison population, and adequate-depth Lichess cloud evaluation supplies engine evidence.
 - Automatic graph expansion is local to each source position: sufficiently sampled moves at or above 5% qualify for automatic discovery.
 - The visible neighborhood is branch-balanced rather than dominated by one broad Line.
 - The Nodus is a large playable board; surrounding boards are navigation surfaces. Root context is left of the Nodus and Line context is right of it.
-- Recentring is position-based. The URL identifies the Nodus, not the path used to reach it.
+- Recentring is position-based: a [Recenter](glossary.md#recenter) selects the next Nodus, while the URL identifies that Nodus rather than the path used to reach it; browser history may restore an earlier recorded Nodus without creating a new Recenter.
 - Discovered graph and evidence data persist in the browser.
 - Application-issued Lichess API requests are coordinated application-wide through `LichessGateway`; transport failure is not interpreted as absence of chess evidence.
 - Production remains a static GitHub Pages deployment.
 
 ## Ownership
 
-`docs/vision.md` owns why Chessview exists and its canonical product language. This file owns cross-product conditions that must remain true. `docs/components/` owns exact component behavior and verification, while `docs/architecture/` owns independently maintained technical boundaries. `backlog/` owns work that is still intended but incomplete.
+The [glossary](glossary.md) owns canonical definitions. `docs/vision.md` owns why Chessview exists and why its product language matters. This file owns cross-product conditions that must remain true. `docs/components/` owns exact component behavior and verification, while `docs/architecture/` owns independently maintained technical boundaries. `backlog/` owns work that is still intended but incomplete.

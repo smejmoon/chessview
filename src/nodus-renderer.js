@@ -15,6 +15,11 @@ import {
 } from './debug.js';
 import { decorateEvidencePresentation } from './eval-ui.js';
 import { decorateRootPresentation } from './root-presentation.js';
+import {
+  bindRecenterTarget,
+  createBoardMoveRecenterHandler,
+  promptPromotion,
+} from './recenter-input.js';
 import { viewStatusSpec } from './view-status.js';
 
 function percent(value) { return `${Math.round((value ?? 0) * 100)}%`; }
@@ -112,7 +117,7 @@ export function createNodusRenderer({
   function bindControls(actions) {
     app.querySelector('#roots-tab')?.addEventListener('click', () => actions.setMode('roots'));
     app.querySelector('#lines-tab')?.addEventListener('click', () => actions.setMode('lines'));
-    app.querySelectorAll('[data-nav-key]').forEach((button) => button.addEventListener('click', () => actions.navigate(button.dataset.navKey)));
+    app.querySelectorAll('[data-nav-key]').forEach((button) => bindRecenterTarget(button, actions, () => button.dataset.navKey));
     app.querySelector('#back')?.addEventListener('click', actions.back);
     app.querySelector('#flip')?.addEventListener('click', actions.flip);
     app.querySelector('#guide-toggle')?.addEventListener('click', () => {
@@ -149,7 +154,7 @@ export function createNodusRenderer({
       wrapper.style.setProperty('--x', `${point.x}%`);
       wrapper.style.setProperty('--y', `${point.y}%`);
       wrapper.innerHTML = `<span class="mini-label"><span class="relation">${relationLabel(item, view.mode)}</span><strong>${escapeHtml(item.edge?.san ?? '')}</strong></span><span class="mini-board board-frame"></span>${node.opening?.name ? `<span class="opening-label">${escapeHtml(node.opening.name)}</span>` : ''}`;
-      wrapper.addEventListener('click', () => actions.navigate(item.key));
+      bindRecenterTarget(wrapper, actions, item.key);
       host.appendChild(wrapper);
       boards.add(Chessground(wrapper.querySelector('.mini-board'), {
         fen: toPlayableFen(item.key),
@@ -205,9 +210,11 @@ export function createNodusRenderer({
         dests: legalDestinations(view.center),
         showDests: true,
         events: {
-          after: async (from, to) => {
-            await actions.playMove(from, to, 'q');
-          },
+          after: createBoardMoveRecenterHandler({
+            source: view.center,
+            actions,
+            choosePromotion: (choices) => promptPromotion(window, choices),
+          }),
         },
       },
       draggable: { enabled: true, showGhost: true },

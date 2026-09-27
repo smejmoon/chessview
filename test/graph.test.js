@@ -6,6 +6,8 @@ import {
   chooseNeighborhood,
   decorateExplorerMoves,
   omittedShare,
+  resolveMove,
+  START_FEN,
 } from '../src/graph.js';
 
 function play(sequence) {
@@ -18,6 +20,18 @@ test('canonical identity ignores FEN counters', () => {
   const a = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   const b = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 47 99';
   assert.equal(canonicalPosition(a), canonicalPosition(b));
+});
+
+test('Resolve Move returns the canonical target and move notation', () => {
+  const source = canonicalPosition(START_FEN);
+  const resolved = resolveMove(source, { uci: 'e2e4' });
+  const chess = new Chess(START_FEN);
+  const played = chess.move('e4');
+
+  assert.equal(resolved.target, canonicalPosition(chess.fen()));
+  assert.equal(resolved.fen, chess.fen());
+  assert.equal(resolved.san, played.san);
+  assert.equal(resolved.uci, 'e2e4');
 });
 
 test('canonical identity preserves only relevant en-passant state', () => {

@@ -42,6 +42,30 @@ test('position repository reuses an in-memory record before persistence fallback
   assert.equal(reads, 1);
 });
 
+test('concurrent facet merges preserve both updates on one canonical record', async () => {
+  let version = 0;
+  const stored = new Map([[key, { key, fen: START_FEN }]]);
+  const repository = createPositionRepository({
+    read: async (position) => stored.get(position) ?? null,
+    write: async (record) => {
+      await Promise.resolve();
+      stored.set(record.key, record);
+      version += 1;
+      return record;
+    },
+    version: () => version,
+  });
+
+  await Promise.all([
+    repository.merge(key, { cloudEval: { depth: 22 } }),
+    repository.merge(key, { mastersExplorer: { moves: [] } }),
+  ]);
+
+  const record = await repository.get(key);
+  assert.equal(record.cloudEval.depth, 22);
+  assert.deepEqual(record.mastersExplorer, { moves: [] });
+});
+
 test('one obsolete caller detaches without cancelling shared position work', async () => {
   const repository = createPositionRepository({ read: async () => null, write: async (value) => value, version: () => 0 });
   const first = new AbortController();

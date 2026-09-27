@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseNeighborhood, chooseRootNeighborhood } from '../src/graph.js';
+import { chooseLineNeighborhood, chooseRootNeighborhood } from '../src/visible-graph.js';
 import { lineStrokeWidth } from '../src/edge-visual.js';
 import { visibleConnectors } from '../src/map-render.js';
 
@@ -19,10 +19,10 @@ test('Line connector planning keeps every convergence relationship and every fam
     ['shared', [{ source: 'shared', target: 'after', uci: 'shared-after', share: 0.9, qualifies: true }]],
   ]);
 
-  const composition = chooseNeighborhood({ center: 'center', outgoingBySource, max: 4 });
-  const connectors = visibleConnectors(composition);
+  const composition = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 4 });
+  const connectors = visibleConnectors(composition, { direction: 'lines' });
 
-  assert.equal(composition.filter((node) => node.key === 'shared').length, 1);
+  assert.equal(composition.nodes.filter((node) => node.key === 'shared').length, 1);
   assert.deepEqual(
     connectors.filter((connector) => connector.target === 'shared').map((connector) => connector.relationshipId),
     ['a|a-shared|shared', 'b|b-shared|shared'],
@@ -46,11 +46,11 @@ test('Root connector planning draws every downstream relationship from one merge
   ]);
 
   const composition = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 3 });
-  const connectors = visibleConnectors(composition);
+  const connectors = visibleConnectors(composition, { direction: 'roots' });
   const fromShared = connectors.filter((connector) => connector.source === 'shared');
 
-  assert.equal(composition.filter((node) => node.key === 'shared').length, 1);
-  assert.equal(composition.find((node) => node.key === 'shared')?.merge, true);
+  assert.equal(composition.nodes.filter((node) => node.key === 'shared').length, 1);
+  assert.equal(composition.nodes.find((node) => node.key === 'shared')?.merge, true);
   assert.deepEqual(fromShared.map((connector) => connector.target), ['a', 'b']);
   assert.ok(fromShared.every((connector) => connector.className.includes('edge-merge')));
 });

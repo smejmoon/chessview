@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
 import {
   canonicalPosition,
-  chooseNeighborhood,
   decorateExplorerMoves,
   omittedShare,
   resolveMove,
   START_FEN,
 } from '../src/graph.js';
+import { chooseLineNeighborhood } from '../src/visible-graph.js';
 
 function play(sequence) {
   const chess = new Chess();
@@ -86,11 +86,11 @@ test('branch-balanced neighborhood gives roots space before going deeper', () =>
     ['b1', [{ source: 'b1', target: 'b2', uci: 'b2', share: 0.7, qualifies: true }]],
   ]);
 
-  const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 4 });
-  assert.deepEqual(selected.map((item) => item.key), ['a1', 'b1', 'a2', 'b2']);
-  assert.deepEqual(selected.map((item) => item.lineShare), [0.6, 0.3, 0.6, 0.3]);
-  assert.equal(selected.find((item) => item.key === 'a1')?.merge, false);
-  assert.equal(selected.length, 4);
+  const selected = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 4 });
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a1', 'b1', 'a2', 'b2']);
+  assert.deepEqual(selected.nodes.map((item) => item.lineShare), [0.6, 0.3, 0.6, 0.3]);
+  assert.equal(selected.nodes.find((item) => item.key === 'a1')?.merge, false);
+  assert.equal(selected.nodes.length, 4);
 });
 
 test('bushy Line siblings remain reachable while first-level Lines stay round-robin', () => {
@@ -109,9 +109,9 @@ test('bushy Line siblings remain reachable while first-level Lines stay round-ro
     ['b2', [{ source: 'b2', target: 'b3', uci: 'b3', share: 0.7, qualifies: true }]],
   ]);
 
-  const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 7 });
-  assert.deepEqual(selected.map((item) => item.key), ['a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'ax']);
-  assert.equal(selected.find((item) => item.key === 'ax')?.branch, 'a');
+  const selected = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 7 });
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'ax']);
+  assert.equal(selected.nodes.find((item) => item.key === 'ax')?.branch, 'a');
 });
 
 test('Line convergence keeps one board and every visible family relationship', () => {
@@ -125,27 +125,29 @@ test('Line convergence keeps one board and every visible family relationship', (
     ['shared', [{ source: 'shared', target: 'after', uci: 'shared-after', share: 0.9, qualifies: true }]],
   ]);
 
-  const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 4 });
-  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared', 'after']);
-  assert.deepEqual(selected.find((item) => item.key === 'shared')?.families, ['line-a', 'line-b']);
-  assert.deepEqual(selected.find((item) => item.key === 'after')?.families, ['line-a', 'line-b']);
-  assert.equal(selected.find((item) => item.key === 'shared')?.merge, true);
-  assert.equal(selected.find((item) => item.key === 'after')?.merge, false);
+  const selected = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 4 });
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a', 'b', 'shared', 'after']);
+  assert.deepEqual(selected.nodes.find((item) => item.key === 'shared')?.families, ['line-a', 'line-b']);
+  assert.deepEqual(selected.nodes.find((item) => item.key === 'after')?.families, ['line-a', 'line-b']);
+  assert.equal(selected.nodes.find((item) => item.key === 'shared')?.merge, true);
+  assert.equal(selected.nodes.find((item) => item.key === 'after')?.merge, false);
 
   const intoShared = selected.relationships.filter((relationship) => relationship.target === 'shared');
   assert.equal(intoShared.length, 2);
   assert.deepEqual(intoShared.map((relationship) => relationship.families), [['line-a'], ['line-b']]);
-  assert.deepEqual(selected.relationshipsFor('shared', { outgoing: false }), intoShared);
 
   const sharedAfter = selected.relationships.find((relationship) => relationship.id === 'shared|shared-after|after');
   assert.deepEqual(sharedAfter?.families, ['line-a', 'line-b']);
   assert.deepEqual(
-    sharedAfter?.families.map((family) => selected.familyById.get(family)?.lineShare),
+    sharedAfter?.families.map((family) => selected.families.find((item) => item.id === family)?.lineShare),
     [0.6, 0.25],
   );
   assert.equal(Object.hasOwn(sharedAfter ?? {}, 'lineShare'), false);
-  assert.deepEqual(selected.relationshipsFor('shared', { incoming: false }), [sharedAfter]);
-  assert.equal(selected.length, 4);
+  assert.deepEqual(
+    selected.relationships.filter((relationship) => relationship.source === 'shared'),
+    [sharedAfter],
+  );
+  assert.equal(selected.nodes.length, 4);
 });
 
 test('Line convergence still records zero-cost relationships when the board budget is full', () => {
@@ -158,36 +160,37 @@ test('Line convergence still records zero-cost relationships when the board budg
     ['b', [{ source: 'b', target: 'shared', uci: 'b-shared', share: 0.8, qualifies: true }]],
   ]);
 
-  const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 3 });
-  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared']);
-  assert.deepEqual(selected.find((item) => item.key === 'shared')?.families, ['line-a', 'line-b']);
+  const selected = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 3 });
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a', 'b', 'shared']);
+  assert.deepEqual(selected.nodes.find((item) => item.key === 'shared')?.families, ['line-a', 'line-b']);
   assert.equal(selected.relationships.filter((relationship) => relationship.target === 'shared').length, 2);
 });
 
-test('visible Line composition exposes stable node edge and family identity', () => {
+test('visible Line composition exposes only the canonical value shape', () => {
   const outgoingBySource = new Map([
     ['center', [{ source: 'center', target: 'a', uci: 'line-a', share: 0.6, qualifies: true }]],
   ]);
-  const selected = chooseNeighborhood({ center: 'center', outgoingBySource, max: 2 });
-  assert.equal(selected.direction, 'lines');
-  assert.equal(selected.nodes, selected);
-  assert.deepEqual(selected.families, [{ id: 'line-a', direction: 'lines', lineShare: 0.6, rootEdgeId: 'center|line-a|a' }]);
-  assert.equal(selected.familyById.get('line-a'), selected.families[0]);
+  const selected = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 2 });
+
+  assert.deepEqual(Object.keys(selected).sort(), ['families', 'nodes', 'relationships']);
+  assert.deepEqual(selected.families, [{ id: 'line-a', lineShare: 0.6, rootEdgeId: 'center|line-a|a' }]);
   assert.equal(selected.relationships[0].id, 'center|line-a|a');
-  assert.equal(selected.nodeByKey.get('a'), selected[0]);
-  assert.deepEqual(selected.relationshipsFor('a'), [selected.relationships[0]]);
-  assert.deepEqual(selected.relationshipsFor('missing'), []);
+  assert.equal(selected.nodes[0].key, 'a');
+  assert.equal(Object.hasOwn(selected, 'direction'), false);
+  assert.equal(Object.hasOwn(selected, 'nodeByKey'), false);
+  assert.equal(Object.hasOwn(selected, 'familyById'), false);
+  assert.equal(Object.hasOwn(selected, 'relationshipsFor'), false);
 });
 
-test('neighborhood selection is deterministic', () => {
+test('Line neighborhood selection is deterministic', () => {
   const outgoingBySource = new Map([
     ['center', [
       { source: 'center', target: 'b', uci: 'b', share: 0.2, qualifies: true },
       { source: 'center', target: 'a', uci: 'a', share: 0.2, qualifies: true },
     ]],
   ]);
-  const first = chooseNeighborhood({ center: 'center', outgoingBySource, max: 2 });
-  const second = chooseNeighborhood({ center: 'center', outgoingBySource, max: 2 });
+  const first = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 2 });
+  const second = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 2 });
   assert.deepEqual(first, second);
-  assert.deepEqual(first.map((item) => item.key), ['a', 'b']);
+  assert.deepEqual(first.nodes.map((item) => item.key), ['a', 'b']);
 });

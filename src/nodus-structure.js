@@ -2,11 +2,10 @@ import { getIncoming, getOutgoing } from './db.js';
 import {
   START_FEN,
   canonicalPosition,
-  chooseNeighborhood,
-  chooseRootNeighborhood,
   stableEdgeOrder,
   toPlayableFen,
 } from './graph.js';
+import { chooseLineNeighborhood, chooseRootNeighborhood } from './visible-graph.js';
 import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { positionRepository } from './position-repository.js';
 import { rootTranspositionEnricher } from './root-enrichment.js';
@@ -31,30 +30,6 @@ function immutable(value) {
     ));
   }
   return value;
-}
-
-function normalizeComposition(value) {
-  const nodes = (value?.nodes ?? value ?? []).map((node) => ({
-    ...node,
-    families: [...(node.families ?? [])],
-    branches: [...(node.branches ?? [])],
-    relationships: [...(node.relationships ?? [])],
-    edges: node.edges?.map((edge) => ({ ...edge })),
-    edge: node.edge ? { ...node.edge } : null,
-  }));
-  const relationships = (value?.relationships ?? []).map((relationship) => ({
-    ...relationship,
-    families: [...(relationship.families ?? [])],
-    edge: relationship.edge ? { ...relationship.edge } : null,
-  }));
-  const families = (value?.families ?? []).map((family) => ({ ...family }));
-  return immutable({
-    center: value?.center,
-    direction: value?.direction,
-    nodes,
-    relationships,
-    families,
-  });
 }
 
 async function collectOutgoingGraph(center, max, signal) {
@@ -160,11 +135,11 @@ export async function composeNodusStructure({ center, mode, max = 19, signal }) 
     selected = chooseRootNeighborhood({ center, incomingByTarget, max });
   } else {
     const outgoingBySource = await collectOutgoingGraph(center, max, signal);
-    selected = chooseNeighborhood({ center, incoming: [], outgoingBySource, max });
+    selected = chooseLineNeighborhood({ center, incoming: [], outgoingBySource, max });
   }
   throwIfAborted(signal);
 
-  const composition = normalizeComposition(selected);
+  const composition = immutable(selected);
   const keys = [center, ...composition.nodes.map((node) => node.key)];
   const nodeValues = await Promise.all(keys.map(async (key) => {
     const value = (await positionRepository.get(key)) ?? { key, fen: toPlayableFen(key) };

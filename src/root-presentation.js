@@ -9,7 +9,7 @@ function relationshipsFor(composition, key, options = {}) {
 }
 
 function rootStructure(map, composition) {
-  if (!map || composition?.direction !== 'roots') return null;
+  if (!map || !composition) return null;
   const satellites = new Map([...map.querySelectorAll('.satellite[data-key]')].map((element) => [element.dataset.key, element]));
   const entries = (composition.nodes ?? []).map((node) => {
     const satellite = satellites.get(node.key);

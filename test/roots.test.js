@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseRootNeighborhood } from '../src/graph.js';
+import { chooseRootNeighborhood } from '../src/visible-graph.js';
 
 function edge(source, target, uci, games = 0) {
   return { source, target, uci, san: uci, games, share: 0.1 };
@@ -14,11 +14,11 @@ test('Roots gives each immediate family ancestry before returning to a bushy fam
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 5 });
-  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'aa', 'bb', 'ax']);
-  assert.deepEqual(selected.map((item) => item.distance), [1, 1, 2, 2, 2]);
-  assert.ok(selected.every((item) => item.relation === 'root'));
-  assert.equal(selected.find((item) => item.key === 'a')?.merge, false);
-  assert.deepEqual(selected.find((item) => item.key === 'a')?.edges.map((item) => item.target), ['center']);
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a', 'b', 'aa', 'bb', 'ax']);
+  assert.deepEqual(selected.nodes.map((item) => item.distance), [1, 1, 2, 2, 2]);
+  assert.ok(selected.nodes.every((item) => item.relation === 'root'));
+  assert.equal(selected.nodes.find((item) => item.key === 'a')?.merge, false);
+  assert.deepEqual(selected.nodes.find((item) => item.key === 'a')?.edges.map((item) => item.target), ['center']);
 });
 
 test('Roots stays shallow-first inside each immediate family', () => {
@@ -30,7 +30,7 @@ test('Roots stays shallow-first inside each immediate family', () => {
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 6 });
-  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'aa', 'bb', 'ax', 'aaa']);
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a', 'b', 'aa', 'bb', 'ax', 'aaa']);
 });
 
 test('Roots merges a transposed ancestor and keeps every visible downstream edge', () => {
@@ -41,9 +41,9 @@ test('Roots merges a transposed ancestor and keeps every visible downstream edge
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 8 });
-  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared']);
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a', 'b', 'shared']);
 
-  const shared = selected.find((item) => item.key === 'shared');
+  const shared = selected.nodes.find((item) => item.key === 'shared');
   assert.deepEqual(shared.branches, ['a', 'b']);
   assert.deepEqual(shared.edges.map((item) => item.target), ['a', 'b']);
   assert.equal(shared.merge, true);
@@ -57,12 +57,12 @@ test('Roots keep zero-cost convergence relationships when the board budget is fu
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 3 });
-  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared']);
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a', 'b', 'shared']);
 
-  const shared = selected.find((item) => item.key === 'shared');
+  const shared = selected.nodes.find((item) => item.key === 'shared');
   assert.deepEqual(shared.branches, ['a', 'b']);
   assert.deepEqual(shared.edges.map((item) => item.target), ['a', 'b']);
-  assert.equal(selected.length, 3);
+  assert.equal(selected.nodes.length, 3);
 });
 
 test('ancestry above a transposition inherits all converged Root families', () => {
@@ -74,8 +74,8 @@ test('ancestry above a transposition inherits all converged Root families', () =
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 4 });
-  assert.deepEqual(selected.map((item) => item.key), ['a', 'b', 'shared', 'upstream']);
-  const upstream = selected.find((item) => item.key === 'upstream');
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a', 'b', 'shared', 'upstream']);
+  const upstream = selected.nodes.find((item) => item.key === 'upstream');
   assert.deepEqual(upstream.branches, ['a', 'b']);
   assert.equal(upstream.merge, false);
   assert.deepEqual(upstream.edges.map((item) => item.target), ['shared']);
@@ -88,5 +88,5 @@ test('Roots selection is deterministic and respects its visible budget', () => {
   const first = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 2 });
   const second = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 2 });
   assert.deepEqual(first, second);
-  assert.deepEqual(first.map((item) => item.key), ['a', 'b']);
+  assert.deepEqual(first.nodes.map((item) => item.key), ['a', 'b']);
 });

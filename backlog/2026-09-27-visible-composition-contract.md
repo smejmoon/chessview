@@ -1,44 +1,36 @@
 # Do:
 
-Replace the visible graph's hybrid array/object compatibility shape with an explicit source-owned visible-composition contract, then move direct consumers to that contract so `src/nodus-structure.js` no longer has to normalize both an array and an object-shaped composition.
+Run deterministic tests, TypeScript checking, and the production build against the current `koko` tip. If all verification passes, close this outcome.
+
+# Blocked:
+
+Execution verification is blocked until a repository execution path is available for `npm test`, `npm run typecheck`, and `npm run build` on `koko`.
 
 # Because:
 
-`src/visible-graph.js` currently returns the `nodes` array after attaching `center`, `direction`, `nodes` (self-reference), `relationships`, `families`, lookup maps, and `relationshipsFor` to that same array. This keeps older iterable consumers working, but it means one runtime value simultaneously represents a node list and the whole visible composition.
+`src/visible-graph.js` owns visible Roots/Lines selection together with its private mutable builder and publishes one plain `{ nodes, relationships, families }` value. Builder lookup maps and `relationshipsFor`, plus Nodus context such as center and direction, are not part of the returned composition.
 
-`src/nodus-structure.js` exposes the ambiguity directly in `normalizeComposition`: it reads nodes through `value?.nodes ?? value ?? []` while separately reading `value?.relationships` and `value?.families`. That dual acceptance makes the real domain boundary harder to state and is a likely source of the next useful static-type mismatch now that the `composeNodusStructure` call contract is source-owned.
+`src/graph.js` now retains durable chess/graph utilities rather than visible-neighborhood selection, and `src/nodus-structure.js` consumes the source-owned composition directly without `normalizeComposition` or dual array/object interpretation.
+
+Direct consumers and tests use `composition.nodes`; map rendering receives Roots/Lines direction explicitly from the Nodus view context instead of recovering it from the composition.
 
 # Edges:
 
 Keep the visible composition transient and limited to view composition. Do not turn it into persisted graph state, scheduling state, or a large orchestration object.
 
-Preserve current selection semantics, deterministic ordering, merge/family metadata, board-count limits, and existing Roots/Lines behavior. This outcome is about the boundary representation and its direct consumers, not a repository-wide TypeScript conversion or a redesign of graph selection.
+Preserve current selection semantics, deterministic ordering, merge/family metadata, board-count limits, and existing Roots/Lines behavior. Root-label generation and other wider Nodus-structure responsibilities remain outside this outcome.
 
-A compatibility adapter is acceptable temporarily if a direct consumer still genuinely needs an iterable node array, but the canonical result should have one unambiguous shape rather than an array carrying composition fields.
-
-# Unsettled:
-
-Settle the smallest canonical `VisibleComposition` shape and where it is owned. In particular, decide whether lookup maps and `relationshipsFor` belong on the returned value, remain private to the builder, or move behind separate query helpers.
-
-Settle whether the source-owned contract is best expressed with checked JSDoc in the current JavaScript module or by migrating the owning module to TypeScript. Prefer whichever makes the boundary explicit without forcing unrelated migration.
-
-Settle which legacy consumers, if any, still require raw array iteration and whether they should be migrated directly or served by a narrow compatibility view.
+No repository-wide TypeScript conversion or compatibility adapter is required by the implemented boundary.
 
 # Complete:
 
-`createVisibleGraph(...).result()` has one explicit canonical composition shape; direct consumers use that shape without dual array/object interpretation; `normalizeComposition` no longer needs `value?.nodes ?? value`; and deterministic tests, TypeScript checking, and the production build pass without weakening compiler settings.
+Visible composition has one source-owned canonical `{ nodes, relationships, families }` shape; visible selection and its private builder share that owner; direct consumers use the canonical shape without dual array/object interpretation; and deterministic tests, TypeScript checking, and the production build pass without weakening compiler settings.
 
 # Steps:
 
-Inventory direct consumers of `createVisibleGraph(...).result()` and distinguish composition consumers from node-list-only consumers.
+Run `npm test`, `npm run typecheck`, and `npm run build` against the current `koko` tip.
 
-Define the source-owned visible-composition contract at the smallest owning boundary.
-
-Refactor the result representation and direct consumers, retaining only narrowly justified compatibility code.
-
-Remove the dual-shape normalization path once no direct consumer requires it.
-
-Run deterministic tests, TypeScript checking, and the production build, then sync this entry around anything still open.
+If all three pass, run Backlog Close for this outcome; otherwise rewrite this entry around the concrete remaining failure.
 
 # Sync:
 

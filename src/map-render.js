@@ -2,18 +2,17 @@ import { lineStrokeWidth } from './edge-visual.js';
 
 function familyRecord(composition, id) {
   if (!id) return null;
-  const indexed = composition?.familyById?.get?.(id);
-  if (indexed) return indexed;
   return composition?.families?.find?.((family) => family.id === id) ?? null;
 }
 
 function nodeRecord(composition, key) {
-  const indexed = composition?.nodeByKey?.get?.(key);
-  if (indexed) return indexed;
   return composition?.nodes?.find?.((node) => node.key === key) ?? null;
 }
 
-export function visibleConnectors(composition, { direction = composition?.direction } = {}) {
+export function visibleConnectors(composition, { direction }) {
+  if (direction !== 'lines' && direction !== 'roots') {
+    throw new TypeError('visibleConnectors requires a roots or lines direction');
+  }
   const relationships = Array.isArray(composition?.relationships) ? composition.relationships : [];
 
   return relationships.flatMap((relationship) => {
@@ -102,7 +101,7 @@ function retainedEvidenceClasses(svg) {
   return result;
 }
 
-export function drawVisibleEdges(map, composition, { direction = composition?.direction } = {}) {
+export function drawVisibleEdges(map, composition, { direction }) {
   const svg = map?.querySelector('#edges');
   if (!map || !svg) return [];
 

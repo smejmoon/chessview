@@ -63,7 +63,7 @@ function relationLabel(item, mode) {
 
 function emptyStructure(center) {
   return {
-    composition: { center, direction: 'lines', nodes: [], relationships: [], families: [] },
+    composition: { nodes: [], relationships: [], families: [] },
     centerNode: { key: center },
     positions: [],
     incomingCount: 0,

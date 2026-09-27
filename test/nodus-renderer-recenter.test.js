@@ -104,7 +104,7 @@ function viewFor(center, positions = []) {
       status: 'ready',
       error: null,
       value: {
-        composition: { center, direction: 'lines', nodes: [], relationships: [], families: [] },
+        composition: { nodes: [], relationships: [], families: [] },
         centerNode: { key: center },
         positions,
         incomingCount: 0,

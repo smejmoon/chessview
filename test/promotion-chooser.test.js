@@ -143,6 +143,36 @@ test('promotion chooser follows the destination file and promotion edge', async 
   }
 });
 
+test('same-center sync updates promotion placement after orientation changes', async () => {
+  const { createPromotionChooser, close } = await loadChooser();
+  try {
+    const document = new FakeDocument();
+    const { app } = fixture(document);
+    const chooser = createPromotionChooser({ app });
+    const pending = chooser.choose({
+      center: 'position',
+      to: 'e8',
+      choices: ['q', 'r', 'b', 'n'],
+      orientation: 'white',
+      color: 'white',
+    });
+
+    let queen = app.querySelector('[data-promotion="q"]');
+    assert.equal(queen.style.getPropertyValue('left'), '50%');
+    assert.equal(queen.style.getPropertyValue('top'), '0%');
+
+    assert.equal(chooser.sync({ center: 'position', orientation: 'black', color: 'white' }), true);
+    queen = app.querySelector('[data-promotion="q"]');
+    assert.equal(queen.style.getPropertyValue('left'), '37.5%');
+    assert.equal(queen.style.getPropertyValue('top'), '87.5%');
+
+    chooser.cancel();
+    assert.equal(await pending, null);
+  } finally {
+    await close();
+  }
+});
+
 test('backdrop and Escape cancel without selecting a promotion', async () => {
   const { createPromotionChooser, close } = await loadChooser();
   try {
@@ -173,12 +203,12 @@ test('same-center sync recreates the chooser after renderer replacement', async 
     first.remove();
     assert.equal(board.children.length, 0);
 
-    assert.equal(chooser.sync('position'), true);
+    assert.equal(chooser.sync({ center: 'position', orientation: 'white', color: 'white' }), true);
     const replacement = app.querySelector('#promotion-choice');
     assert.ok(replacement);
     assert.notEqual(replacement, first);
 
-    chooser.sync('different-position');
+    chooser.sync({ center: 'different-position', orientation: 'white', color: 'white' });
     assert.equal(await pending, null);
   } finally {
     await close();

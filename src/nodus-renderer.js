@@ -1,4 +1,5 @@
 import { Chessground } from '@lichess-org/chessground';
+import './chessground-overrides.css';
 import {
   legalDestinations,
   omittedShare,
@@ -233,7 +234,7 @@ export function createNodusRenderer({
     renderSatellites(view, structure, actions);
     decorateRootPresentation(app, view);
     decorateEvidencePresentation(app, view, actions, { showGuide: guide });
-    promotionChooser.sync(view.center);
+    promotionChooser.sync({ center: view.center, orientation: view.orientation, color: turn });
   }
 
   function renderFailure(view, actions, error, presentation = 'failed') {

@@ -4,6 +4,12 @@ import test from 'node:test';
 import { createServer } from 'vite';
 import { canonicalPosition, resolveMove, START_FEN } from '../src/graph.js';
 
+class FakeStyle {
+  constructor() { this.values = new Map(); }
+  setProperty(name, value) { this.values.set(name, value); }
+  getPropertyValue(name) { return this.values.get(name) ?? ''; }
+}
+
 class FakeElement {
   constructor(ownerDocument, { id = '' } = {}) {
     this.ownerDocument = ownerDocument;
@@ -13,7 +19,7 @@ class FakeElement {
     this.listeners = new Map();
     this.attributes = new Map();
     this.parentNode = null;
-    this.style = { setProperty() {} };
+    this.style = new FakeStyle();
     this.classList = {
       add() {},
       remove() {},
@@ -182,6 +188,37 @@ for (const promotion of ['q', 'n', 'r', 'b']) {
     assert.deepEqual(calls, [['recenter', { move: { from: 'e7', to: 'e8', promotion } }]]);
   }));
 }
+
+test('NodusRenderer keeps a pending promotion aligned when the board flips', async () => withRenderer(async (createNodusRenderer) => {
+  const source = canonicalPosition('k7/4P3/8/8/8/8/8/7K w - - 0 1');
+  const document = new FakeDocument();
+  const app = new FakeElement(document, { id: 'app' });
+  const calls = [];
+  const actions = {
+    recenter(request) { calls.push(['recenter', request]); return true; },
+    redraw() { calls.push(['redraw']); return true; },
+    setMode() {}, back() {}, flip() {},
+  };
+  const renderer = createNodusRenderer({ app, preferences: {} });
+  const whiteView = viewFor(source);
+  renderer.render(whiteView, actions);
+
+  const whiteBoard = globalThis.__chessviewRendererBoardCalls.find(({ element }) => element?.id === 'center-board');
+  const move = whiteBoard.config.movable.events.after('e7', 'e8');
+  let queen = app.centerBoard.querySelector('[data-promotion="q"]');
+  assert.equal(queen.style.getPropertyValue('left'), '50%');
+  assert.equal(queen.style.getPropertyValue('top'), '0%');
+
+  renderer.render({ ...whiteView, orientation: 'black' }, actions);
+  queen = app.centerBoard.querySelector('[data-promotion="q"]');
+  assert.ok(queen);
+  assert.equal(queen.style.getPropertyValue('left'), '37.5%');
+  assert.equal(queen.style.getPropertyValue('top'), '87.5%');
+
+  queen.emit('click', { stopPropagation() {} });
+  assert.equal(await move, true);
+  assert.deepEqual(calls, [['recenter', { move: { from: 'e7', to: 'e8', promotion: 'q' } }]]);
+}));
 
 test('NodusRenderer promotion backdrop cancels without Recenter', async () => withRenderer(async (createNodusRenderer) => {
   const source = canonicalPosition('k7/4P3/8/8/8/8/8/7K w - - 0 1');

@@ -1,30 +1,32 @@
 # Do:
 
-Run the deterministic test verification and manually verify the published board-native promotion chooser on desktop and narrow layouts; fix any failures that verification exposes.
+Run the deterministic test verification and manually verify the latest published board-native promotion chooser on desktop and narrow layouts.
 
 # Blocked:
 
-Completion awaits the deterministic test run and manual browser verification of the latest preview. The current promotion implementation, including the coordinate-label correction, has passed the repository's static Pages build and publish path.
+Completion awaits the deterministic test run and manual browser verification of the latest preview. The exact implementation tip that adds orientation-aware promotion sync and renderer-owned Chessground coordinate overrides has passed the repository's static Pages build and publish path.
 
 # Because:
 
 `src/promotion-chooser.js` owns a Lichess-style destination-file promotion overlay using Chessground's existing piece theme, while `src/recenter-input.js::promotionChoices()` still derives legal promotion pieces through `resolveMove()`. The selected piece is passed unchanged through the existing Move/Recenter path; backdrop or Escape dismissal resolves as cancel and the existing handler redraws without Recenter.
 
-Chessground's stock coordinate CSS positions labels partly outside the board, which conflicted with Chessview's clipped Nodus frame and made file/rank labels look shifted. `src/chessground-overrides.css` now keeps center-board coordinates inside their squares without changing move, FEN, or promotion geometry.
+A pending chooser now synchronizes its placement inputs from each renderer publication, so flipping the current Nodus preserves the pending choice while remapping it to the newly oriented destination file and promotion edge. Deterministic chooser and renderer coverage now exercise that same-center orientation change.
+
+Chessground's stock coordinate CSS positions labels partly outside the board, which conflicts with Chessview's clipped Nodus frame. `src/chessground-overrides.css` keeps center-board coordinates inside their squares and is imported by `src/nodus-renderer.js`, so the presentation fix no longer depends on whether the application entrypoint is JavaScript or TypeScript.
 
 # Edges:
 
-Keep `resolveMove()` as the chess-rule authority for which promotion pieces are legal, and keep `NodusController` as the owner of Recenter. This outcome changes promotion interaction and its board presentation only; it does not redesign Move materialization, graph identity, or browser-history behavior.
+Keep `resolveMove()` as the chess-rule authority for which promotion pieces are legal, and keep `NodusController` as the owner of Recenter. This outcome changes promotion interaction and its board presentation only; it does not redesign Move materialization, graph identity, browser-history behavior, or migrate the application entrypoint to TypeScript.
 
 # Complete:
 
-All legal promotion pieces can be selected without a textual browser prompt; the selected piece reaches the existing Move/Recenter pipeline unchanged; cancel creates no Move or Recenter; deterministic Interface/renderer coverage protects all four choices and cancel behavior; board coordinates remain visually aligned at supported responsive sizes and orientations.
+All legal promotion pieces can be selected without a textual browser prompt; the selected piece reaches the existing Move/Recenter pipeline unchanged; cancel creates no Move or Recenter; flipping while promotion is pending keeps the chooser aligned to the displayed board; deterministic Interface/renderer coverage protects all four choices, cancel, and flip behavior; board coordinates remain visually aligned at supported responsive sizes and orientations.
 
 # Steps:
 
 Run deterministic tests against the promotion implementation.
 
-Verify the published destination-file chooser manually for White and Black promotion, flipped orientation, backdrop/Escape cancel, coordinate alignment, and narrow responsive layouts.
+Verify the published destination-file chooser manually for White and Black promotion, flipped orientation while the chooser is open, backdrop/Escape cancel, coordinate alignment, and narrow responsive layouts.
 
 If verification passes, run Backlog Close; otherwise repair the observed failures and repeat verification.
 

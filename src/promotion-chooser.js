@@ -112,9 +112,18 @@ export function createPromotionChooser({ app } = {}) {
     });
   }
 
+  function sync({ center, orientation, color } = {}) {
+    const state = pending;
+    if (!state) return false;
+    if (center !== state.center) return settle(null);
+    if (orientation === 'white' || orientation === 'black') state.orientation = orientation;
+    if (color === 'white' || color === 'black') state.color = color;
+    return render(center);
+  }
+
   return Object.freeze({
     choose,
-    sync: (center) => render(center),
+    sync,
     cancel: () => settle(null),
     dispose: () => settle(null),
   });

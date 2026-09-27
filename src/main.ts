@@ -17,13 +17,6 @@ import { createRouteLedger } from './route-ledger.js';
 import { preferenceStore } from './preference-store.js';
 import { positionRepository } from './position-repository.js';
 
-const composeStructure = composeNodusStructure as (options: {
-  center: string;
-  mode: string;
-  max?: number;
-  signal?: AbortSignal;
-}) => ReturnType<typeof composeNodusStructure>;
-
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
   if (window.innerWidth < 620) return 5;
@@ -61,7 +54,7 @@ const controller = new NodusController({
   canonicalize: canonicalPosition,
   routeLedger,
   preferences: preferenceStore,
-  structure: ({ center, mode, signal }) => composeStructure({
+  structure: ({ center, mode, signal }) => composeNodusStructure({
     center,
     mode,
     max: boardBudget(),

@@ -36,13 +36,15 @@ The product-level classification of critical, supplementary, and decorative beha
 
 ## Composition direction
 
-**Commands enter the controller; domain contributors return values; the controller publishes one immutable current view; presentation consumes it.**
+**Current-view commands enter the controller; domain contributors return values; the controller publishes one immutable current view; presentation consumes it.**
 
-`NodusController` is the sole owner allowed to make an asynchronous domain result current. Internal revision identity and publication decisions stay private to that boundary. Structural and evidence contributors receive explicit domain inputs and return data keyed by stable node/edge identity; a contributor may receive a scoped cancellation capability to stop obsolete participation, but that capability does not authorize publication or make the contributor own current-view lifetime. Contributors do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals.
+`NodusController` is the sole owner allowed to make an asynchronous domain result current. Internal revision identity and publication decisions stay private to that boundary. Structural, evidence, and manual-move contributors receive explicit domain inputs and return values keyed by stable position/node/edge identity; a contributor may receive a scoped cancellation capability to stop obsolete participation, but that capability does not authorize publication or make the contributor own current-view lifetime. Contributors do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals. Commands that can replace the current Nodus, including a legal move played on the board, enter through the controller so an obsolete command result cannot recenter a replacement view.
 
-The published current view contains the current Nodus-centered view state and the structural/evidence values accepted for that view. Browser history metadata, persistence mechanisms, request scheduling, generation tokens, DOM handles, and Chessground instances remain outside that value. Presentation may retain resource handles needed to update or dispose rendered objects, but it must not keep a second mutable copy of current-view truth.
+The published current view contains the current Nodus-centered view state and the structural/evidence values accepted for that view. Browser history metadata, persistence mechanisms, request scheduling, generation tokens, DOM handles, and Chessground instances remain outside that value. Presentation-only controls such as Guide and Debug may persist their own durable preferences and request a redraw without becoming current-view truth.
 
-Presentation consumes the current view through a lifecycle-aware presenter. The controller distinguishes the start of a new current-view lifecycle from later publications within that lifecycle without exposing revision identity. This boundary lets delayed presentation timing reset for a replacement view even when its structural status string is the same as the superseded view. Presentation failures are handled at that boundary: normal rendering must fail closed to a degraded/unavailable surface rather than rewriting valid structural domain data or leaving a success presentation visible; failure of the degraded fallback itself is not swallowed.
+Presentation consumes the current view through a lifecycle-aware presenter. The controller distinguishes the start of a new current-view lifecycle from later publications within that lifecycle without exposing revision identity. `NodusRenderer` owns DOM and Chessground mutation under its application root. Root/evidence presentation helpers receive that root explicitly and act only as renderer delegates; they do not discover elements from the global document. View-status presentation owns timing/state only and delegates status DOM updates back to the renderer. Presentation may retain resource handles needed to update or dispose rendered objects, but it must not keep a second mutable copy of current-view truth.
+
+Presentation failures are handled at that boundary: normal rendering must fail closed to a degraded/unavailable surface rather than rewriting valid structural domain data or leaving a success presentation visible; failure of the degraded fallback itself is not swallowed.
 
 Critical structural data is published with generation-scoped loading/ready/failed state. Supplementary evidence may publish later without downgrading established structural readiness. The subtle delayed `Updating…` / brief `Ready` / check acknowledgement is presentation behavior derived from structural lifecycle state rather than an independent source of application truth.
 
@@ -55,6 +57,7 @@ Deterministic/browser contract tests should cover:
 - URL round-tripping for canonical positions;
 - recentering by mini-board click;
 - recentering after a legal Nodus move, including a sub-threshold move;
+- stale completion from a legal Nodus move being unable to recenter a replacement view;
 - browser back/forward navigation;
 - Root-left / Line-right directional semantics;
 - global orientation behavior;

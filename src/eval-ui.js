@@ -4,7 +4,6 @@ import {
   engineUnavailableLabel,
   humanFailureIndicator,
 } from './evidence-presentation.js';
-import { preferenceStore } from './preference-store.js';
 
 function escapeHtml(value = '') {
   return String(value)
@@ -49,10 +48,10 @@ function relationshipsFor(composition, key, options = {}) {
   ));
 }
 
-function renderGuide() {
-  const rail = document.querySelector('.analysis-rail');
+function renderGuide(root, visible) {
+  const rail = root.querySelector('.analysis-rail');
   const existing = rail?.querySelector('.eval-guide');
-  if (!preferenceStore.getGuide()) return existing?.remove();
+  if (!visible) return existing?.remove();
   if (!rail || existing) return;
   const position = rail.querySelector('.rail-current-details');
   if (!position) return;
@@ -63,40 +62,11 @@ function renderGuide() {
     </section>`);
 }
 
-function decorateStructure(actions) {
-  const rail = document.querySelector('.analysis-rail');
-  const tabs = rail?.querySelector('.mode-tabs');
-  if (!rail || !tabs) return;
-  if (!rail.querySelector('.rail-title')) {
-    const title = document.createElement('div');
-    title.className = 'rail-title';
-    title.textContent = 'Rail';
-    rail.insertBefore(title, tabs);
-  }
-  const position = rail.querySelector('.rail-position');
-  if (position) position.classList.add('rail-current-details');
-  const debugButton = document.querySelector('#debug-toggle');
-  if (debugButton && !document.querySelector('#guide-toggle')) {
-    const guideOn = preferenceStore.getGuide();
-    const button = document.createElement('button');
-    button.id = 'guide-toggle';
-    button.type = 'button';
-    button.className = `toolbar-button guide-toggle ${guideOn ? 'is-active' : ''}`;
-    button.textContent = 'Guide';
-    button.addEventListener('click', () => {
-      preferenceStore.setGuide(!preferenceStore.getGuide());
-      void actions.redraw();
-    });
-    debugButton.parentElement?.insertBefore(button, debugButton);
-  }
-  renderGuide();
-}
-
-function decorateCenter(evidence) {
-  const stats = document.querySelector('.rail-current-details .position-stats');
+function decorateCenter(root, evidence) {
+  const stats = root.querySelector('.rail-current-details .position-stats');
   if (!stats || !evidence?.center) return;
   const { cloud, evaluation } = evidence.center;
-  const badge = document.createElement('span');
+  const badge = (root.ownerDocument ?? globalThis.document).createElement('span');
   badge.className = 'center-eval-detail';
   badge.innerHTML = evaluation
     ? `<strong>${escapeHtml(evaluation.label)}</strong>${evaluation.depth ? ` <span>d${evaluation.depth}</span>` : ''}`
@@ -114,8 +84,8 @@ function relationshipForSatellite(element, view) {
   return visible[0] ?? null;
 }
 
-function decorateSatellites(view, evidenceById) {
-  for (const element of document.querySelectorAll('.satellite[data-key]')) {
+function decorateSatellites(root, view, evidenceById) {
+  for (const element of root.querySelectorAll('.satellite[data-key]')) {
     const relationship = relationshipForSatellite(element, view);
     const evidence = relationship ? evidenceById.get(relationship.id) : null;
     if (!evidence) continue;
@@ -124,7 +94,7 @@ function decorateSatellites(view, evidenceById) {
     setClass(element, 'rarity-', evidence.rarity);
     const label = element.querySelector('.mini-label');
     if (!label) continue;
-    const pill = document.createElement('span');
+    const pill = (root.ownerDocument ?? globalThis.document).createElement('span');
     pill.className = 'mini-eval';
     const failed = evidenceRequestFailed(evidence.sourceEval, evidence.targetEval);
     pill.textContent = evidence.moveEval ? lossLabel(evidence.moveEval) : failed ? '!' : '·';
@@ -135,8 +105,8 @@ function decorateSatellites(view, evidenceById) {
   }
 }
 
-function decorateConnectors(evidenceById) {
-  for (const path of document.querySelectorAll('path[data-relationship-id]')) {
+function decorateConnectors(root, evidenceById) {
+  for (const path of root.querySelectorAll('path[data-relationship-id]')) {
     const evidence = evidenceById.get(path.dataset.relationshipId);
     if (!evidence) continue;
     setClass(path, 'edge-quality-', evidence.moveEval?.quality ?? null);
@@ -154,9 +124,9 @@ function railRowHtml(row) {
     <span class="eval-human-cell">${mismatch}</span><span class="eval-play">›</span></button>`;
 }
 
-function decorateLineRail(view, actions, evidence) {
+function decorateLineRail(root, view, actions, evidence) {
   if (view.mode !== 'lines') return;
-  const list = document.querySelector('.analysis-rail .rail-explorer .explorer-list');
+  const list = root.querySelector('.analysis-rail .rail-explorer .explorer-list');
   if (!list) return;
   const rows = evidence?.rail?.rows ?? [];
   const mastersFailure = humanFailureIndicator(evidence?.rail?.masters, 'Masters');
@@ -169,28 +139,28 @@ function decorateLineRail(view, actions, evidence) {
   });
 }
 
-function showPresentationFailure(error) {
-  const rail = document.querySelector('.analysis-rail .rail-explorer');
+function showPresentationFailure(root, error) {
+  const rail = root.querySelector('.analysis-rail .rail-explorer');
   if (!rail || rail.querySelector('.evidence-presentation-failure')) return;
-  const note = document.createElement('div');
+  const note = (root.ownerDocument ?? globalThis.document).createElement('div');
   note.className = 'rail-empty evidence-presentation-failure';
   note.textContent = 'Supplementary evidence is temporarily unavailable.';
   note.title = error || 'Evidence presentation failed';
   rail.appendChild(note);
 }
 
-export function decorateEvidencePresentation(view, actions) {
-  decorateStructure(actions);
+export function decorateEvidencePresentation(root, view, actions, { showGuide = false } = {}) {
+  renderGuide(root, showGuide);
   if (view.evidence.status === 'failed') {
-    showPresentationFailure(view.evidence.error);
+    showPresentationFailure(root, view.evidence.error);
     return;
   }
   if (view.evidence.status !== 'ready' || !view.evidence.value) return;
 
   const evidence = view.evidence.value;
   const evidenceById = new Map((evidence.relationships ?? []).map((item) => [item.id, item]));
-  decorateCenter(evidence);
-  decorateLineRail(view, actions, evidence);
-  decorateSatellites(view, evidenceById);
-  decorateConnectors(evidenceById);
+  decorateCenter(root, evidence);
+  decorateLineRail(root, view, actions, evidence);
+  decorateSatellites(root, view, evidenceById);
+  decorateConnectors(root, evidenceById);
 }

@@ -28,6 +28,7 @@ export class NodusController {
   #disposed = false;
   #evidence;
   #log;
+  #manualMove;
   #preferences;
   #presenter;
   #revision = 0;
@@ -44,6 +45,7 @@ export class NodusController {
     structure,
     evidence = null,
     discover = null,
+    manualMove = null,
     presenter,
     log = () => {},
   }) {
@@ -58,6 +60,7 @@ export class NodusController {
     this.#structure = structure;
     this.#evidence = evidence;
     this.#discover = discover;
+    this.#manualMove = manualMove;
     this.#presenter = presenter;
     this.#log = log;
     this.#state = {
@@ -70,6 +73,7 @@ export class NodusController {
     };
     this.#actions = Object.freeze({
       navigate: (position) => this.navigate(position),
+      playMove: (from, to, promotion) => this.playMove(from, to, promotion),
       setMode: (mode) => this.setMode(mode),
       flip: () => this.flip(),
       back: () => this.back(),
@@ -107,6 +111,28 @@ export class NodusController {
     this.#log('recenter', { from: previous, to: next, mode: this.#state.mode, navDepth: this.#state.navDepth });
     await this.#startView('navigate');
     return true;
+  }
+
+  async playMove(from, to, promotion = 'q') {
+    if (this.#disposed || typeof this.#manualMove !== 'function') return false;
+    const run = this.#run;
+    const source = this.#state.center;
+    let result = null;
+    try {
+      result = await this.#manualMove(Object.freeze({ source, from, to, promotion }));
+    } catch (error) {
+      if (this.#isCurrent(run) && this.#state.center === source) {
+        this.#log('manual move failed', { source, from, to, promotion, error: errorMessage(error) });
+        await this.#presentCurrent('update');
+      }
+      return false;
+    }
+    if (!this.#isCurrent(run) || this.#state.center !== source) return false;
+    if (!result?.target) {
+      await this.#presentCurrent('update');
+      return false;
+    }
+    return this.navigate(result.target);
   }
 
   async restore(route) {

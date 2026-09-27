@@ -55,8 +55,8 @@ function layoutRoots(structure) {
   }
 }
 
-function bindLinkedHover() {
-  const elements = [...document.querySelectorAll('.roots-row[data-nav-key], .satellite[data-key]')];
+function bindLinkedHover(root) {
+  const elements = [...root.querySelectorAll('.roots-row[data-nav-key], .satellite[data-key]')];
   const clear = () => elements.forEach((element) => element.classList.remove('is-related-highlight'));
   for (const element of elements) {
     element.addEventListener('pointerenter', () => {
@@ -69,12 +69,12 @@ function bindLinkedHover() {
   }
 }
 
-export function decorateRootPresentation(view) {
+export function decorateRootPresentation(root, view) {
   const composition = view?.structure?.value?.composition;
-  const map = document.querySelector('.map');
+  const map = root?.querySelector?.('.map');
   if (!map || !composition) return;
   const structure = view.mode === 'roots' ? rootStructure(map, composition) : null;
   if (structure) layoutRoots(structure);
   drawVisibleEdges(map, composition, { direction: view.mode });
-  bindLinkedHover();
+  bindLinkedHover(root);
 }

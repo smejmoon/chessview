@@ -5,7 +5,6 @@ import {
   stableEdgeOrder,
   toPlayableFen,
 } from './graph.js';
-import { ensureManualEdge } from './explorer.js';
 import {
   clearDebugLog,
   debugLog,
@@ -24,14 +23,14 @@ function escapeHtml(value = '') {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 }
 
-function mapCenterX() {
-  if (window.innerWidth <= 460) return 34;
-  if (window.innerWidth <= 760) return 31;
-  if (window.innerWidth <= 1100) return 29;
+function mapCenterX(width) {
+  if (width <= 460) return 34;
+  if (width <= 760) return 31;
+  if (width <= 1100) return 29;
   return 26;
 }
 
-function layoutPositions(items) {
+function layoutPositions(items, viewportWidth) {
   const positions = new Map();
   const levels = new Map();
   for (const item of items) {
@@ -40,8 +39,9 @@ function layoutPositions(items) {
   }
   if (!levels.size) return positions;
   const maxDepth = Math.max(...levels.keys());
+  const centerX = mapCenterX(viewportWidth);
   for (const [depth, level] of levels) {
-    const x = mapCenterX() + (92 - mapCenterX()) * (depth / Math.max(1, maxDepth));
+    const x = centerX + (92 - centerX) * (depth / Math.max(1, maxDepth));
     level.forEach((item, index) => {
       const y = level.length <= 1 ? 50 : 12 + (76 * index) / Math.max(1, level.length - 1);
       positions.set(item.key, { x, y, tier: depth === 1 && level.length <= 4 ? 1 : 2 });
@@ -95,29 +95,13 @@ function debugRailHtml() {
   return `<section class="rail-debug" aria-label="Chessview debug log"><div class="debug-head"><div class="debug-title">Debug <small>${getDebugEntries().length} events</small></div><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy</button><button class="debug-action" id="debug-clear" type="button">Clear</button></div></div><pre class="debug-log" id="debug-log">${escapeHtml(debugText())}</pre></section>`;
 }
 
-function bindControls(actions) {
-  document.querySelector('#roots-tab')?.addEventListener('click', () => actions.setMode('roots'));
-  document.querySelector('#lines-tab')?.addEventListener('click', () => actions.setMode('lines'));
-  document.querySelectorAll('[data-nav-key]').forEach((button) => button.addEventListener('click', () => actions.navigate(button.dataset.navKey)));
-  document.querySelector('#back')?.addEventListener('click', actions.back);
-  document.querySelector('#flip')?.addEventListener('click', actions.flip);
-  document.querySelector('#debug-toggle')?.addEventListener('click', () => {
-    setDebugEnabled(!isDebugEnabled());
-    void actions.redraw();
-  });
-  document.querySelector('#debug-clear')?.addEventListener('click', () => {
-    clearDebugLog();
-    void actions.redraw();
-  });
-  document.querySelector('#debug-copy')?.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(debugText()); debugLog('debug log copied'); }
-    catch (error) { debugLog('debug copy failed', error, 'warn'); }
-    void actions.redraw();
-  });
-}
-
-export function createNodusRenderer({ app = document.querySelector('#app') } = {}) {
+export function createNodusRenderer({
+  app = globalThis.document?.querySelector?.('#app'),
+  preferences = {},
+} = {}) {
   if (!app) throw new Error('Nodus renderer requires an app element');
+  const document = app.ownerDocument ?? globalThis.document;
+  const window = document?.defaultView ?? globalThis.window;
   const boards = new Set();
 
   function disposeBoards() {
@@ -125,10 +109,35 @@ export function createNodusRenderer({ app = document.querySelector('#app') } = {
     boards.clear();
   }
 
+  function bindControls(actions) {
+    app.querySelector('#roots-tab')?.addEventListener('click', () => actions.setMode('roots'));
+    app.querySelector('#lines-tab')?.addEventListener('click', () => actions.setMode('lines'));
+    app.querySelectorAll('[data-nav-key]').forEach((button) => button.addEventListener('click', () => actions.navigate(button.dataset.navKey)));
+    app.querySelector('#back')?.addEventListener('click', actions.back);
+    app.querySelector('#flip')?.addEventListener('click', actions.flip);
+    app.querySelector('#guide-toggle')?.addEventListener('click', () => {
+      preferences.setGuide?.(!preferences.getGuide?.());
+      void actions.redraw();
+    });
+    app.querySelector('#debug-toggle')?.addEventListener('click', () => {
+      setDebugEnabled(!isDebugEnabled());
+      void actions.redraw();
+    });
+    app.querySelector('#debug-clear')?.addEventListener('click', () => {
+      clearDebugLog();
+      void actions.redraw();
+    });
+    app.querySelector('#debug-copy')?.addEventListener('click', async () => {
+      try { await window?.navigator?.clipboard?.writeText?.(debugText()); debugLog('debug log copied'); }
+      catch (error) { debugLog('debug copy failed', error, 'warn'); }
+      void actions.redraw();
+    });
+  }
+
   function renderSatellites(view, structure, actions) {
-    const host = document.querySelector('#satellites');
+    const host = app.querySelector('#satellites');
     if (!host) return;
-    const positions = layoutPositions(structure.positions ?? []);
+    const positions = layoutPositions(structure.positions ?? [], window?.innerWidth ?? 1280);
     for (const item of structure.positions ?? []) {
       const point = positions.get(item.key);
       if (!point) continue;
@@ -155,6 +164,19 @@ export function createNodusRenderer({ app = document.querySelector('#app') } = {
     }
   }
 
+  function renderStatus(presentation) {
+    const element = app.querySelector('#view-status');
+    if (!element) return;
+    const status = viewStatusSpec(presentation);
+    element.className = `view-status is-${presentation}`;
+    element.title = status.title;
+    element.setAttribute('aria-label', status.title);
+    const mark = element.querySelector('.view-status-mark');
+    const label = element.querySelector('.view-status-label');
+    if (mark) mark.textContent = status.mark;
+    if (label) label.textContent = status.label;
+  }
+
   function render(view, actions, presentation = 'hidden') {
     disposeBoards();
     const structure = view.structure.value ?? emptyStructure(view.center);
@@ -166,10 +188,12 @@ export function createNodusRenderer({ app = document.querySelector('#app') } = {
     const lineCount = structure.lineEdges?.length ?? 0;
     const structuralError = view.structure.error;
     const debug = isDebugEnabled();
+    const guide = preferences.getGuide?.() === true;
+    const centerX = mapCenterX(window?.innerWidth ?? 1280);
 
-    app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map mode-${view.mode}" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="center-position position" data-key="${escapeHtml(view.center)}" style="left:${mapCenterX()}%"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">${view.mode === 'roots' ? 'Known move orders converge here.' : 'Drag a legal move, or choose a Line.'}</div></div><div id="satellites"></div>${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</section><aside class="analysis-rail"><div class="rail-position"><div class="eyebrow">${centerNode.opening ? `${escapeHtml(centerNode.opening.eco ?? '')} · opening` : 'current position'}</div><h1>${escapeHtml(centerNode.opening?.name ?? 'Explore from here')}</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span>${view.mode === 'lines' && explorer && omittedShare(explorer) >= 0.005 ? `<span>other · ${percent(omittedShare(explorer))}</span>` : ''}</div></div><div class="mode-tabs" role="tablist"><button id="roots-tab" class="mode-tab ${view.mode === 'roots' ? 'is-active' : ''}" type="button">Roots <small>${rootCount}</small></button><button id="lines-tab" class="mode-tab ${view.mode === 'lines' ? 'is-active' : ''}" type="button">Lines <small>${lineCount}</small></button></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>${view.mode === 'roots' ? 'Root Explorer' : 'Opening Explorer'}</strong></div></div>${railExplorerHtml(view, structure)}</section>${debugRailHtml()}</aside></div></main>`;
+    app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map mode-${view.mode}" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="center-position position" data-key="${escapeHtml(view.center)}" style="left:${centerX}%"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">${view.mode === 'roots' ? 'Known move orders converge here.' : 'Drag a legal move, or choose a Line.'}</div></div><div id="satellites"></div>${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</section><aside class="analysis-rail"><div class="rail-title">Rail</div><div class="rail-position rail-current-details"><div class="eyebrow">${centerNode.opening ? `${escapeHtml(centerNode.opening.eco ?? '')} · opening` : 'current position'}</div><h1>${escapeHtml(centerNode.opening?.name ?? 'Explore from here')}</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span>${view.mode === 'lines' && explorer && omittedShare(explorer) >= 0.005 ? `<span>other · ${percent(omittedShare(explorer))}</span>` : ''}</div></div><div class="mode-tabs" role="tablist"><button id="roots-tab" class="mode-tab ${view.mode === 'roots' ? 'is-active' : ''}" type="button">Roots <small>${rootCount}</small></button><button id="lines-tab" class="mode-tab ${view.mode === 'lines' ? 'is-active' : ''}" type="button">Lines <small>${lineCount}</small></button></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>${view.mode === 'roots' ? 'Root Explorer' : 'Opening Explorer'}</strong></div></div>${railExplorerHtml(view, structure)}</section>${debugRailHtml()}</aside></div></main>`;
 
-    const centerApi = Chessground(document.querySelector('#center-board'), {
+    const centerApi = Chessground(app.querySelector('#center-board'), {
       fen: toPlayableFen(view.center),
       orientation: view.orientation,
       turnColor: turn,
@@ -182,9 +206,7 @@ export function createNodusRenderer({ app = document.querySelector('#app') } = {
         showDests: true,
         events: {
           after: async (from, to) => {
-            const result = await ensureManualEdge(view.center, from, to, 'q');
-            if (result) await actions.navigate(result.target);
-            else await actions.redraw();
+            await actions.playMove(from, to, 'q');
           },
         },
       },
@@ -195,8 +217,8 @@ export function createNodusRenderer({ app = document.querySelector('#app') } = {
     boards.add(centerApi);
     bindControls(actions);
     renderSatellites(view, structure, actions);
-    decorateRootPresentation(view);
-    decorateEvidencePresentation(view, actions);
+    decorateRootPresentation(app, view);
+    decorateEvidencePresentation(app, view, actions, { showGuide: guide });
   }
 
   function renderFailure(view, actions, error, presentation = 'failed') {
@@ -212,5 +234,5 @@ export function createNodusRenderer({ app = document.querySelector('#app') } = {
     disposeBoards();
   }
 
-  return Object.freeze({ render, renderFailure, dispose });
+  return Object.freeze({ render, renderFailure, renderStatus, dispose });
 }

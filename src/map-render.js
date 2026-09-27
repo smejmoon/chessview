@@ -132,6 +132,7 @@ export function drawVisibleEdges(map, composition, { direction = composition?.di
   svg.dataset.visibleEdgesSignature = signature;
   svg.setAttribute('viewBox', `0 0 ${mapRect.width} ${mapRect.height}`);
   svg.innerHTML = '';
+  const document = svg.ownerDocument ?? globalThis.document;
   for (const item of paths) {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', item.d);

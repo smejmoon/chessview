@@ -2,19 +2,25 @@ import { createViewStatusPresenter } from './view-status.js';
 
 export function createNodusPresenter({
   renderer,
-  statusPresenter = createViewStatusPresenter(),
+  statusPresenter = null,
   log = () => {},
 } = {}) {
   if (typeof renderer?.render !== 'function') throw new TypeError('Nodus presenter requires renderer.render');
   if (typeof renderer?.renderFailure !== 'function') throw new TypeError('Nodus presenter requires renderer.renderFailure');
+  if (!statusPresenter && typeof renderer?.renderStatus !== 'function') {
+    throw new TypeError('Nodus presenter requires renderer.renderStatus');
+  }
+
+  const status = statusPresenter ?? createViewStatusPresenter({
+    onPresentation: (presentation) => renderer.renderStatus(presentation),
+  });
 
   async function present(kind, view, actions) {
-    if (kind === 'start') statusPresenter.start(view);
-    else statusPresenter.update(view);
+    if (kind === 'start') status.start(view);
+    else status.update(view);
 
     try {
-      await renderer.render(view, actions, statusPresenter.presentation);
-      statusPresenter.paint();
+      await renderer.render(view, actions, status.presentation);
       return true;
     } catch (error) {
       log('Nodus presentation failed', {
@@ -22,15 +28,14 @@ export function createNodusPresenter({
         mode: view?.mode,
         error: error?.message ?? String(error),
       });
-      statusPresenter.fail();
-      await renderer.renderFailure(view, actions, error, statusPresenter.presentation);
-      statusPresenter.paint();
+      status.fail();
+      await renderer.renderFailure(view, actions, error, status.presentation);
       return false;
     }
   }
 
   function dispose() {
-    statusPresenter.dispose();
+    status.dispose();
     renderer.dispose?.();
   }
 

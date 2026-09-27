@@ -5,7 +5,7 @@ import './style.css';
 import './debug.css';
 
 import { canonicalPosition } from './graph.js';
-import { discoverForViewport } from './explorer.js';
+import { discoverForViewport, ensureManualEdge } from './explorer.js';
 import { debugLog } from './debug.js';
 import { NodusController } from './nodus-controller.js';
 import { composeNodusStructure } from './nodus-structure.js';
@@ -26,7 +26,10 @@ function boardBudget() {
 
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
 const initialRoute = routeLedger.read();
-const renderer = createNodusRenderer({ app: document.querySelector('#app') });
+const renderer = createNodusRenderer({
+  app: document.querySelector('#app'),
+  preferences: preferenceStore,
+});
 const presenter = createNodusPresenter({
   renderer,
   log: (message, detail) => debugLog(message, detail, 'error'),
@@ -58,6 +61,7 @@ const controller = new NodusController({
   }),
   evidence: loadNodusEvidence,
   discover,
+  manualMove: ({ source, from, to, promotion }) => ensureManualEdge(source, from, to, promotion),
   presenter,
   log: (message, detail) => debugLog(message, detail),
 });

@@ -11,6 +11,7 @@ export function createViewStatusPresenter({
   readyHoldMs = 1_200,
   setTimeoutFn = (...args) => setTimeout(...args),
   clearTimeoutFn = (id) => clearTimeout(id),
+  onPresentation = () => {},
 } = {}) {
   let structuralStatus = 'idle';
   let presentation = 'hidden';
@@ -25,51 +26,35 @@ export function createViewStatusPresenter({
     readyTimer = null;
   }
 
-  function paint() {
-    const element = globalThis.document?.querySelector?.('#view-status');
-    if (!element) return;
-    const spec = statusSpec(presentation);
-    element.className = `view-status is-${presentation}`;
-    element.title = spec.title;
-    element.setAttribute('aria-label', spec.title);
-    const mark = element.querySelector('.view-status-mark');
-    const label = element.querySelector('.view-status-label');
-    if (mark) mark.textContent = spec.mark;
-    if (label) label.textContent = spec.label;
-  }
-
   function present(next) {
     presentation = next;
-    paint();
+    onPresentation(presentation);
+    return presentation;
   }
 
   function transitionTo(next, { force = false } = {}) {
-    if (!force && next === structuralStatus) {
-      paint();
-      return presentation;
-    }
+    if (!force && next === structuralStatus) return presentation;
     structuralStatus = next;
     transition += 1;
     const id = transition;
     clearTimers();
     if (next === 'loading') {
-      presentation = 'hidden';
+      present('hidden');
       updatingTimer = setTimeoutFn(() => {
         updatingTimer = null;
         if (id === transition && structuralStatus === 'loading') present('updating');
       }, updatingDelayMs);
     } else if (next === 'ready') {
-      presentation = 'ready';
+      present('ready');
       readyTimer = setTimeoutFn(() => {
         readyTimer = null;
         if (id === transition && structuralStatus === 'ready') present('check');
       }, readyHoldMs);
     } else if (next === 'failed') {
-      presentation = 'failed';
+      present('failed');
     } else {
-      presentation = 'hidden';
+      present('hidden');
     }
-    paint();
     return presentation;
   }
 
@@ -85,9 +70,7 @@ export function createViewStatusPresenter({
     transition += 1;
     clearTimers();
     structuralStatus = 'idle';
-    presentation = 'failed';
-    paint();
-    return presentation;
+    return present('failed');
   }
 
   function dispose() {
@@ -98,7 +81,6 @@ export function createViewStatusPresenter({
     start,
     update,
     fail,
-    paint,
     dispose,
     get presentation() { return presentation; },
   });

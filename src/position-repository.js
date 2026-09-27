@@ -14,6 +14,7 @@ export function createPositionRepository({
 } = {}) {
   const records = new Map();
   const reads = new Map();
+  const mutations = new Map();
   const loads = new Map();
   let observedVersion = version();
 
@@ -49,34 +50,57 @@ export function createPositionRepository({
     return pending;
   }
 
-  async function put(record) {
-    syncVersion();
-    const key = canonicalPosition(record?.key ?? record?.fen);
-    const value = {
-      ...record,
-      key,
-      fen: record?.fen ?? toPlayableFen(key),
-    };
+  function mutate(key, operation) {
+    const previous = mutations.get(key) ?? Promise.resolve();
+    const pending = previous
+      .catch(() => undefined)
+      .then(operation)
+      .finally(() => {
+        if (mutations.get(key) === pending) mutations.delete(key);
+      });
+    mutations.set(key, pending);
+    return pending;
+  }
+
+  async function persist(key, value) {
     await write(value);
     observedVersion = version();
     records.set(key, value);
     return value;
   }
 
-  async function merge(position, fields = {}) {
-    const key = canonicalPosition(position);
-    const current = await get(key);
-    return put({
-      ...(current ?? {}),
+  function put(record) {
+    syncVersion();
+    const key = canonicalPosition(record?.key ?? record?.fen);
+    return mutate(key, () => persist(key, {
+      ...record,
       key,
-      fen: current?.fen ?? fields.fen ?? toPlayableFen(key),
-      ...fields,
+      fen: record?.fen ?? toPlayableFen(key),
+    }));
+  }
+
+  function merge(position, fields = {}) {
+    syncVersion();
+    const key = canonicalPosition(position);
+    return mutate(key, async () => {
+      const current = await get(key);
+      return persist(key, {
+        ...(current ?? {}),
+        key,
+        fen: current?.fen ?? fields.fen ?? toPlayableFen(key),
+        ...fields,
+      });
     });
   }
 
-  async function ensure(position, fields = {}) {
+  function ensure(position, fields = {}) {
+    syncVersion();
     const key = canonicalPosition(position);
-    return (await get(key)) ?? put({ key, fen: toPlayableFen(key), ...fields });
+    return mutate(key, async () => {
+      const current = await get(key);
+      if (current) return current;
+      return persist(key, { key, fen: toPlayableFen(key), ...fields });
+    });
   }
 
   function subscribe(load, signal, releaseLast) {

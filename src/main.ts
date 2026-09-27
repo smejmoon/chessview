@@ -17,6 +17,9 @@ import { createRouteLedger } from './route-ledger.js';
 import { preferenceStore } from './preference-store.js';
 import { positionRepository } from './position-repository.js';
 
+const typescriptSmokeTest: string = 'ok';
+void typescriptSmokeTest;
+
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
   if (window.innerWidth < 620) return 5;

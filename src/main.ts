@@ -17,9 +17,6 @@ import { createRouteLedger } from './route-ledger.js';
 import { preferenceStore } from './preference-store.js';
 import { positionRepository } from './position-repository.js';
 
-const buildMarker: string = 'Chessview — Built from TypeScript';
-document.title = buildMarker;
-
 const composeStructure = composeNodusStructure as (options: {
   center: string;
   mode: string;

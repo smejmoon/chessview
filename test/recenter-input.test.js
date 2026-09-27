@@ -5,7 +5,6 @@ import {
   bindRecenterTarget,
   createBoardMoveRecenterHandler,
   promotionChoices,
-  promptPromotion,
 } from '../src/recenter-input.js';
 
 function fakeElement() {
@@ -49,15 +48,15 @@ test('promotion move requires and preserves the selected promotion piece', async
     actions: {
       recenter(request) { calls.push(request); return true; },
     },
-    choosePromotion(choices) {
-      seenChoices.push(choices);
+    choosePromotion(choices, context) {
+      seenChoices.push([choices, context]);
       return 'n';
     },
   });
 
   assert.deepEqual(promotionChoices(source, 'e7', 'e8'), ['q', 'r', 'b', 'n']);
   assert.equal(await handler('e7', 'e8'), true);
-  assert.deepEqual(seenChoices, [['q', 'r', 'b', 'n']]);
+  assert.deepEqual(seenChoices, [[['q', 'r', 'b', 'n'], { from: 'e7', to: 'e8' }]]);
   assert.deepEqual(calls, [{ move: { from: 'e7', to: 'e8', promotion: 'n' } }]);
 });
 
@@ -75,19 +74,4 @@ test('cancelled promotion redraws the current view without recentering', async (
 
   assert.equal(await handler('e7', 'e8'), false);
   assert.deepEqual(calls, [['redraw']]);
-});
-
-test('promotion prompt defaults to queen and rejects unsupported input', () => {
-  const prompts = [];
-  const answers = ['x', 'N'];
-  const windowLike = {
-    prompt(message, defaultValue) {
-      prompts.push([message, defaultValue]);
-      return answers.shift();
-    },
-  };
-
-  assert.equal(promptPromotion(windowLike, ['q', 'r', 'b', 'n']), 'n');
-  assert.equal(prompts.length, 2);
-  assert.equal(prompts[0][1], 'q');
 });

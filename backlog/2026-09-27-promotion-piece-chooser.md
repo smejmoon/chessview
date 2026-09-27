@@ -1,32 +1,32 @@
 # Do:
 
-Replace the browser-text promotion prompt with a board-native promotion chooser that preserves explicit queen, rook, bishop, or knight intent before issuing Recenter.
+Run the deterministic test verification and manually verify the published board-native promotion chooser on desktop and narrow layouts; fix any failures that verification exposes.
+
+# Blocked:
+
+Completion awaits the deterministic test run and manual browser verification of the latest preview. The current promotion implementation, including the coordinate-label correction, has passed the repository's static Pages build and publish path.
 
 # Because:
 
-`src/recenter-input.js::promptPromotion()` currently delegates promotion choice to `window.prompt`, while `docs/components/interface.md` §Requirements defines the Nodus as a playable board whose legal Move input recenters through the normal application path. Promotion choice changes the resulting Move and canonical target, so the choice belongs at the Interface input boundary rather than being inferred later.
+`src/promotion-chooser.js` owns a Lichess-style destination-file promotion overlay using Chessground's existing piece theme, while `src/recenter-input.js::promotionChoices()` still derives legal promotion pieces through `resolveMove()`. The selected piece is passed unchanged through the existing Move/Recenter path; backdrop or Escape dismissal resolves as cancel and the existing handler redraws without Recenter.
+
+Chessground's stock coordinate CSS positions labels partly outside the board, which conflicted with Chessview's clipped Nodus frame and made file/rank labels look shifted. `src/chessground-overrides.css` now keeps center-board coordinates inside their squares without changing move, FEN, or promotion geometry.
 
 # Edges:
 
-Keep `resolveMove()` as the chess-rule authority for which promotion pieces are legal, and keep `NodusController` as the owner of Recenter. This outcome changes promotion interaction only; it does not redesign Move materialization, graph identity, or browser-history behavior.
-
-# Unsettled:
-
-Choose the smallest board-native interaction that remains clear on desktop and narrow layouts: destination-square overlay, piece tray, or equivalent.
-
-Define cancel/dismiss behavior so abandoning promotion leaves the current Nodus unchanged and restores a playable board without creating a Recenter.
+Keep `resolveMove()` as the chess-rule authority for which promotion pieces are legal, and keep `NodusController` as the owner of Recenter. This outcome changes promotion interaction and its board presentation only; it does not redesign Move materialization, graph identity, or browser-history behavior.
 
 # Complete:
 
-All legal promotion pieces can be selected without a textual browser prompt; the selected piece reaches the existing Move/Recenter pipeline unchanged; cancel creates no Move or Recenter; deterministic Interface/renderer coverage protects all four choices and cancel behavior.
+All legal promotion pieces can be selected without a textual browser prompt; the selected piece reaches the existing Move/Recenter pipeline unchanged; cancel creates no Move or Recenter; deterministic Interface/renderer coverage protects all four choices and cancel behavior; board coordinates remain visually aligned at supported responsive sizes and orientations.
 
 # Steps:
 
-Replace `promptPromotion()` with a presentation-owned chooser surface while preserving `promotionChoices()` as the legality source.
+Run deterministic tests against the promotion implementation.
 
-Wire the chooser into the existing center-board move callback and cover queen, rook, bishop, knight, and cancel at the renderer boundary.
+Verify the published destination-file chooser manually for White and Black promotion, flipped orientation, backdrop/Escape cancel, coordinate alignment, and narrow responsive layouts.
 
-Verify responsive interaction manually and run deterministic tests/build.
+If verification passes, run Backlog Close; otherwise repair the observed failures and repeat verification.
 
 # Sync:
 

@@ -1,12 +1,6 @@
 import { resolveMove } from './graph.js';
 
 const PROMOTION_PIECES = Object.freeze(['q', 'r', 'b', 'n']);
-const PROMOTION_NAMES = Object.freeze({
-  q: 'queen',
-  r: 'rook',
-  b: 'bishop',
-  n: 'knight',
-});
 
 export function promotionChoices(source, from, to) {
   try {
@@ -22,20 +16,6 @@ export function promotionChoices(source, from, to) {
       return false;
     }
   });
-}
-
-export function promptPromotion(windowLike, choices) {
-  if (!choices?.length || typeof windowLike?.prompt !== 'function') return null;
-  const allowed = new Set(choices);
-  const defaultPiece = allowed.has('q') ? 'q' : choices[0];
-  const descriptions = choices.map((piece) => `${piece}=${PROMOTION_NAMES[piece] ?? piece}`).join(', ');
-
-  while (true) {
-    const answer = windowLike.prompt(`Promote pawn (${descriptions})`, defaultPiece);
-    if (answer == null) return null;
-    const piece = String(answer).trim().toLowerCase().slice(0, 1);
-    if (allowed.has(piece)) return piece;
-  }
 }
 
 export function bindRecenterTarget(element, actions, target) {
@@ -61,7 +41,7 @@ export function createBoardMoveRecenterHandler({
     let promotion;
 
     if (choices.length) {
-      promotion = await choosePromotion?.(choices);
+      promotion = await choosePromotion?.(choices, { from, to });
       if (!promotion || !choices.includes(promotion)) {
         await actions.redraw?.();
         return false;

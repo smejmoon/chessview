@@ -20,6 +20,13 @@ import { positionRepository } from './position-repository.js';
 const typescriptSmokeTest: string = 'ok';
 void typescriptSmokeTest;
 
+const composeStructure = composeNodusStructure as (options: {
+  center: string;
+  mode: string;
+  max?: number;
+  signal?: AbortSignal;
+}) => ReturnType<typeof composeNodusStructure>;
+
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
   if (window.innerWidth < 620) return 5;
@@ -36,7 +43,7 @@ const renderer = createNodusRenderer({
 });
 const presenter = createNodusPresenter({
   renderer,
-  log: (message, detail) => debugLog(message, detail, 'error'),
+  log: (message, detail) => { debugLog(message, detail, 'error'); },
 });
 
 async function discover({ center, signal, onProgress }) {
@@ -57,7 +64,7 @@ const controller = new NodusController({
   canonicalize: canonicalPosition,
   routeLedger,
   preferences: preferenceStore,
-  structure: ({ center, mode, signal }) => composeNodusStructure({
+  structure: ({ center, mode, signal }) => composeStructure({
     center,
     mode,
     max: boardBudget(),
@@ -67,7 +74,7 @@ const controller = new NodusController({
   discover,
   materializeMove,
   presenter,
-  log: (message, detail) => debugLog(message, detail),
+  log: (message, detail) => { debugLog(message, detail); },
 });
 
 const stopRouteRestore = routeLedger.onRestore((route) => { void controller.restore(route); });

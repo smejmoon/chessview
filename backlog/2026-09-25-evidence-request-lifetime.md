@@ -1,50 +1,42 @@
 # Do:
 
-Define and implement evidence-request lifetime and coalescing so an obsolete view can stop waiting for its cloud-eval/Masters work without cancelling an equivalent request still needed by a current subscriber, while obsolete queued work with no remaining subscriber is prevented from reaching Lichess.
+Run the repository deterministic suite and build on the exact implementation tip that introduces `PositionRepository`; if verification passes, close this outcome and unblock the browser-composition evidence integration.
 
 # Because:
 
-`docs/components/lichess-access.md` §Network boundary requires queued obsolete work to be prevented from reaching the network, and `docs/components/interface.md` §Requirements scopes accepted work to the current view. Current `src/eval.js` coalesces cloud-eval and Masters loads by canonical position by returning the first in-flight promise before considering a later caller's `AbortSignal`; the first caller's signal therefore effectively owns the shared request lifetime.
+The original evidence-specific framing was too narrow. `src/eval.js` and `src/explorer.js` both coalesced canonical-position work by storing the first caller's promise, so the first caller's `AbortSignal` could own shared work also needed by a replacement caller. Explorer can be critical structural work, so the common problem belongs below evidence composition.
 
-`src/evidence-source.js` now makes evidence a value-returning contributor. It receives a view-scoped AbortSignal and checks it between awaits, and it serializes visible-relationship evidence derivation to limit how much obsolete work it queues at once. It deliberately does not pass that signal into `loadCloudEval` / `loadMasters`, because doing so while the in-flight maps have first-caller ownership would let one obsolete view cancel shared work still useful to another subscriber. This bounds some stale participation but does not solve shared request lifetime.
+`docs/architecture/position-repository.md` now owns canonical position record access and shared facet lifetime. One in-memory record exists per canonical key after use, IndexedDB remains durable persistence, and Explorer/cloud-eval/Masters stay independently fresh facets rather than giving a whole node one freshness state.
 
-`audits/2026-09-25-22-28-08-gpt-5.6-sol-chatgpt.md`, finding “Obsolete evidence work is generation-stale but not request-cancelled,” records that stale evidence results are ignored by publication but their queued requests can still consume the application-wide serialized Lichess request stream and delay the current view.
+`PositionRepository` gives each equivalent facet load one internal producer `AbortController`. Callers participate with their ordinary scoped `AbortSignal`: an obsolete caller detaches independently; live callers keep the producer alive; the last departing caller removes the shared entry and aborts the producer so queued work can be rejected by `LichessGateway` before `fetch`.
+
+`src/eval.js` and `src/explorer.js` now use repository-managed shared facet loads, and `src/evidence-source.js` passes its existing view-scoped signal directly into cloud-eval and Masters loads. Node reads/writes in structure and transposition persistence also go through the repository so the in-memory identity map is not bypassed by application code.
 
 # Edges:
 
-`backlog/2026-09-26-visible-graph-composition.md` owns the stable visible node/edge/family identity used by Root/Line and evidence presentation. This outcome may consume those identifiers when associating a subscriber with the current view, but request coalescing remains an evidence-loader concern and must not be keyed by rendered order or presentation layout.
+`NodusController` continues to own current-view obsolescence and publication only. It does not expose revision identity or own shared request lifetime.
 
-`backlog/2026-09-25-browser-composition-boundary.md` owns immutable current-view publication. `NodusController` keeps revision/publication authority private and supplies only scoped obsolescence to the evidence source. This outcome must replace the evidence source's coarse view-level abort checks with subscriber participation that can detach independently from shared same-position work; the controller must not become the owner of shared request lifetime.
+`LichessGateway` continues to own application-wide serialization, cooldown, and pre-send `AbortSignal` enforcement. It does not own canonical position identity, endpoint cache TTLs, or parsed-result coalescing.
 
-`LichessGateway` continues to own application-wide serialization, cooldown, and pre-send `AbortSignal` enforcement. This outcome must use that boundary rather than introducing a second scheduler or changing chess/evidence cache meaning.
+Endpoint clients still own request parameters, parsing, failure semantics, and facet-specific TTLs. Rated Explorer remains a 24-hour facet; Masters and cloud evaluation remain seven-day facets.
 
-Existing cache TTLs, stale-evidence fallback, cloud-eval 404-as-absence behavior, and explicit request-failure semantics remain constraints rather than subjects for redesign.
-
-# Unsettled:
-
-Choose the smallest model for separating subscriber lifetime from the underlying same-position request lifetime. In particular, decide when a shared underlying request should be aborted after subscribers become obsolete and how a later current subscriber joins already-started or queued equivalent work.
-
-Decide whether coalescing identity remains canonical position per endpoint or needs any additional request-shape key while preserving current endpoint semantics.
+`backlog/2026-09-25-browser-composition-boundary.md` may consume the resulting independent cancellation behavior after this outcome is verified; it should not introduce another evidence-specific subscriber abstraction.
 
 # Complete:
 
-A caller becoming obsolete can stop participating in cloud-eval/Masters work without aborting equivalent work still required by another live subscriber.
+Application-level node access has one canonical-position repository with in-memory reuse and IndexedDB fallback/persistence.
 
-When every subscriber to queued evidence work is obsolete, that request is cancelled before it reaches `fetch`; when at least one live subscriber remains, the underlying request may complete and satisfy it.
+Equivalent cloud-eval, Masters, and Explorer facet loads do not bind shared producer lifetime to the first caller. One obsolete caller can detach while an equivalent live caller remains; when no caller remains, queued producer work is aborted before Lichess transport sends it.
 
-Deterministic tests cover an obsolete subscriber followed by a live same-position subscriber, all-subscribers-obsolete cancellation before send, normal same-position coalescing, cache/stale fallback behavior, and interaction with the shared serialized gateway.
+Evidence composition needs only its existing scoped abort signal and does not know repository subscriber identity, controller revision identity, or request scheduling internals.
+
+Deterministic coverage proves repository memory reuse, independent caller cancellation, last-caller producer cancellation, replacement work after cancellation, same-position cloud-eval sharing across an obsolete/current caller pair, and cancellation of all queued cloud-eval callers before `fetch`, while existing cache/failure, Explorer, gateway, controller, graph, and transposition regressions remain green.
 
 # Steps:
 
-Add failing deterministic cases for shared same-position work with independently obsolete subscribers.
+Run the exact-tip CI workflow, which executes `npm test` and `npm run build`.
 
-Define the minimum subscriber/request-lifetime abstraction around the existing cloud-eval and Masters in-flight maps.
-
-Have `EvidenceSource` participate through that subscriber abstraction rather than handing its view AbortSignal to shared loaders, while keeping revision/publication policy in `NodusController` and scheduling in `LichessGateway`.
-
-Verify the abstraction against stable visible relationship identity and immutable current-view publication, including a superseded view whose equivalent request is still needed by a newer subscriber.
-
-Run evidence, gateway, and controller regressions and synchronize this entry around any remaining behavior.
+If it passes, run Backlog Close for this entry, then synchronize the browser-composition entry around the cleared dependency and any verification still open there.
 
 # Sync:
 

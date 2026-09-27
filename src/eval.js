@@ -1,6 +1,6 @@
 import { canonicalPosition, toPlayableFen } from './graph.js';
-import { getNode, putNode } from './db.js';
 import { lichessGateway } from './lichess-gateway.js';
+import { positionRepository } from './position-repository.js';
 
 export const ENGINE_MIN_DEPTH = 18;
 export const ENGINE_DUBIOUS_CP = 50;
@@ -16,8 +16,6 @@ export const EVAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const CLOUD_ENDPOINT = 'https://lichess.org/api/cloud-eval';
 const MASTERS_ENDPOINT = 'https://explorer.lichess.org/masters';
-const cloudInFlight = new Map();
-const mastersInFlight = new Map();
 
 function moveGames(move) {
   return (move?.white ?? 0) + (move?.draws ?? 0) + (move?.black ?? 0);
@@ -75,17 +73,10 @@ function staleOrFailure(error, cachedValue) {
   return requestFailure(error);
 }
 
-async function mergeNodeFields(key, fields) {
-  const current = await getNode(key);
-  await putNode({ ...(current ?? {}), key, fen: current?.fen ?? toPlayableFen(key), ...fields });
-}
-
-export async function loadCloudEval(positionKey, { signal } = {}) {
+export function loadCloudEval(positionKey, { signal } = {}) {
   const key = canonicalPosition(positionKey);
-  if (cloudInFlight.has(key)) return cloudInFlight.get(key);
-
-  const promise = (async () => {
-    const cached = await getNode(key);
+  return positionRepository.load(key, 'cloud-eval', async ({ signal: requestSignal }) => {
+    const cached = await positionRepository.get(key);
     if (cached?.cloudEvalFetchedAt && Date.now() - cached.cloudEvalFetchedAt < EVAL_TTL_MS) {
       return cached.cloudEval ?? null;
     }
@@ -96,30 +87,25 @@ export async function loadCloudEval(positionKey, { signal } = {}) {
     url.searchParams.set('multiPv', '5');
 
     try {
-      const response = await lichessGateway.request(url, { signal, headers: { Accept: 'application/json' } });
+      const response = await lichessGateway.request(url, { signal: requestSignal, headers: { Accept: 'application/json' } });
       if (response.status === 404) {
-        await mergeNodeFields(key, { cloudEval: null, cloudEvalFetchedAt: Date.now() });
+        await positionRepository.merge(key, { cloudEval: null, cloudEvalFetchedAt: Date.now() });
         return null;
       }
       if (!response.ok) throw httpError(response.status, `Lichess cloud eval returned ${response.status}`);
       const value = await response.json();
-      await mergeNodeFields(key, { cloudEval: value, cloudEvalFetchedAt: Date.now() });
+      await positionRepository.merge(key, { cloudEval: value, cloudEvalFetchedAt: Date.now() });
       return value;
     } catch (error) {
       return staleOrFailure(error, cached?.cloudEval);
     }
-  })().finally(() => cloudInFlight.delete(key));
-
-  cloudInFlight.set(key, promise);
-  return promise;
+  }, { signal });
 }
 
-export async function loadMasters(positionKey, { signal } = {}) {
+export function loadMasters(positionKey, { signal } = {}) {
   const key = canonicalPosition(positionKey);
-  if (mastersInFlight.has(key)) return mastersInFlight.get(key);
-
-  const promise = (async () => {
-    const cached = await getNode(key);
+  return positionRepository.load(key, 'masters', async ({ signal: requestSignal }) => {
+    const cached = await positionRepository.get(key);
     if (cached?.mastersFetchedAt && Date.now() - cached.mastersFetchedAt < EVAL_TTL_MS) {
       return cached.mastersExplorer ?? null;
     }
@@ -130,18 +116,15 @@ export async function loadMasters(positionKey, { signal } = {}) {
     url.searchParams.set('topGames', '0');
 
     try {
-      const response = await lichessGateway.request(url, { signal, headers: { Accept: 'application/json' } });
+      const response = await lichessGateway.request(url, { signal: requestSignal, headers: { Accept: 'application/json' } });
       if (!response.ok) throw httpError(response.status, `Lichess masters explorer returned ${response.status}`);
       const value = await response.json();
-      await mergeNodeFields(key, { mastersExplorer: value, mastersFetchedAt: Date.now() });
+      await positionRepository.merge(key, { mastersExplorer: value, mastersFetchedAt: Date.now() });
       return value;
     } catch (error) {
       return staleOrFailure(error, cached?.mastersExplorer);
     }
-  })().finally(() => mastersInFlight.delete(key));
-
-  mastersInFlight.set(key, promise);
-  return promise;
+  }, { signal });
 }
 
 export function positionEvaluation(cloudEval) {

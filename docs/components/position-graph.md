@@ -21,7 +21,8 @@ Own Chessview's durable chess-state model: what a node means, what an edge means
 
 - `chess.js` owns legal move generation and playable FEN handling.
 - Canonical keys are the stable node identity used by persistence, navigation, discovery, and evidence attachment.
-- IndexedDB stores nodes and edges; graph persistence is independent of the current rendered path.
+- [`PositionRepository`](../architecture/position-repository.md) owns application-level access to node records: one in-memory record per canonical key, IndexedDB fallback/persistence, and independently cancellable shared hydration of position-backed data facets.
+- IndexedDB stores nodes and edges; graph persistence is independent of the current rendered path. `db.js` is the low-level persistence adapter rather than an application-level node cache.
 - Presentation code may use product terms such as Root and Line, but storage and graph algorithms should use directional graph terms where clearer.
 
 ## Verification
@@ -33,6 +34,7 @@ Deterministic tests should cover:
 - legal one-move edge creation;
 - transposition merge behavior;
 - persistence of nodes and edges;
+- in-memory node reuse and IndexedDB fallback through `PositionRepository`;
 - promotion of an Explorer-backed edge to manual without losing its statistical evidence;
 - preservation of manual/explicit graph provenance when Explorer-derived edges are reconciled, while refreshed Explorer statistics replace stale statistical values.
 

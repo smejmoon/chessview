@@ -4,7 +4,7 @@
 
 Own authentication, endpoint access, shared request policy, endpoint caches, and transport/failure semantics for Chessview's Lichess-backed data.
 
-The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). This component owns the observable request-policy requirements that boundary must enforce.
+The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). Canonical position record and shared facet lifetime are defined in [`docs/architecture/position-repository.md`](../architecture/position-repository.md). This component owns the observable request-policy requirements those boundaries must enforce.
 
 ## Data sources
 
@@ -32,7 +32,9 @@ The gateway must:
 - prevent queued work from being sent after its `AbortSignal` becomes obsolete;
 - preserve transport outcomes so domain clients can distinguish successful absence from failure to obtain data.
 
-Endpoint clients retain responsibility for request parameters, parsing, validation, persistence, cache policy, and chess-specific meaning.
+Position-backed endpoint clients may coalesce equivalent work for one canonical position and endpoint facet. One caller becoming obsolete must stop only that caller's participation without cancelling equivalent work still needed by another live caller. When every caller to shared queued work becomes obsolete, the shared producer must be cancelled so the queued request does not reach Lichess.
+
+Endpoint clients retain responsibility for request parameters, parsing, validation, persistence, cache policy, and chess-specific meaning. Facets retain independent freshness; a position record is not globally fresh or stale.
 
 ## Cache and failure semantics
 
@@ -57,6 +59,8 @@ Deterministic tests should cover:
 - cross-client serialization between rated Explorer, Masters, cloud evaluation, and other gateway users;
 - a 429 from one client delaying later traffic from another client;
 - cancellation of queued obsolete work before it reaches the network;
+- one obsolete caller detaching from shared same-position work while another live caller still receives it;
+- all callers becoming obsolete cancelling shared queued work before send;
 - cloud-eval successful absence versus request failure;
 - stale evidence fallback without converting failure into absence.
 

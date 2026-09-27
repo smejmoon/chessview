@@ -1,4 +1,4 @@
-import { getNode, getOutgoing } from './db.js';
+import { getOutgoing } from './db.js';
 import {
   ENGINE_MIN_DEPTH,
   HUMAN_SAMPLE_FLOOR,
@@ -11,6 +11,7 @@ import {
   railWorthy,
   rootRarity,
 } from './eval.js';
+import { positionRepository } from './position-repository.js';
 
 function abortError() {
   const error = new Error('Evidence view became obsolete');
@@ -34,14 +35,12 @@ function immutable(value) {
 
 async function relationshipEvidence(relationship, mode, signal) {
   const edge = relationship.edge;
-  const sourceNode = await getNode(edge.source);
+  const sourceNode = await positionRepository.get(edge.source);
   throwIfAborted(signal);
-  // Do not bind the shared evidence request to this view's AbortSignal. The
-  // evidence-request-lifetime outcome owns independent subscriber cancellation.
   const [sourceEval, targetEval, masters] = await Promise.all([
-    loadCloudEval(edge.source),
-    loadCloudEval(edge.target),
-    loadMasters(edge.source),
+    loadCloudEval(edge.source, { signal }),
+    loadCloudEval(edge.target, { signal }),
+    loadMasters(edge.source, { signal }),
   ]);
   throwIfAborted(signal);
   const moveEval = moveEvaluation(edge.source, edge, sourceEval, targetEval);
@@ -70,10 +69,10 @@ async function visibleRelationshipEvidence(composition, mode, signal) {
 
 async function lineRailEvidence(center, signal) {
   const [node, outgoing, sourceEval, masters] = await Promise.all([
-    getNode(center),
+    positionRepository.get(center),
     getOutgoing(center),
-    loadCloudEval(center),
-    loadMasters(center),
+    loadCloudEval(center, { signal }),
+    loadMasters(center, { signal }),
   ]);
   throwIfAborted(signal);
   const lichess = node?.explorer ?? null;
@@ -90,7 +89,7 @@ async function lineRailEvidence(center, signal) {
       && Number.isFinite(sourceEval?.depth)
       && sourceEval.depth >= ENGINE_MIN_DEPTH;
     if (!moveEval && fallback) {
-      targetEval = await loadCloudEval(edge.target);
+      targetEval = await loadCloudEval(edge.target, { signal });
       throwIfAborted(signal);
       moveEval = moveEvaluation(center, edge, sourceEval, targetEval);
     }
@@ -113,7 +112,7 @@ export async function loadNodusEvidence({ center, mode, structure, signal } = {}
   const composition = structure?.composition;
   if (!composition) return immutable({ center: null, relationships: [], rail: { rows: [], masters: null } });
 
-  const centerCloudPromise = loadCloudEval(center);
+  const centerCloudPromise = loadCloudEval(center, { signal });
   const relationshipPromise = visibleRelationshipEvidence(composition, mode, signal);
   const railPromise = mode === 'lines'
     ? lineRailEvidence(center, signal)

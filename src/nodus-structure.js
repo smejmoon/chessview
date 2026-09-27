@@ -1,4 +1,4 @@
-import { getIncoming, getNode, getOutgoing } from './db.js';
+import { getIncoming, getOutgoing } from './db.js';
 import {
   START_FEN,
   canonicalPosition,
@@ -8,6 +8,7 @@ import {
   toPlayableFen,
 } from './graph.js';
 import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
+import { positionRepository } from './position-repository.js';
 import { rootTranspositionEnricher } from './root-enrichment.js';
 
 const START = canonicalPosition(START_FEN);
@@ -153,7 +154,7 @@ export async function composeNodusStructure({ center, mode, max = 19, signal } =
   const composition = normalizeComposition(selected);
   const keys = [center, ...composition.nodes.map((node) => node.key)];
   const nodeValues = await Promise.all(keys.map(async (key) => {
-    const value = (await getNode(key)) ?? { key, fen: toPlayableFen(key) };
+    const value = (await positionRepository.get(key)) ?? { key, fen: toPlayableFen(key) };
     throwIfAborted(signal);
     return [key, immutable({ ...value })];
   }));

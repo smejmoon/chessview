@@ -2,6 +2,11 @@ const DB_NAME = 'chessview';
 const DB_VERSION = 1;
 
 let dbPromise;
+let nodeVersion = 0;
+
+export function nodeStoreVersion() {
+  return nodeVersion;
+}
 
 function openDb() {
   if (dbPromise) return dbPromise;
@@ -41,7 +46,10 @@ export async function putNode(node) {
   const tx = db.transaction('nodes', 'readwrite');
   tx.objectStore('nodes').put(node);
   return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve(node);
+    tx.oncomplete = () => {
+      nodeVersion += 1;
+      resolve(node);
+    };
     tx.onerror = () => reject(tx.error);
   });
 }
@@ -138,7 +146,10 @@ export async function clearGraph() {
   tx.objectStore('nodes').clear();
   tx.objectStore('edges').clear();
   return new Promise((resolve, reject) => {
-    tx.oncomplete = resolve;
+    tx.oncomplete = () => {
+      nodeVersion += 1;
+      resolve();
+    };
     tx.onerror = () => reject(tx.error);
   });
 }

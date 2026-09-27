@@ -16,13 +16,13 @@ import {
   hasLineCandidates,
   takeLineCandidate,
 } from './line-frontier.js';
-import { getNode, getOutgoing, putManualEdge, putNode, replaceExplorerEdges } from './db.js';
+import { getOutgoing, putManualEdge, replaceExplorerEdges } from './db.js';
 import { debugLog } from './debug.js';
 import { lichessSession } from './lichess-session.js';
 import { lichessGateway } from './lichess-gateway.js';
+import { positionRepository } from './position-repository.js';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
-const inFlight = new Map();
 
 function explorerUrl(key) {
   const url = new URL(ENDPOINT);
@@ -59,12 +59,7 @@ async function reconcileExplorerSnapshot(canonical, explorer) {
       };
       edge.id = edgeId(edge);
       edges.push(edge);
-      const previousChild = await getNode(child.key);
-      await putNode({
-        ...(previousChild ?? {}),
-        key: child.key,
-        fen: child.fen,
-      });
+      await positionRepository.merge(child.key, { fen: child.fen });
     } catch (error) {
       debugLog('ignored explorer move', { position: canonical, uci: move.uci, error: error?.message ?? String(error) }, 'warn');
     }
@@ -74,26 +69,23 @@ async function reconcileExplorerSnapshot(canonical, explorer) {
   return edges;
 }
 
-export async function loadExplorer(key, { force = false, signal } = {}) {
+export function loadExplorer(key, { force = false, signal } = {}) {
   const canonical = canonicalPosition(key);
-  const cached = await getNode(canonical);
-  const fresh = cached?.explorer && Date.now() - (cached.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS;
-  if (!force && fresh) {
-    const edges = await reconcileExplorerSnapshot(canonical, cached.explorer);
-    debugLog('explorer cache hit', {
-      position: canonical,
-      games: cached.games ?? 0,
-      edges: edges.length,
-      qualifying: edges.filter((edge) => edge.qualifies).length,
-    });
-    return cached;
-  }
-  if (inFlight.has(canonical)) {
-    debugLog('explorer request joined', { position: canonical });
-    return inFlight.get(canonical);
-  }
+  const facet = force ? 'explorer:force' : 'explorer';
+  return positionRepository.load(canonical, facet, async ({ signal: requestSignal }) => {
+    const cached = await positionRepository.get(canonical);
+    const fresh = cached?.explorer && Date.now() - (cached.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS;
+    if (!force && fresh) {
+      const edges = await reconcileExplorerSnapshot(canonical, cached.explorer);
+      debugLog('explorer cache hit', {
+        position: canonical,
+        games: cached.games ?? 0,
+        edges: edges.length,
+        qualifying: edges.filter((edge) => edge.qualifies).length,
+      });
+      return cached;
+    }
 
-  const promise = (async () => {
     const token = await lichessSession.requireAccessToken();
     const url = explorerUrl(canonical);
     debugLog('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
@@ -101,7 +93,7 @@ export async function loadExplorer(key, { force = false, signal } = {}) {
     let response;
     try {
       response = await lichessGateway.request(url, {
-        signal,
+        signal: requestSignal,
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
@@ -130,24 +122,18 @@ export async function loadExplorer(key, { force = false, signal } = {}) {
     }
 
     const explorer = await response.json();
-    const node = {
-      ...(cached ?? {}),
-      key: canonical,
-      fen: toPlayableFen(canonical),
+    const node = await positionRepository.merge(canonical, {
+      fen: cached?.fen ?? toPlayableFen(canonical),
       opening: explorer.opening ?? cached?.opening ?? null,
       explorer,
       explorerFetchedAt: Date.now(),
       games: totalGames(explorer),
-    };
+    });
 
-    await putNode(node);
     const edges = await reconcileExplorerSnapshot(canonical, explorer);
     debugLog('explorer stored', { position: canonical, games: node.games, edges: edges.length, qualifying: edges.filter((edge) => edge.qualifies).length });
     return node;
-  })().finally(() => inFlight.delete(canonical));
-
-  inFlight.set(canonical, promise);
-  return promise;
+  }, { signal });
 }
 
 export async function ensureManualEdge(sourceKey, from, to, promotion = 'q') {
@@ -179,8 +165,7 @@ export async function ensureManualEdge(sourceKey, from, to, promotion = 'q') {
   };
   edge.id = edgeId(edge);
   const storedEdge = await putManualEdge(edge);
-  const existing = await getNode(target);
-  await putNode({ ...(existing ?? {}), key: target, fen: chess.fen() });
+  await positionRepository.merge(target, { fen: chess.fen() });
   debugLog('manual move stored', { san: played.san, uci: edge.uci, source: edge.source, target });
   return { edge: storedEdge, target };
 }
@@ -216,7 +201,7 @@ export async function discoverForViewport(centerKey, budget, onProgress, { signa
       seen.add(item.key);
       progressed = true;
 
-      const known = await getNode(item.key);
+      const known = await positionRepository.get(item.key);
       if ((known?.games ?? Infinity) < AUTO_SAMPLE_FLOOR && known?.explorer) continue;
       try {
         const node = await loadExplorer(item.key, { signal });

@@ -3,9 +3,9 @@ import {
   START_FEN,
   canonicalPosition,
   edgeId,
-  toPlayableFen,
 } from './graph.js';
-import { getNode, getOutgoing, putEdges, putNode } from './db.js';
+import { getOutgoing, putEdges } from './db.js';
+import { positionRepository } from './position-repository.js';
 
 const START = canonicalPosition(START_FEN);
 
@@ -134,8 +134,8 @@ export async function persistTranspositionPaths(paths) {
 
   let addedNodes = 0;
   for (const key of nodeKeys) {
-    if (await getNode(key)) continue;
-    await putNode({ key, fen: toPlayableFen(key) });
+    if (await positionRepository.get(key)) continue;
+    await positionRepository.ensure(key);
     addedNodes += 1;
   }
 

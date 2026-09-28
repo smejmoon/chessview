@@ -40,8 +40,8 @@ export async function materializeMove({ source, move } = {}) {
   };
   edge.id = edgeId(edge);
 
+  await positionRepository.ensure(resolved.target);
   const storedEdge = await putManualEdge(edge);
-  await positionRepository.merge(resolved.target, { fen: resolved.fen });
   debugLog('move materialization stored', {
     san: resolved.san,
     uci: edge.uci,

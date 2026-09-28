@@ -70,3 +70,27 @@ test('materializing an existing edge preserves its Explorer evidence while marki
   assert.equal(stored.share, 0.6);
   assert.equal(stored.qualifies, true);
 });
+
+test('target position exists before the durable move edge is written', async () => {
+  await clearGraph();
+  const resolved = resolveMove(center, { uci: 'e2e4' });
+  const originalPut = IDBObjectStore.prototype.put;
+  let observedTarget = null;
+
+  IDBObjectStore.prototype.put = function put(value, ...args) {
+    if (this.name === 'edges' && value?.target === resolved.target) {
+      const request = this.transaction.db.transaction('nodes').objectStore('nodes').get(resolved.target);
+      request.onsuccess = () => { observedTarget = request.result ?? null; };
+    }
+    return originalPut.call(this, value, ...args);
+  };
+
+  try {
+    await materializeMove({ source: center, move: { from: 'e2', to: 'e4' } });
+  } finally {
+    IDBObjectStore.prototype.put = originalPut;
+  }
+
+  assert.equal(observedTarget?.key, resolved.target);
+  assert.equal(observedTarget?.fen, resolved.fen);
+});

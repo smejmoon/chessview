@@ -84,11 +84,11 @@ button { color: inherit; }
   text-align: left;
   z-index: 4;
   transform-origin: center;
-  transition: transform 190ms cubic-bezier(.2,.8,.2,1), filter 160ms ease, opacity 160ms ease;
+  transition: transform 190ms cubic-bezier(.2,.8,.2,1), filter 160ms ease;
 }
 .satellite:hover, .satellite:focus-visible { transform: translate(-50%, -50%) scale(1.34); z-index: 24; outline: none; filter: brightness(1.09); }
-.satellite.tier-2 { --size: 74px; opacity: .7; }
-.satellite.tier-2:hover, .satellite.tier-2:focus-visible { transform: translate(-50%, -50%) scale(1.85); opacity: 1; z-index: 28; }
+.satellite.tier-2 { --size: 74px; }
+.satellite.tier-2:hover, .satellite.tier-2:focus-visible { transform: translate(-50%, -50%) scale(1.85); z-index: 28; }
 .satellite .mini-board { width: 100%; border-radius: 2px; overflow: hidden; box-shadow: 0 9px 24px rgba(0,0,0,.31), 0 0 0 1px rgba(255,255,255,.045); pointer-events: none; }
 .satellite:hover .mini-board, .satellite:focus-visible .mini-board { box-shadow: 0 18px 42px rgba(0,0,0,.5), 0 0 0 1px rgba(179,210,103,.18); }
 .mini-label { display: flex; align-items: baseline; gap: 5px; min-height: 18px; color: #bdbab5; font-size: 10px; white-space: nowrap; text-shadow: 0 1px 5px #000; }
@@ -175,21 +175,9 @@ cg-board piece { will-change: transform; }
   .position-stats { font-size: 9px; }
   .mode-tabs { grid-column: 2; grid-row: 1; padding: 8px; }
   .rail-explorer { grid-column: 1 / -1; grid-row: 2; }
+  .rail-section-head { display: none; }
+  .explorer-list { padding: 4px 6px 8px; }
+  .explorer-row { min-height: 34px; grid-template-columns: 46px minmax(54px, 1fr) 36px 42px; gap: 5px; padding: 0 6px; }
+  .roots-row { grid-template-columns: 28px 38px minmax(54px, 1fr) 34px 40px; }
   .rail-debug { display: none; }
-}
-
-@media (max-width: 460px) {
-  .brand { font-size: 14px; }
-  .toolbar-button { padding: 0 7px; }
-  .center-position { width: min(60vw, 285px); }
-  .mode-lines .center-position { left: 34%; }
-  .mode-roots .center-position { left: 66%; }
-  .satellite { --size: 58px; }
-  .satellite.tier-2 { --size: 44px; }
-  .analysis-rail { grid-template-columns: 1fr 180px; }
-  .roots-row { grid-template-columns: 28px 44px minmax(60px, 1fr) 34px 40px; gap: 5px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }

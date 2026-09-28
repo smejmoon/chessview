@@ -38,6 +38,20 @@ test('Line connector planning keeps every convergence relationship and every fam
   assert.deepEqual(sharedContinuation.map((connector) => connector.familyOffset), [-0.5, 0.5]);
 });
 
+test('Root connector planning points every graph edge toward its target', () => {
+  const incomingByTarget = new Map([
+    ['center', [rootEdge('a', 'center', 'a1a2'), rootEdge('b', 'center', 'b1b2')]],
+  ]);
+
+  const composition = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 2 });
+  const connectors = visibleConnectors(composition, { direction: 'roots' });
+
+  assert.deepEqual(connectors.map(({ source, target }) => [source, target]), [
+    ['a', 'center'],
+    ['b', 'center'],
+  ]);
+});
+
 test('Root connector planning draws every downstream relationship from one merged board', () => {
   const incomingByTarget = new Map([
     ['center', [rootEdge('a', 'center', 'a1a2'), rootEdge('b', 'center', 'b1b2')]],

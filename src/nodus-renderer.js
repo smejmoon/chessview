@@ -29,6 +29,16 @@ function escapeHtml(value = '') {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 }
 
+function moveCueShapes(item, structure, mode) {
+  const uci = item.edge?.uci;
+  if (typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8]/.test(uci)) return [];
+  if (mode === 'roots') {
+    const node = structure.composition?.nodes?.find?.((candidate) => candidate.key === item.key);
+    if (node?.merge) return [];
+  }
+  return [{ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: 'green' }];
+}
+
 function mapCenterX(width) {
   if (width <= 460) return 34;
   if (width <= 760) return 31;
@@ -167,6 +177,11 @@ export function createNodusRenderer({
         movable: { free: false, color: undefined },
         draggable: { enabled: false },
         selectable: { enabled: false },
+        drawable: {
+          enabled: false,
+          visible: true,
+          autoShapes: moveCueShapes(item, structure, view.mode),
+        },
       }));
     }
   }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
+import { IDBObjectStore, indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import { canonicalPosition, edgeId, resolveMove, START_FEN } from '../src/graph.js';
 
 globalThis.indexedDB = fakeIndexedDB;

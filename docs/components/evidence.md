@@ -6,7 +6,7 @@ Own how Chessview turns engine and human statistical data into move-quality, mis
 
 ## Product criticality
 
-This component is supplementary to the core position-graph experience defined by [`docs/PLAN.md`](../PLAN.md) §Product usability bar. Once the visible Root/Line neighborhood has been structurally established, evidence in this component may continue hydrating without blocking normal global readiness.
+This component is supplementary to the core position-graph experience defined by [`docs/product.md`](../product.md) §Product usability bar. Once the visible Root/Line neighborhood has been structurally established, evidence in this component may continue hydrating without blocking normal global readiness.
 
 Rated Lichess Explorer data used by [Discovery](discovery.md) to decide which Line boards belong in the visible graph can be critical to structural usability when persisted graph knowledge is insufficient. That structural use is owned by Discovery. The evidence uses below — engine evaluation, move quality, Masters comparison, mismatch markers, Rail filtering/annotation, and Root rarity — enrich an already navigable graph and are not themselves prerequisites for rendering or navigating the established Root/Line boards.
 

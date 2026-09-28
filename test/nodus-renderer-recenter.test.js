@@ -92,6 +92,7 @@ class FakeDocument {
   removeEventListener(type, listener) {
     if (this.listeners.get(type) === listener) this.listeners.delete(type);
   }
+  emit(type, event = {}) { return this.listeners.get(type)?.(event); }
 }
 
 function viewFor(center, positions = []) {
@@ -189,38 +190,7 @@ for (const promotion of ['q', 'n', 'r', 'b']) {
   }));
 }
 
-test('NodusRenderer keeps a pending promotion aligned when the board flips', async () => withRenderer(async (createNodusRenderer) => {
-  const source = canonicalPosition('k7/4P3/8/8/8/8/8/7K w - - 0 1');
-  const document = new FakeDocument();
-  const app = new FakeElement(document, { id: 'app' });
-  const calls = [];
-  const actions = {
-    recenter(request) { calls.push(['recenter', request]); return true; },
-    redraw() { calls.push(['redraw']); return true; },
-    setMode() {}, back() {}, flip() {},
-  };
-  const renderer = createNodusRenderer({ app, preferences: {} });
-  const whiteView = viewFor(source);
-  renderer.render(whiteView, actions);
-
-  const whiteBoard = globalThis.__chessviewRendererBoardCalls.find(({ element }) => element?.id === 'center-board');
-  const move = whiteBoard.config.movable.events.after('e7', 'e8');
-  let queen = app.centerBoard.querySelector('[data-promotion="q"]');
-  assert.equal(queen.style.getPropertyValue('left'), '50%');
-  assert.equal(queen.style.getPropertyValue('top'), '0%');
-
-  renderer.render({ ...whiteView, orientation: 'black' }, actions);
-  queen = app.centerBoard.querySelector('[data-promotion="q"]');
-  assert.ok(queen);
-  assert.equal(queen.style.getPropertyValue('left'), '37.5%');
-  assert.equal(queen.style.getPropertyValue('top'), '87.5%');
-
-  queen.emit('click', { stopPropagation() {} });
-  assert.equal(await move, true);
-  assert.deepEqual(calls, [['recenter', { move: { from: 'e7', to: 'e8', promotion: 'q' } }]]);
-}));
-
-test('NodusRenderer promotion backdrop cancels without Recenter', async () => withRenderer(async (createNodusRenderer) => {
+test('NodusRenderer outside-promotion pointer cancels without Recenter', async () => withRenderer(async (createNodusRenderer) => {
   const source = canonicalPosition('k7/4P3/8/8/8/8/8/7K w - - 0 1');
   const document = new FakeDocument();
   const app = new FakeElement(document, { id: 'app' });
@@ -235,7 +205,15 @@ test('NodusRenderer promotion backdrop cancels without Recenter', async () => wi
 
   const centerBoard = globalThis.__chessviewRendererBoardCalls.find(({ element }) => element?.id === 'center-board');
   const move = centerBoard.config.movable.events.after('e7', 'e8');
-  app.centerBoard.querySelector('#promotion-choice').emit('click');
+  let stopped = false;
+  let prevented = false;
+  document.emit('pointerdown', {
+    target: app.centerBoard,
+    stopPropagation() { stopped = true; },
+    preventDefault() { prevented = true; },
+  });
+  assert.equal(stopped, true);
+  assert.equal(prevented, true);
   assert.equal(await move, false);
   assert.deepEqual(calls, [['redraw']]);
 }));

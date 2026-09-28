@@ -24,6 +24,13 @@ function promotionSquare(to, index, orientation, color) {
   };
 }
 
+function isPromotionOptionTarget(state, target) {
+  for (let node = target; node; node = node.parentNode) {
+    if (state.options.has(node)) return true;
+  }
+  return false;
+}
+
 export function createPromotionChooser({ app } = {}) {
   if (!app) throw new TypeError('Promotion chooser requires an app element');
   const document = app.ownerDocument ?? globalThis.document;
@@ -31,7 +38,10 @@ export function createPromotionChooser({ app } = {}) {
 
   function removeOverlay(state = pending) {
     state?.overlay?.remove?.();
-    if (state) state.overlay = null;
+    if (state) {
+      state.overlay = null;
+      state.options.clear();
+    }
   }
 
   function settle(piece) {
@@ -39,6 +49,7 @@ export function createPromotionChooser({ app } = {}) {
     if (!state) return false;
     pending = null;
     removeOverlay(state);
+    document?.removeEventListener?.('pointerdown', state.onPointerDown, true);
     document?.removeEventListener?.('keydown', state.onKeyDown);
     state.resolve(piece);
     return true;
@@ -58,7 +69,6 @@ export function createPromotionChooser({ app } = {}) {
     overlay.className = 'promotion-choice';
     overlay.setAttribute?.('role', 'dialog');
     overlay.setAttribute?.('aria-label', 'Choose promotion piece');
-    overlay.addEventListener('click', () => settle(null));
 
     state.choices.forEach((piece, index) => {
       const point = promotionSquare(state.to, index, state.orientation, state.color);
@@ -80,6 +90,7 @@ export function createPromotionChooser({ app } = {}) {
       visual.className = `${role} ${state.color}`;
       button.appendChild(visual);
       overlay.appendChild(button);
+      state.options.add(button);
     });
 
     state.overlay = overlay;
@@ -100,13 +111,22 @@ export function createPromotionChooser({ app } = {}) {
         orientation,
         color,
         overlay: null,
+        options: new Set(),
         resolve,
+        onPointerDown: null,
         onKeyDown: null,
+      };
+      state.onPointerDown = (event) => {
+        if (isPromotionOptionTarget(state, event?.target)) return;
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        settle(null);
       };
       state.onKeyDown = (event) => {
         if (event?.key === 'Escape') settle(null);
       };
       pending = state;
+      document?.addEventListener?.('pointerdown', state.onPointerDown, true);
       document?.addEventListener?.('keydown', state.onKeyDown);
       render(center);
     });

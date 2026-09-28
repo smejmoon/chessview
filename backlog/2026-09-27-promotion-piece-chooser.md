@@ -1,32 +1,34 @@
 # Do:
 
-Manually verify the latest published board-native promotion chooser on desktop and narrow layouts.
+Manually verify the latest published board-native promotion chooser on desktop and narrow layouts after simplifying outside-selection cancellation.
 
 # Blocked:
 
-Completion awaits manual browser verification of the latest preview. Deterministic repository verification now passes through task-branch CI, including the chooser/renderer coverage, TypeScript check, and production build; subsequent pushed checkpoints rerun those gates automatically.
+Completion awaits manual browser verification of the latest preview. Deterministic repository verification runs through task-branch CI, including chooser/renderer coverage, TypeScript checking, and the production build; the exact current tip must retain a successful `Verify` result.
 
 # Because:
 
-`src/promotion-chooser.js` owns a Lichess-style destination-file promotion overlay using Chessground's existing piece theme, while `src/recenter-input.js::promotionChoices()` still derives legal promotion pieces through `resolveMove()`. The selected piece is passed unchanged through the existing Move/Recenter path; backdrop or Escape dismissal resolves as cancel and the existing handler redraws without Recenter.
+`src/promotion-chooser.js` owns a Lichess-style destination-file promotion overlay using Chessground's existing piece theme, while `src/recenter-input.js::promotionChoices()` derives legal promotion pieces through `resolveMove()`. The selected piece is passed unchanged through the existing Move/Recenter path; cancellation resolves as null and the existing handler redraws without Recenter.
 
-A pending chooser now synchronizes its placement inputs from each renderer publication, so flipping the current Nodus preserves the pending choice while remapping it to the newly oriented destination file and promotion edge. Deterministic chooser and renderer coverage exercise that same-center orientation change and now run in the task-branch `Verify` gate.
+While a promotion choice is pending, the chooser now owns one document-capture pointer rule: a pointer target inside a rendered promotion option is allowed through for normal selection; every other pointer target cancels the chooser before Chessground can consume the gesture. The overlay itself is presentation only and no longer carries separate backdrop click/pointer cancellation handlers. Escape remains the keyboard cancel path.
 
-Chessground's stock coordinate CSS positions labels partly outside the board, which conflicts with Chessview's clipped Nodus frame. `src/chessground-overrides.css` keeps center-board coordinates inside their squares and is imported by `src/nodus-renderer.js`, so the presentation fix no longer depends on whether the application entrypoint is JavaScript or TypeScript.
+The chooser still tolerates orientation changes while pending, but flip-during-promotion is not part of this outcome's required behavior or manual close gate.
+
+Chessground's stock coordinate CSS positions labels partly outside the board, which conflicts with Chessview's clipped Nodus frame. `src/chessground-overrides.css` keeps center-board coordinates inside their squares and is imported by `src/nodus-renderer.js`.
 
 # Edges:
 
-Keep `resolveMove()` as the chess-rule authority for which promotion pieces are legal, and keep `NodusController` as the owner of Recenter. This outcome changes promotion interaction and its board presentation only; it does not redesign Move materialization, graph identity, browser-history behavior, or migrate the application entrypoint to TypeScript.
+Keep `resolveMove()` as the chess-rule authority for legal promotion pieces and keep `NodusController` as the owner of Recenter. This outcome changes promotion interaction and board presentation only; it does not redesign Move materialization, graph identity, browser-history behavior, or migrate the application entrypoint to TypeScript.
 
 # Complete:
 
-All legal promotion pieces can be selected without a textual browser prompt; the selected piece reaches the existing Move/Recenter pipeline unchanged; cancel creates no Move or Recenter; flipping while promotion is pending keeps the chooser aligned to the displayed board; deterministic Interface/renderer coverage protects all four choices, cancel, and flip behavior; board coordinates remain visually aligned at supported responsive sizes and orientations.
+All legal promotion pieces can be selected without a textual browser prompt; the selected piece reaches the existing Move/Recenter pipeline unchanged; any pointer outside the promotion options and Escape cancel without creating a Move or Recenter; deterministic coverage protects all four choices and cancel behavior; board coordinates remain visually aligned at supported responsive sizes and orientations.
 
 # Steps:
 
-Verify the published destination-file chooser manually for White and Black promotion, flipped orientation while the chooser is open, backdrop/Escape cancel, coordinate alignment, and narrow responsive layouts.
+Verify the published chooser manually for White and Black promotion, outside-selection cancel, Escape cancel, coordinate alignment, and narrow responsive layouts.
 
-If manual verification passes and the latest task-branch `Verify` gate remains green, run Backlog Close; otherwise repair the observed failures and repeat verification.
+If manual verification passes and the latest task-branch `Verify` gate remains green, run Backlog Close; otherwise repair the observed failure and repeat verification.
 
 # Sync:
 

@@ -173,18 +173,51 @@ test('same-center sync updates promotion placement after orientation changes', a
   }
 });
 
-test('backdrop and Escape cancel without selecting a promotion', async () => {
+test('document capture cancels outside promotion options but not an option', async () => {
+  const { createPromotionChooser, close } = await loadChooser();
+  try {
+    const document = new FakeDocument();
+    const { app, board } = fixture(document);
+    const chooser = createPromotionChooser({ app });
+
+    let pending = chooser.choose({ center: 'position', to: 'e8', choices: ['q', 'r', 'b', 'n'] });
+    const queen = app.querySelector('[data-promotion="q"]');
+    let stopped = false;
+    let prevented = false;
+    document.emit('pointerdown', {
+      target: queen,
+      stopPropagation() { stopped = true; },
+      preventDefault() { prevented = true; },
+    });
+    assert.equal(stopped, false);
+    assert.equal(prevented, false);
+    queen.emit('click', { stopPropagation() {} });
+    assert.equal(await pending, 'q');
+
+    pending = chooser.choose({ center: 'position', to: 'e8', choices: ['q', 'r', 'b', 'n'] });
+    stopped = false;
+    prevented = false;
+    document.emit('pointerdown', {
+      target: board,
+      stopPropagation() { stopped = true; },
+      preventDefault() { prevented = true; },
+    });
+    assert.equal(stopped, true);
+    assert.equal(prevented, true);
+    assert.equal(await pending, null);
+    assert.equal(app.querySelector('#promotion-choice'), null);
+  } finally {
+    await close();
+  }
+});
+
+test('Escape cancels without selecting a promotion', async () => {
   const { createPromotionChooser, close } = await loadChooser();
   try {
     const document = new FakeDocument();
     const { app } = fixture(document);
     const chooser = createPromotionChooser({ app });
-
-    let pending = chooser.choose({ center: 'position', to: 'e8', choices: ['q', 'r', 'b', 'n'] });
-    app.querySelector('#promotion-choice').emit('click');
-    assert.equal(await pending, null);
-
-    pending = chooser.choose({ center: 'position', to: 'e8', choices: ['q', 'r', 'b', 'n'] });
+    const pending = chooser.choose({ center: 'position', to: 'e8', choices: ['q', 'r', 'b', 'n'] });
     document.emit('keydown', { key: 'Escape' });
     assert.equal(await pending, null);
   } finally {

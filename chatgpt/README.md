@@ -32,7 +32,11 @@ an explicitly authorized named non-`main` task branch.
 `branch-preview.md` owns Chessview's compact branch-development lifecycle and
 its conversational commands:
 
-`branch -> implement -> preview -> review -> distill -> merge -> cleanup`
+`branch -> implement -> preview -> review -> distill -> merge`
+
+Preview retention follows branch existence. Deleting a task branch retires its
+preview on the next `reset-pages` reconstruction; there is no separate cleanup
+command.
 
 It is intentionally project-local for now. `chessview-gpt.md` owns policy and
 authorization, while `.github/workflows/` owns executable CI and deployment

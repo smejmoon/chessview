@@ -40,16 +40,6 @@ export function resolveMove(sourceKey, move) {
   };
 }
 
-export function moveToChild(sourceKey, move) {
-  const resolved = resolveMove(sourceKey, move);
-  return {
-    key: resolved.target,
-    fen: resolved.fen,
-    san: resolved.san,
-    uci: resolved.uci,
-  };
-}
-
 export function totalGames(explorer) {
   return (explorer?.white ?? 0) + (explorer?.draws ?? 0) + (explorer?.black ?? 0);
 }

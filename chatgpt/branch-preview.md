@@ -1,15 +1,14 @@
 # Branch preview workflow
 
 Use this as Chessview's default feature-development lifecycle when a task benefits
-from inspecting a deployed result before it reaches production.
-
-The lifecycle is:
+from inspecting a deployed result before it reaches production:
 
 `branch -> implement -> preview -> review -> distill -> merge -> cleanup`
 
-This file owns the lifecycle and command meanings. Repository policy stays in
-`chatgpt/chessview-gpt.md`; executable CI and deployment behavior stays in
-`.github/workflows/`.
+This file owns lifecycle transitions and command meanings. `chatgpt/chessview-gpt.md`
+owns repository policy and integration authority; `docs/components/delivery.md`
+§Verification owns CI evidence semantics; `.github/workflows/` owns executable CI
+and deployment behavior.
 
 ## Start work
 
@@ -17,44 +16,23 @@ This file owns the lifecycle and command meanings. Repository policy stays in
 it does not already exist. That branch becomes this-chat branch. Keep feature
 writes there until the human explicitly changes the target.
 
-Small maintenance work may still happen directly on `main` when the Chessview
-adapter permits it, but branch work is the default when preview, review, or
-history distillation is useful.
-
 ## Implement
 
 Make coherent checkpoint commits on the task branch. Pushing a named task-branch
-checkpoint triggers the dedicated CI workflow for that exact branch tip.
+checkpoint triggers CI for that branch tip. After code-affecting changes,
+establish exact-tip verification using `docs/components/delivery.md` §Verification.
 
-`Verify` means the named `Verify` job from `.github/workflows/ci.yml`; it is
-Chessview's CI job name, not a GitHub-wide feature or an informal synonym for
-"looks good." A successful `Verify` means that job concluded `success` for the
-workflow run attached to the commit being evaluated.
-
-After code-affecting changes, establish exact-tip verification as follows:
-
-1. resolve the current task branch to SHA `X`;
-2. find the `CI` workflow run whose `head_sha` is exactly `X`;
-3. inspect that run's `Verify` job and require conclusion `success` (latest
-   attempt when the run was rerun);
-4. re-resolve the branch before relying on the result, and discard the evidence
-   if the branch tip is no longer `X`.
-
-A successful run for another SHA does not verify the current branch tip. If the
-same SHA needs to be checked again, rerun that existing workflow run rather than
-manufacturing a new commit. Branch-preview publication is separate and is not by
-itself merge-readiness evidence. Checkpoints are execution history, not
-necessarily the final history worth keeping.
+Checkpoints are execution history, not necessarily the final history worth
+keeping.
 
 ## Preview
 
 `preview` means publish or refresh the task branch's non-production preview using
 the repository's current preview mechanism, then report the exact preview URL or
-report why no preview mechanism is available.
+the blocker when publication is unavailable.
 
-A preview must not replace the production deployment from `main`. Preview
-publication may occur independently of CI because it is a development artifact,
-not an assertion that the branch is ready to merge.
+A preview must not replace production from `main`. Preview success is inspection
+evidence, not CI verification.
 
 ## Review
 
@@ -69,51 +47,27 @@ After review fixes, refresh the preview when the visible result may have changed
 
 ## Distill
 
-`distill history` routes to Strake `distill-history`. It may rewrite only an
-explicitly authorized named non-`main` task branch and keeps all of that skill's
-safety and verification requirements.
+`distill history` routes to Strake `distill-history`.
 
-Because commit identities change, re-establish any CI, preview, or review evidence
-whose validity was tied to the replaced commits. The rewritten branch-tip push
-must obtain a fresh `Verify` result for the replacement SHA.
+Because distillation changes commit identities, re-establish exact-tip
+verification using `docs/components/delivery.md` §Verification and refresh any
+preview or review evidence tied to replaced commits.
 
 ## Ready to merge
 
 `ready to merge` is read-only preflight. Re-resolve the task branch and current
-`main`, inspect their relationship, then apply the exact-tip verification
-procedure from Implement: call the current task-branch tip `X`, locate the `CI`
-run with `head_sha == X`, require its latest-attempt `Verify` job to have
-conclusion `success`, and re-resolve the branch once more before accepting that
-evidence. Also verify the current preview state and report any integration or
-evidence that must be refreshed before merge.
-
-Do not treat readiness as authorization to merge.
+`main`, inspect their relationship, establish exact-tip verification using
+`docs/components/delivery.md` §Verification, verify the current preview state,
+and report anything that must be refreshed or resolved before integration.
 
 ## Merge and ship
 
-An explicit request such as `merge <branch> into main` or `ship` authorizes the
-Chessview adapter's task-branch integration exception after a successful fresh
-preflight.
-
-Immediately before mutation, re-resolve both the named task branch and `main`.
-If `main` is still an ancestor of the task branch, prefer a non-force
-fast-forward of `main` to the exact verified task-branch tip. This preserves the
-distilled branch history without manufacturing an extra merge commit.
-
-If `main` has moved or the histories have diverged, do not force-update `main`.
-Use only a repository-supported connected-GitHub merge mechanism that preserves
-both lineages and whose result can be verified. If no such safe mechanism is
-available, stop and report the exact integration handoff rather than guessing or
-rewriting history.
-
-After integration, re-resolve `main` and verify both the GitHub Actions CI
-workflow and the production Pages build/deploy workflow on the resulting `main`
-tip. A task branch's pre-merge CI remains useful preflight evidence, but it does
-not replace post-integration CI when the resulting commit identity differs.
+`merge <branch> into main` and `ship` route to
+`chatgpt/chessview-gpt.md` §Task-branch integration exception after a successful
+fresh preflight. That project-policy section owns the integration mechanics and
+authorization boundary.
 
 ## Cleanup
 
-After production is verified, remove branch-preview state only through the
-repository's supported cleanup mechanism. Deleting a task branch or preview is
-separate mutation and requires the authorization implied by the human's cleanup
-request; do not make cleanup a hidden side effect of merge.
+`cleanup` removes task-branch preview state only after production verification
+using the repository's supported cleanup mechanism. Merge does not imply cleanup.

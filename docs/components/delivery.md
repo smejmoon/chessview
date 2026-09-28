@@ -52,10 +52,15 @@ canonical preview target from `scripts/pages-target.js`.
 A reset must:
 
 - fetch and prune the current branch-head set before planning the snapshot;
-- install, type-check, and build every planned branch from its own source tree;
+- install, type-check, and build every planned branch from its own source tree
+  in a job with read-only repository contents authority;
 - assemble the complete production root and all surviving branch previews in a
   temporary snapshot before changing publication state;
 - leave `gh-pages` unchanged if any planned branch cannot be prepared;
+- transfer the completed snapshot to a separate publication job before granting
+  repository write authority;
+- execute no branch-controlled dependency, type-check, or build command in the
+  publication job that can write the repository;
 - serialize with ordinary Pages publication through the shared `pages-publish`
   concurrency group;
 - after successful assembly, replace `gh-pages` with one parentless deployment

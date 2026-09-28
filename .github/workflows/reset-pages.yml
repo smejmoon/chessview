@@ -9,15 +9,15 @@ on:
       - scripts/pages-target.js
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: pages-publish
   cancel-in-progress: false
 
 jobs:
-  reset:
-    name: Rebuild snapshot
+  build:
+    name: Build snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -108,6 +108,66 @@ jobs:
           fi
           touch "$snapshot/.nojekyll"
 
+      - name: Validate fresh root commit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          snapshot="$RUNNER_TEMP/pages-reset-snapshot"
+          index="$RUNNER_TEMP/pages-reset.index"
+          rm -f "$index"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          GIT_INDEX_FILE="$index" git read-tree --empty
+          GIT_INDEX_FILE="$index" git --work-tree="$snapshot" add --all
+          tree_sha=$(GIT_INDEX_FILE="$index" git write-tree)
+          printf 'Reset Pages from live branches\n' | git commit-tree "$tree_sha" >/dev/null
+
+      - name: Archive Pages snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "$RUNNER_TEMP/pages-reset-snapshot" -czf "$RUNNER_TEMP/pages-reset-snapshot.tgz" .
+
+      - name: Upload Pages snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-reset-snapshot
+          path: ${{ runner.temp }}/pages-reset-snapshot.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Replace gh-pages
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout publication repository
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Download Pages snapshot
+        uses: actions/download-artifact@v4
+        with:
+          name: pages-reset-snapshot
+          path: ${{ runner.temp }}
+
+      - name: Extract Pages snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="$RUNNER_TEMP/pages-reset-snapshot"
+          rm -rf "$snapshot"
+          mkdir -p "$snapshot"
+          tar -xzf "$RUNNER_TEMP/pages-reset-snapshot.tgz" -C "$snapshot"
+
       - name: Create fresh root Pages commit
         id: root
         shell: bash
@@ -127,7 +187,6 @@ jobs:
           echo "commit=$commit_sha" >> "$GITHUB_OUTPUT"
 
       - name: Replace gh-pages
-        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail

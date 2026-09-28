@@ -1,0 +1,37 @@
+# Constellation
+
+## Purpose
+
+Own the coherent current-view subgraph around the Nodus: which known canonical positions and relationships belong in the view.
+
+A Constellation is a projection of Chessview's durable graph, not the durable graph itself and not its two-dimensional rendering.
+
+## Requirements
+
+- The set of positions Chessview knows and the set represented in the current Constellation are independent. Known positions may be omitted from a view without being removed from durable graph knowledge.
+- Constellation determines what graph and evidence information it needs for composition. [Knowledge acquisition](knowledge-acquisition.md) is responsible for supplying or enriching that information; Constellation does not own fetching, derivation, reconciliation, caching, or persistence mechanics.
+- A Constellation request may cover one position or a larger graph region. Acquisition granularity is not part of the Constellation contract.
+- Constellation optimizes for a coherent, understandable structure rather than maximum coverage.
+- The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count. Presentation may provide the constraints needed to compose an appropriate view.
+- Visible depth has no arbitrary fixed opening-depth cap. Useful depth emerges from available presentation space, available knowledge, branch significance, and coherence; a narrow Line may deepen when doing so remains the best use of the view.
+- Root and Line direction remain relative to the Nodus. Broad positions retain meaningful alternatives instead of allowing one branch to consume the whole view.
+- Distinct immediate Root or first-level Line families remain structurally distinct until their selected paths genuinely converge on the same canonical position.
+- Canonical graph identity is preserved. When selected paths transpose into the same canonical position, the Constellation represents that position once while preserving every selected relationship and the branch/family membership that reaches the convergence.
+- Constellation may consume frequency, quality, human-result, rarity, or other evidence signals when deciding how to spend scarce visible space. [Evidence](evidence.md) owns the meaning and calculation of those signals; [Constellation selection](constellation-selection.md) owns automatic eligibility and local candidate ordering.
+- Frequency evidence from different source positions is not treated as a globally comparable score by itself. Constellation owns cross-branch allocation needed to preserve coherence.
+- Constellation output refers to canonical positions and visible relationships. It does not redefine graph identity or persist a second graph.
+- Two-dimensional coordinates, board sizes, connector paths, colors, labels, and other visual treatment belong to presentation rather than Constellation composition.
+
+## Verification
+
+Deterministic tests should cover:
+
+- durable known graph state being larger than the selected Constellation;
+- the same durable graph composing differently under different presentation-space constraints without changing graph knowledge;
+- coherent representation of multiple significant branches when space allows;
+- a narrow useful Line deepening without an independent fixed opening-depth cap;
+- distinct immediate Root/Line families remaining distinct before genuine convergence;
+- canonical transpositions appearing once while retaining every selected relationship and branch/family membership into or out of the convergence;
+- Constellation requesting additional knowledge without itself performing transport or persistence side effects;
+- evidence signals influencing selection without changing canonical graph identity;
+- cross-branch allocation preserving coherence without comparing unrelated source-local percentages as one global rank.

@@ -2,85 +2,45 @@
 
 ## Purpose
 
-Own Chessview's position-centered navigation model and spatial presentation.
+Own Chessview's two-dimensional spatial presentation and the rendering integration between the [Nodus](nodus.md), [Constellation](constellation.md), [Rail](rail.md), and [Weather](weather.md).
 
-Terminology follows the [Chessview glossary](../glossary.md), especially [Nodus](../glossary.md#nodus), [Recenter](../glossary.md#recenter), [visible relationship](../glossary.md#visible-relationship), and [move cue](../glossary.md#move-cue).
+Interface does not decide durable graph identity, acquire graph knowledge, select Constellation membership, calculate evidence meaning, or own current-view publication. The cross-component currentness/publication boundary is defined separately in [`docs/architecture/current-view.md`](../architecture/current-view.md).
 
 ## Requirements
 
-- The Nodus is a large playable Chessground board.
-- Surrounding positions are smaller Chessground boards used for navigation rather than direct play.
-- Root boards sit to the left of the Nodus; Line boards sit to the right.
+- The Nodus is the primary large playable board; surrounding Constellation positions are smaller navigation boards.
+- Root boards are presented to the left of the Nodus and Line boards to the right.
 - Root move cues point toward the Nodus; Line move cues identify the move that produced the displayed child position.
-- Immediate Root families retain distinct visual lanes while they remain distinct. When visible Root paths reach the same canonical upstream position, the paths converge on one shared board rather than duplicating that position.
-- A Root transposition merge draws every visible downstream connector from the shared position. Because there is no single unambiguous next move at that merge, the shared board does not show one misleading move cue; the connectors carry the convergence meaning instead.
-- Ancestry above a visible Root merge stays on the shared lane instead of splitting back into duplicate family copies.
+- Distinct immediate Root families remain visually distinguishable while their selected Constellation relationships remain distinct.
+- A canonical position represented once in the Constellation is rendered once even when several visible paths converge there. Every selected relationship needed to communicate the convergence remains visible.
+- At a visible Root convergence with more than one selected downstream relationship, the shared board does not show one misleading board-level move cue; the connectors carry the distinct Move meanings instead.
+- Ancestry above a visible Root merge stays visually shared instead of splitting back into duplicate copies of the same canonical positions.
 - In Lines view, connector thickness encodes the first move's rated-Explorer share from the Nodus. Every deeper segment belonging to that Line inherits the same thickness; deeper local move shares do not change it.
-- Connector color does not encode popularity. It is reserved for per-edge move-quality evidence when available, while a connector without usable evaluation stays neutral.
-- Root rarity remains a separate dash/opacity treatment and does not reuse Line thickness.
+- Connector color does not encode popularity. It reflects per-edge move-quality evidence supplied by [Evidence](evidence.md): strong moves use green, dubious moves amber, bad moves red, and unavailable/unknown evaluation stays neutral.
+- Root rarity remains a separate presentation channel supplied by Evidence. Rare Roots may use a diamond, reduced emphasis, and dashed connectors; stronger rarity treatment may apply to very rare Roots. Rarity may change dash/opacity but not connector color or Line-popularity width.
 - Siblings, cousins, and merged transpositions may occupy lateral context where useful without changing Root/Line direction semantics.
-- The right-side control and evidence surface is the Rail.
-- The `Lines` tab count reports qualifying first-level graph Lines represented by the structural discovery model. Supplementary Rail filtering must not overwrite that count with a broader evidence-row count.
-- The enriched Lines Rail may show additional selectable/evidenced moves that are not automatic Line boards; each such row keeps its rated-Explorer share visible so the distinction from the 5% structural threshold is understandable.
-- Clicking a miniature board requests a Recenter to that board's canonical position and recenters immediately.
-- Playing a legal Move on the Nodus requests a Recenter whose target is first materialized from that Move, even when the Move is below the automatic-discovery threshold.
-- A Recenter is the user/application command that selects another Nodus; a caller supplies either a known target position or a Move to materialize into a target.
-- Browser history restoration is distinct from Recenter: it replays previously recorded position-centered state and must not create a new history entry.
+- Interface derives the presentation-space constraints needed to fit readable boards and relationships in the available viewport and supplies those constraints to Constellation composition. It does not convert a fixed desktop board count into a product rule.
 - All visible boards share one global orientation controlled by the flip action.
-- The URL identifies the canonical Nodus, not the navigation path used to reach it.
-- Browser history navigation restores position-centered state consistently.
-- Evidence presentation follows the [Evidence](evidence.md) component rather than deriving chess meaning from DOM layout.
-- The application indicates when the critical structural state of the current visible view is still settling and when it has reached a terminal outcome.
-- Normal `Ready` means the visible Root/Line structure has been established successfully, including legitimate empty/absent structure where applicable. Supplementary evidence does not block this state and may continue hydrating afterward.
-- A critical structural failure is terminal for loading but must not present the normal success-style `Ready` / check state; it is shown as degraded or unavailable.
-- Readiness is scoped to the current view generation: completion from an obsolete position/view must not settle a newer one.
-- The readiness treatment stays subtle: delayed `Updating…`, a brief `Ready`, then a persistent low-emphasis check for successful structural settlement.
-
-The product-level classification of critical, supplementary, and decorative behavior is owned by [`docs/product.md`](../product.md) §Product usability bar.
-
-## Composition direction
-
-**Current-view commands enter the controller; domain contributors return values; the controller publishes one immutable current view; presentation consumes it.**
-
-`NodusController` is the sole owner allowed to make an asynchronous domain result current. Internal revision identity and publication decisions stay private to that boundary. Structural and evidence contributors receive explicit domain inputs and return values keyed by stable position/node/edge identity. Move materialization is a Position-Graph operation supplied to the controller: it may establish durable graph knowledge and return a target, but it does not decide whether that target becomes current. Contributors do not settle controller lifecycle directly and do not discover current application state from shared DOM or mutable module globals.
-
-Every user recenter command enters the controller as a Recenter. A known-board click supplies a target directly; a played Move supplies Move coordinates that must first be materialized. The controller checks that an asynchronous materialization still belongs to the originating current view before accepting its target, so stale completion cannot recenter a replacement view. Browser-history restoration enters separately as recorded route state and does not push another route entry.
-
-The published current view contains the current Nodus-centered view state and the structural/evidence values accepted for that view. Browser history metadata, persistence mechanisms, request scheduling, generation tokens, DOM handles, and Chessground instances remain outside that value. Presentation-only controls such as Guide and Debug may persist their own durable preferences and request a redraw without becoming current-view truth.
-
-Presentation consumes the current view through a lifecycle-aware presenter. The controller distinguishes the start of a new current-view lifecycle from later publications within that lifecycle without exposing revision identity. `NodusRenderer` owns DOM and Chessground mutation under its application root. Root/evidence presentation helpers receive that root explicitly and act only as renderer delegates; they do not discover elements from the global document. View-status presentation owns timing/state only and delegates status DOM updates back to the renderer. Presentation may retain resource handles needed to update or dispose rendered objects, but it must not keep a second mutable copy of current-view truth.
-
-Presentation failures are handled at that boundary: normal rendering must fail closed to a degraded/unavailable surface rather than rewriting valid structural domain data or leaving a success presentation visible; failure of the degraded fallback itself is not swallowed.
-
-Critical structural data is published with generation-scoped loading/ready/failed state. Supplementary evidence may publish later without downgrading established structural readiness. The subtle delayed `Updating…` / brief `Ready` / check acknowledgement is presentation behavior derived from structural lifecycle state rather than an independent source of application truth.
-
-Reusable graph enrichment has producer lifetime independent of a single current view. In particular, shared Root transposition enrichment may continue producing durable graph state after one view becomes obsolete; a view-scoped cancellation signal detaches that caller from waiting on the shared work but does not make the first caller own or cancel the producer. Structural projection consumes the resulting graph and remains cancellable for the current view.
+- Evidence presentation follows the Evidence component rather than deriving chess meaning from DOM layout.
+- Rail behavior follows the Rail component; Weather presentation follows the Weather component; position-centered navigation follows the Nodus component.
+- `NodusRenderer` owns DOM and Chessground mutation under its application root. Presentation helpers receive that root explicitly and act only as renderer delegates; they do not discover elements from the global document.
+- Presentation may retain resource handles needed to update or dispose rendered objects, but it must not keep a second mutable copy of current-view truth.
+- Normal presentation failure must fail closed to a degraded/unavailable surface rather than rewriting valid structural domain data or leaving stale success feedback visible; failure of the degraded fallback itself is not swallowed.
 
 ## Verification
 
 Deterministic/browser contract tests should cover:
 
-- URL round-tripping for canonical positions;
-- Recenter to a known target by mini-board click;
-- Recenter after a legal Nodus Move, including a sub-threshold Move;
-- stale Move materialization being unable to Recenter a replacement view;
-- browser back/forward restoration without adding a new history entry;
 - Root-left / Line-right directional semantics;
+- distinct immediate Root families remaining visually distinct until genuine canonical convergence;
+- one rendered canonical board at a visible transposition with every selected connector preserved;
+- a merged Root board with several downstream relationships suppressing a misleading single board-level move cue;
+- ancestry above a Root convergence remaining shared rather than duplicating canonical positions;
 - global orientation behavior;
-- stable identity between rendered positions/connectors and their graph edges;
-- fair visual representation of multiple immediate Root families before one family consumes deeper ancestry;
-- Root transpositions rendering one shared canonical board with connectors to every visible downstream parent;
-- ancestry above a Root convergence remaining shared rather than duplicating the same canonical positions per family;
-- same-target Root enrichment remaining useful to a replacement view after an older caller becomes obsolete;
+- stable identity between rendered positions/connectors and their Constellation relationships;
 - Line descendants inheriting the first move's Nodus share for connector-width semantics;
-- the Lines tab retaining its structural first-level-Line count while the evidence Rail hydrates a broader move set;
-- current-view settlement waiting for every critical structural contributor;
-- supplementary evidence hydration not blocking or reopening a successfully settled structural view;
-- stale work from an obsolete generation being unable to settle the current view;
-- a replacement lifecycle resetting delayed status timing even when both old and new views are structurally `loading`;
-- fast cached structural work avoiding a distracting `Updating…` flash while still acknowledging `Ready`;
-- critical structural failure ending loading without showing the normal success-style settled state;
-- normal presentation failure falling back to a degraded/unavailable surface without changing structural truth;
-- supplementary request failures remaining locally visible without downgrading structural readiness.
+- move-quality color, Root-rarity treatment, and Line-popularity width remaining independent channels attached to the correct relationship;
+- different viewport constraints being supplied to Constellation without Interface independently changing graph identity or persistence;
+- normal presentation failure falling back to a degraded/unavailable surface without changing structural truth.
 
-Manual verification should include dense Root and Line neighborhoods, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. In Roots view, it should include a position reachable through several move orders (for example a Panov Attack position) and confirm that immediate Root families remain legible, visible convergence produces one shared board with multiple incoming-to-Nodus routes, and ancestry above the merge remains shared. It should confirm that every segment of one Line keeps the same popularity thickness even when deeper local move percentages differ, while quality color may change edge by edge. It should also confirm that the Lines tab counts structural first-level Lines, while broader Rail-only moves keep their Explorer share visible without changing that tab count. For network-backed structural navigation it should confirm `Updating…` → `Ready` → subtle check; cached structural navigation that settles inside the delay should skip `Updating…` and still acknowledge `Ready` before fading to the check. Supplementary evidence should be allowed to appear afterward without reopening the global loading state.
+Manual verification should include dense Root and Line Constellations, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. It should confirm that distinct Root families remain legible before convergence, that genuine convergence produces one shared board with every selected connector and no misleading single move cue, and that the presentation remains legible as available screen space changes without assuming a fixed number of surrounding boards.

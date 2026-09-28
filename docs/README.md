@@ -3,8 +3,8 @@
 Chessview keeps durable product direction separate from unfinished work.
 
 - [Glossary](glossary.md) — canonical definitions for Chessview terms used across product, component, and architecture documents.
-- [Vision](vision.md) — why Chessview exists, the user needs it serves, and how the canonical product language fits together: **Roots → Nodus → Lines**, with the **Rail** alongside the map.
-- [Product contract](product.md) — what must remain true across the product, including usability, readiness, and cross-component commitments.
+- [Vision](vision.md) — why Chessview exists, the user needs it serves, and how the canonical product language fits together: **Roots → Nodus → Lines**, composed into a **Constellation**, with the **Rail** alongside and **Weather** communicating structural readiness.
+- [Product contract](product.md) — what must remain true across the product, including usability, Weather, and cross-component commitments.
 - [Components](components/) — exact behavior, tunables, edge cases, and verification owned by each product component.
 - [Architecture](architecture/) — independently maintained technical boundaries.
 - [`backlog/`](../backlog/) — outcomes and changes that are still intended but not yet complete.

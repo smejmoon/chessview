@@ -18,8 +18,8 @@ Terminology follows the [Chessview glossary](../glossary.md), especially [Move](
 - Edge identity is independent of how the edge became known. Explorer, manual exploration, and derived/transposition provenance may coexist on one edge rather than replacing one another.
 - Materializing a played Move delegates its chess resolution to Resolve Move, then ensures the durable graph edge exists with explicit/manual provenance and ensures the target position record exists.
 - Materializing an already-known edge preserves its existing Explorer games, share, qualification, and other evidence fields while adding explicit/manual provenance.
-- Explicitly explored/manual edges survive refreshes of automatically discovered Explorer edges; Explorer refresh may update statistical evidence while preserving manual/derived provenance.
-- Move materialization establishes graph knowledge only; it does not decide whether the target becomes the current Nodus.
+- Explicitly explored/manual edges survive refreshes of Explorer-derived edges; Explorer refresh may update statistical evidence while preserving manual/derived provenance.
+- Move materialization establishes graph knowledge only; it does not decide whether the target becomes the current Nodus or belongs in the current Constellation.
 - Graph state persists in IndexedDB so navigation and previously discovered transpositions survive reloads.
 
 ## Implementation
@@ -27,10 +27,10 @@ Terminology follows the [Chessview glossary](../glossary.md), especially [Move](
 - `chess.js` owns legal move generation and playable FEN handling.
 - `src/graph.js::resolveMove()` owns pure source-position + Move resolution into canonical target, target FEN, SAN, and UCI.
 - `src/move-materialization.js` owns the concrete resolved-Move -> durable graph-edge/target materialization operation and delegates chess interpretation to `resolveMove()`.
-- Canonical keys are the stable node identity used by persistence, navigation, discovery, and evidence attachment.
+- Canonical keys are the stable node identity used by persistence, navigation, knowledge acquisition, Constellation composition, and evidence attachment.
 - [`PositionRepository`](../architecture/position-repository.md) owns application-level access to node records: one in-memory record per canonical key, IndexedDB fallback/persistence, and independently cancellable shared hydration of position-backed data facets.
-- IndexedDB stores nodes and edges; graph persistence is independent of the current rendered path. `db.js` is the low-level persistence adapter rather than an application-level node cache.
-- Discovery owns Explorer-backed enrichment and reconciliation; it uses Resolve Move to interpret Explorer moves, preserves explicit/manual provenance, and does not own played-Move materialization.
+- IndexedDB stores nodes and edges; graph persistence is independent of the current Constellation. `db.js` is the low-level persistence adapter rather than an application-level node cache.
+- [Knowledge acquisition](knowledge-acquisition.md) owns Explorer-backed enrichment and reconciliation; it uses Resolve Move to interpret Explorer moves, preserves explicit/manual provenance, and does not own played-Move materialization.
 - Presentation code may use product terms such as Root and Line, but storage and graph algorithms should use directional graph terms where clearer.
 
 ## Verification
@@ -50,6 +50,7 @@ Deterministic tests should cover:
 
 ## Related components
 
-- [Discovery](discovery.md) adds and reconciles Explorer-derived graph edges.
-- [Interface](interface.md) owns Recenter commands and decides whether a materialized target may become the current Nodus.
+- [Knowledge acquisition](knowledge-acquisition.md) adds and reconciles Explorer-derived graph edges and evidence.
+- [Constellation](constellation.md) projects durable graph knowledge into the current coherent visible subgraph without redefining graph identity.
+- [Nodus](nodus.md) owns Recenter behavior and decides which canonical position organizes the current view.
 - [Evidence](evidence.md) attaches statistical and engine meaning without changing graph identity.

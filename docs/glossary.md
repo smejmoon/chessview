@@ -14,9 +14,17 @@ Visible upstream context showing positions from which play can reach the Nodus.
 
 Visible downstream continuation showing positions reachable from the Nodus.
 
+## Constellation
+
+The coherent current-view subgraph selected around the Nodus. A Constellation is a projection of durable graph knowledge: positions may be known without belonging to the current Constellation.
+
 ## Rail
 
 The supporting control and evidence surface beside the spatial map.
+
+## Weather
+
+The current view's structural lifecycle/readiness state and the user-facing status derived from it.
 
 ## Recenter
 
@@ -40,7 +48,7 @@ Resolve a played legal Move from a source position, then ensure the correspondin
 
 ## Visible relationship
 
-A current-view projection of graph connectivity used to compose the visible map. A visible relationship refers back to durable graph identity but belongs to the visible composition rather than persisted graph state.
+A current-view projection of graph connectivity used to compose the Constellation. A visible relationship refers back to durable graph identity but belongs to the current projection rather than persisted graph state.
 
 ## Move cue
 

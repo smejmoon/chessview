@@ -6,9 +6,11 @@ Chessview turns opening knowledge into a spatial map centered on one canonical c
 
 ## Product language
 
-Canonical definitions live in the [Chessview glossary](glossary.md): [Nodus](glossary.md#nodus), [Root](glossary.md#root), [Line](glossary.md#line), and [Rail](glossary.md#rail).
+Canonical definitions live in the [Chessview glossary](glossary.md): [Nodus](glossary.md#nodus), [Root](glossary.md#root), [Line](glossary.md#line), [Constellation](glossary.md#constellation), [Rail](glossary.md#rail), and [Weather](glossary.md#weather).
 
 **Roots → Nodus → Lines**
+
+The Constellation is the coherent current-view subgraph organized around that Nodus. The Rail supports it with controls and evidence. Weather communicates whether the current structural view is still settling, established, or degraded.
 
 This document explains why those terms matter to the product. `docs/product.md` and the component documents own their behavioral contracts; implementation code may use clearer technical graph or rendering terms.
 
@@ -48,7 +50,7 @@ A user notices an alternative Line and compares its human and engine evidence in
 
 **One connected map.** Recentring should feel like moving through the same chess space, and transpositions should feel like convergence on the same place.
 
-**Evidence supports understanding.** Statistics and engine evidence enrich the graph but do not determine whether the graph itself is understandable.
+**Evidence supports understanding.** Statistics and engine evidence enrich the graph and may help choose what deserves scarce visible space, but they do not redefine canonical graph identity.
 
 **Implementation stays invisible.** What appears should follow chess meaning and explicit product rules, not array order, request timing, or traversal accidents.
 

@@ -23,11 +23,28 @@ history distillation is useful.
 
 ## Implement
 
-Make coherent checkpoint commits on the task branch. Verify available tests and
-build automation after code-affecting changes. The dedicated CI workflow may be
-run on demand for the exact branch tip; branch-preview publication is separate
-and is not by itself merge-readiness evidence. Checkpoints are execution history,
-not necessarily the final history worth keeping.
+Make coherent checkpoint commits on the task branch. Pushing a named task-branch
+checkpoint triggers the dedicated CI workflow for that exact branch tip.
+
+`Verify` means the named `Verify` job from `.github/workflows/ci.yml`; it is
+Chessview's CI job name, not a GitHub-wide feature or an informal synonym for
+"looks good." A successful `Verify` means that job concluded `success` for the
+workflow run attached to the commit being evaluated.
+
+After code-affecting changes, establish exact-tip verification as follows:
+
+1. resolve the current task branch to SHA `X`;
+2. find the `CI` workflow run whose `head_sha` is exactly `X`;
+3. inspect that run's `Verify` job and require conclusion `success` (latest
+   attempt when the run was rerun);
+4. re-resolve the branch before relying on the result, and discard the evidence
+   if the branch tip is no longer `X`.
+
+A successful run for another SHA does not verify the current branch tip. If the
+same SHA needs to be checked again, rerun that existing workflow run rather than
+manufacturing a new commit. Branch-preview publication is separate and is not by
+itself merge-readiness evidence. Checkpoints are execution history, not
+necessarily the final history worth keeping.
 
 ## Preview
 
@@ -57,14 +74,18 @@ explicitly authorized named non-`main` task branch and keeps all of that skill's
 safety and verification requirements.
 
 Because commit identities change, re-establish any CI, preview, or review evidence
-whose validity was tied to the replaced commits.
+whose validity was tied to the replaced commits. The rewritten branch-tip push
+must obtain a fresh `Verify` result for the replacement SHA.
 
 ## Ready to merge
 
 `ready to merge` is read-only preflight. Re-resolve the task branch and current
-`main`, inspect their relationship, verify current CI evidence for the exact task
-branch tip and the current preview state, and report any integration or evidence
-that must be refreshed before merge.
+`main`, inspect their relationship, then apply the exact-tip verification
+procedure from Implement: call the current task-branch tip `X`, locate the `CI`
+run with `head_sha == X`, require its latest-attempt `Verify` job to have
+conclusion `success`, and re-resolve the branch once more before accepting that
+evidence. Also verify the current preview state and report any integration or
+evidence that must be refreshed before merge.
 
 Do not treat readiness as authorization to merge.
 

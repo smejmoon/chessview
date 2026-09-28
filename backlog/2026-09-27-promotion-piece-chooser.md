@@ -1,16 +1,16 @@
 # Do:
 
-Run the deterministic test verification and manually verify the latest published board-native promotion chooser on desktop and narrow layouts.
+Manually verify the latest published board-native promotion chooser on desktop and narrow layouts.
 
 # Blocked:
 
-Completion awaits the deterministic test run and manual browser verification of the latest preview. The exact implementation tip that adds orientation-aware promotion sync and renderer-owned Chessground coordinate overrides has passed the repository's static Pages build and publish path.
+Completion awaits manual browser verification of the latest preview. Deterministic repository verification now passes through task-branch CI, including the chooser/renderer coverage, TypeScript check, and production build; subsequent pushed checkpoints rerun those gates automatically.
 
 # Because:
 
 `src/promotion-chooser.js` owns a Lichess-style destination-file promotion overlay using Chessground's existing piece theme, while `src/recenter-input.js::promotionChoices()` still derives legal promotion pieces through `resolveMove()`. The selected piece is passed unchanged through the existing Move/Recenter path; backdrop or Escape dismissal resolves as cancel and the existing handler redraws without Recenter.
 
-A pending chooser now synchronizes its placement inputs from each renderer publication, so flipping the current Nodus preserves the pending choice while remapping it to the newly oriented destination file and promotion edge. Deterministic chooser and renderer coverage now exercise that same-center orientation change.
+A pending chooser now synchronizes its placement inputs from each renderer publication, so flipping the current Nodus preserves the pending choice while remapping it to the newly oriented destination file and promotion edge. Deterministic chooser and renderer coverage exercise that same-center orientation change and now run in the task-branch `Verify` gate.
 
 Chessground's stock coordinate CSS positions labels partly outside the board, which conflicts with Chessview's clipped Nodus frame. `src/chessground-overrides.css` keeps center-board coordinates inside their squares and is imported by `src/nodus-renderer.js`, so the presentation fix no longer depends on whether the application entrypoint is JavaScript or TypeScript.
 
@@ -24,11 +24,9 @@ All legal promotion pieces can be selected without a textual browser prompt; the
 
 # Steps:
 
-Run deterministic tests against the promotion implementation.
-
 Verify the published destination-file chooser manually for White and Black promotion, flipped orientation while the chooser is open, backdrop/Escape cancel, coordinate alignment, and narrow responsive layouts.
 
-If verification passes, run Backlog Close; otherwise repair the observed failures and repeat verification.
+If manual verification passes and the latest task-branch `Verify` gate remains green, run Backlog Close; otherwise repair the observed failures and repeat verification.
 
 # Sync:
 

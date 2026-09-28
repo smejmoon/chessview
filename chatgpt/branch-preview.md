@@ -3,7 +3,7 @@
 Use this as Chessview's default feature-development lifecycle when a task benefits
 from inspecting a deployed result before it reaches production:
 
-`branch -> implement -> preview -> review -> distill -> merge -> cleanup`
+`branch -> implement -> preview -> review -> distill -> merge`
 
 This file owns lifecycle transitions and command meanings. `chatgpt/chessview-gpt.md`
 owns repository policy and integration authority; `docs/components/delivery.md`
@@ -67,7 +67,13 @@ and report anything that must be refreshed or resolved before integration.
 fresh preflight. That project-policy section owns the integration mechanics and
 authorization boundary.
 
-## Cleanup
+Merge does not delete the task branch. Preview retention follows branch existence
+as defined by `docs/components/delivery.md` §Pages reset: deleting a task branch
+makes its preview absent after the next `reset-pages` reconstruction.
 
-`cleanup` removes task-branch preview state only after production verification
-using the repository's supported cleanup mechanism. Merge does not imply cleanup.
+## Reset Pages
+
+`reset-pages` means run the repository's `Reset Pages` workflow from current
+`main`. It rebuilds publication from current branch refs and replaces `gh-pages`
+according to `docs/components/delivery.md` §Pages reset. It is publication
+maintenance only: it does not authorize a merge or delete any source branch.

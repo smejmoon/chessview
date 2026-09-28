@@ -116,7 +116,8 @@ Chessview intentionally permits connected GitHub to move `main` when the human
 explicitly asks to merge or ship a named task branch into `main`. This narrowly
 overrides Strake's rule that writes remain on the this-chat branch and its
 prohibition on moving `main`; it applies only to the integration operation and
-does not authorize unrelated main-branch edits or cleanup.
+does not authorize unrelated main-branch edits, task-branch deletion, or Pages
+reset.
 
 Before integration, load and follow `chatgpt/branch-preview.md` from the current
 Chessview project-policy ref. Re-resolve the named task branch and `main`, verify
@@ -132,8 +133,8 @@ merge result.
 
 After integration, re-resolve `main` and verify the required GitHub Actions CI
 workflow and production Pages build/deploy workflow on the resulting `main` tip.
-Branch or preview cleanup is a separate mutation and is not implied by merge
-authorization.
+Task-branch deletion and Pages reset are separate mutations and are not implied
+by merge authorization.
 
 For implementation writes:
 
@@ -156,7 +157,7 @@ For feature work that benefits from seeing a deployed result before production,
 load and follow `chatgpt/branch-preview.md` from the Chessview project-policy
 ref. It owns the compact lifecycle and command meanings for branch work:
 
-`branch -> implement -> preview -> review -> distill -> merge -> cleanup`
+`branch -> implement -> preview -> review -> distill -> merge`
 
 The workflow is a project-local convention, not a Strake skill. This adapter
 continues to own authorization, policy refs, and skill routing; `.github/workflows/`

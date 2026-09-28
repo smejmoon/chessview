@@ -1,0 +1,193 @@
+name: Reset Pages
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/reset-pages.yml
+      - scripts/pages-reset-plan.js
+      - scripts/pages-target.js
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-publish
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Require main dispatch
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_NAME" != "main" ]]; then
+            echo "Reset Pages must be dispatched from main" >&2
+            exit 1
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Fetch current branch heads
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+
+      - name: Build complete Pages snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          plan="$RUNNER_TEMP/pages-reset-plan.tsv"
+          snapshot="$RUNNER_TEMP/pages-reset-snapshot"
+          worktrees="$RUNNER_TEMP/pages-reset-worktrees"
+          rm -rf "$snapshot" "$worktrees"
+          mkdir -p "$snapshot" "$worktrees"
+
+          git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin/ \
+            | grep -v '^HEAD$' \
+            | node scripts/pages-reset-plan.js > "$plan"
+
+          index=0
+          while IFS=$'\t' read -r branch base target; do
+            [[ -n "$branch" ]] || continue
+            index=$((index + 1))
+            worktree="$worktrees/$index"
+
+            git worktree add --detach "$worktree" "refs/remotes/origin/$branch"
+            (
+              cd "$worktree"
+              npm ci
+              npm run typecheck
+              npm run build -- --base "$base"
+            )
+
+            if [[ "$target" == "." ]]; then
+              if [[ "$branch" != "main" ]]; then
+                echo "Refusing to publish non-main branch at production root" >&2
+                exit 1
+              fi
+              if [[ -e "$worktree/dist/previews" ]]; then
+                echo "Refusing main build containing reserved previews/ subtree" >&2
+                exit 1
+              fi
+              cp -a "$worktree/dist/." "$snapshot/"
+            else
+              if [[ "$branch" == "main" || "$target" != previews/* ]]; then
+                echo "Refusing invalid preview target: $branch -> $target" >&2
+                exit 1
+              fi
+              if [[ -e "$snapshot/$target" ]]; then
+                echo "Refusing duplicate preview target: $target" >&2
+                exit 1
+              fi
+              mkdir -p "$snapshot/$target"
+              cp -a "$worktree/dist/." "$snapshot/$target/"
+            fi
+
+            git worktree remove --force "$worktree"
+          done < "$plan"
+
+          if [[ "$index" -eq 0 ]]; then
+            echo "Pages reset plan is empty" >&2
+            exit 1
+          fi
+          touch "$snapshot/.nojekyll"
+
+      - name: Validate fresh root commit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          snapshot="$RUNNER_TEMP/pages-reset-snapshot"
+          index="$RUNNER_TEMP/pages-reset.index"
+          rm -f "$index"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          GIT_INDEX_FILE="$index" git read-tree --empty
+          GIT_INDEX_FILE="$index" git --work-tree="$snapshot" add --all
+          tree_sha=$(GIT_INDEX_FILE="$index" git write-tree)
+          printf 'Reset Pages from live branches\n' | git commit-tree "$tree_sha" >/dev/null
+
+      - name: Archive Pages snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "$RUNNER_TEMP/pages-reset-snapshot" -czf "$RUNNER_TEMP/pages-reset-snapshot.tgz" .
+
+      - name: Upload Pages snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-reset-snapshot
+          path: ${{ runner.temp }}/pages-reset-snapshot.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Replace gh-pages
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout publication repository
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Download Pages snapshot
+        uses: actions/download-artifact@v4
+        with:
+          name: pages-reset-snapshot
+          path: ${{ runner.temp }}
+
+      - name: Extract Pages snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="$RUNNER_TEMP/pages-reset-snapshot"
+          rm -rf "$snapshot"
+          mkdir -p "$snapshot"
+          tar -xzf "$RUNNER_TEMP/pages-reset-snapshot.tgz" -C "$snapshot"
+
+      - name: Create fresh root Pages commit
+        id: root
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          snapshot="$RUNNER_TEMP/pages-reset-snapshot"
+          index="$RUNNER_TEMP/pages-reset.index"
+          rm -f "$index"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          GIT_INDEX_FILE="$index" git read-tree --empty
+          GIT_INDEX_FILE="$index" git --work-tree="$snapshot" add --all
+          tree_sha=$(GIT_INDEX_FILE="$index" git write-tree)
+          commit_sha=$(printf 'Reset Pages from live branches\n' | git commit-tree "$tree_sha")
+          echo "commit=$commit_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Replace gh-pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push --force origin "${{ steps.root.outputs.commit }}:refs/heads/gh-pages"

@@ -71,3 +71,10 @@ authorization boundary.
 
 `cleanup` removes task-branch preview state only after production verification
 using the repository's supported cleanup mechanism. Merge does not imply cleanup.
+
+## Reset Pages
+
+`reset-pages` means run the repository's `Reset Pages` workflow from current
+`main`. It rebuilds publication from current branch refs and replaces `gh-pages`
+according to `docs/components/delivery.md` §Pages reset. It is publication
+maintenance only: it does not authorize a merge or delete any source branch.

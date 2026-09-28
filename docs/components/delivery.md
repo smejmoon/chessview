@@ -41,6 +41,31 @@ when a newer checkpoint is pushed.
 Branch previews may publish independently of CI. Preview success does not verify
 a commit.
 
+## Pages reset
+
+`.github/workflows/reset-pages.yml` owns explicit full reconstruction of the
+published Pages snapshot. A reset uses the current repository branch heads as
+its source of truth: `main` is required and publishes at the production root,
+`gh-pages` is excluded, and every other still-existing branch publishes at its
+canonical preview target from `scripts/pages-target.js`.
+
+A reset must:
+
+- fetch and prune the current branch-head set before planning the snapshot;
+- install, type-check, and build every planned branch from its own source tree;
+- assemble the complete production root and all surviving branch previews in a
+  temporary snapshot before changing publication state;
+- leave `gh-pages` unchanged if any planned branch cannot be prepared;
+- serialize with ordinary Pages publication through the shared `pages-publish`
+  concurrency group;
+- after successful assembly, replace `gh-pages` with one parentless deployment
+  commit containing exactly that snapshot.
+
+Branch existence is the preview-retention rule: an undeleted non-`main` branch
+is rebuilt by the next reset, while a deleted branch's preview disappears. The
+reset intentionally discards reachable deployment history by force-updating only
+`gh-pages`; it does not rewrite or delete `main` or task branches.
+
 ## Verification
 
 Changes that affect application code, build inputs, or CI behavior require

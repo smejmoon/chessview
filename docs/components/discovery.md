@@ -57,11 +57,9 @@ The Root scheduler owns fairness and visible canonical merging only. Incoming-ed
 
 ## Tunables
 
-- Automatic move threshold: `0.05`.
 - Automatic expansion sample floor: initially `80` games.
-- Surrounding-board budget: responsive, capped at `19` on desktop.
 
-The 5% local automatic-expansion threshold is a product commitment. The sample floor and responsive board budget are implementation tunables.
+The 5% local automatic-expansion threshold is a product commitment. The sample floor and responsive board budget are implementation tunables; their current values are specified in the requirements above.
 
 ## Verification
 

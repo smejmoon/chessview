@@ -14,8 +14,6 @@ Explorer, Masters, cloud-evaluation, and authentication clients own the meaning 
 
 Position-backed clients use [`PositionRepository`](position-repository.md) for canonical node access and shared per-facet producer lifetime. That repository does not send Lichess traffic itself: the endpoint client still constructs and interprets its request, and the application-issued HTTP request still goes through `LichessGateway`.
 
-Domain clients do not independently schedule or send application-issued Lichess API requests.
-
 ## Dependency direction
 
 Application and domain code depend on Lichess-backed clients and `PositionRepository`. Position-backed Lichess clients coordinate canonical records/shared facet work through `PositionRepository` and depend on `LichessGateway` for transport. `LichessGateway` is the only application transport that performs those Lichess HTTP requests.

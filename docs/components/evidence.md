@@ -53,11 +53,8 @@ Root rarity is separate from move quality and does not reuse the green/amber/red
 
 - Engine display minimum depth: `18`.
 - Rail human-sample floor: `100` games.
-- Dubious threshold: `0.5` pawn loss.
-- Bad threshold: `1.0` pawn loss.
-- Popular-bad Rail retention threshold: `0.05`.
-- Rare Root threshold: below `0.05`.
-- Very-rare Root threshold: below `0.01`, with meaningful source evidence and observed move games.
+
+Move-quality, popular-bad retention, and Root-rarity thresholds are specified in their owning behavior sections above.
 
 ## Verification
 

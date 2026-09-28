@@ -70,4 +70,4 @@ Global readiness follows the critical structural layer, not completion of every 
 
 ## Ownership
 
-The [glossary](glossary.md) owns canonical definitions. `docs/vision.md` owns why Chessview exists and why its product language matters. This file owns cross-product conditions that must remain true. `docs/components/` owns exact component behavior and verification, while `docs/architecture/` owns independently maintained technical boundaries. `backlog/` owns work that is still intended but incomplete.
+`docs/architecture/` owns independently maintained technical boundaries distinct from component behavior and verification.

@@ -1,32 +1,30 @@
 # Do:
 
-Make played-Move materialization preserve graph consistency when one durable write fails, so Chessview cannot leave an edge durably pointing at a target position record that was never established.
+Finish the durability proof for played-Move materialization: deterministically inject target-position establishment failure and show no durable edge is created, then verify the branch tests/build.
 
 # Because:
 
-`docs/components/position-graph.md` §Requirements says materialization ensures both the durable graph edge and the target position record. `src/move-materialization.js::materializeMove()` currently stores the edge first with `putManualEdge(edge)` and only afterward calls `positionRepository.merge(target, { fen })`; failure of that second step can therefore leave only half of the required durable fact.
+`docs/components/position-graph.md` §Requirements says materialization ensures both the durable graph edge and the target position record. `src/move-materialization.js::materializeMove()` now delegates target-record establishment to `PositionRepository.ensure(target)` before calling `putManualEdge(edge)`, so target-write failure cannot leave an edge pointing at a missing target. This also leaves `PositionRepository` responsible for deciding how an existing canonical position record is preserved and how its playable FEN is derived.
 
 # Edges:
 
-Preserve Position Graph ownership of materialization and `PositionRepository` ownership of application-level node records. Recenter must continue to consume the materialized result rather than becoming part of the persistence transaction. Existing Explorer evidence/provenance on an already-known edge must still survive explicit materialization.
+Preserve Position Graph ownership of materialization and `PositionRepository` ownership of application-level node records. Recenter continues to consume the materialized result rather than participating in persistence. Existing Explorer evidence/provenance on an already-known edge must still survive explicit materialization.
+
+The chosen target-first ordering intentionally does not make node and edge creation atomic: if edge persistence fails after a previously missing target is established, the target node may remain without that outgoing edge. That state is graph-consistent because no durable edge points at a missing node; the backlog's required invariant does not require rolling the standalone node back.
 
 # Unsettled:
 
-Choose the consistency mechanism: one IndexedDB transaction spanning the necessary stores, target-first write ordering with proven safe semantics, or compensating cleanup on failure.
-
-Decide what durable invariant should be asserted when the target record already exists or the edge is being promoted from Explorer provenance.
+Confirm with deterministic fault injection that `PositionRepository.ensure(target)` failure prevents `putManualEdge(edge)` from creating a durable edge. Confirm the new ordering test is deterministic under fake IndexedDB rather than depending on callback timing.
 
 # Complete:
 
-A deterministic fault-injection test demonstrates that any failed materialization leaves no durable edge whose target position record is missing; successful materialization still preserves existing statistical evidence/provenance and returns the canonical target expected by Resolve Move.
+A deterministic fault-injection test demonstrates that any failed target establishment leaves no durable edge whose target position record is missing; successful materialization still preserves existing statistical evidence/provenance and returns the canonical target expected by Resolve Move; deterministic tests/build pass.
 
 # Steps:
 
-Map the current `putManualEdge`, `PositionRepository.merge`, and IndexedDB transaction boundaries.
+Add the target-establishment failure-path test and adjust the ordering test if needed for deterministic IndexedDB observation.
 
-Implement the smallest consistency mechanism that preserves current ownership and evidence semantics.
-
-Add failure-path and existing-edge tests, then run deterministic tests/build.
+Run deterministic tests/build and resolve any failures without moving node-record ownership out of `PositionRepository`.
 
 # Sync:
 

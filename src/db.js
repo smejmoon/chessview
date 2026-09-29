@@ -66,61 +66,16 @@ export async function putEdges(edges) {
   });
 }
 
-export async function putManualEdge(edge) {
+export async function mutateEdge(id, update) {
   const db = await openDb();
   const tx = db.transaction('edges', 'readwrite');
   const store = tx.objectStore('edges');
-  const existing = await requestAsPromise(store.get(edge.id));
-  const value = {
-    ...edge,
-    ...(existing ?? {}),
-    manual: true,
-    updatedAt: edge.updatedAt ?? existing?.updatedAt ?? Date.now(),
-  };
-  store.put(value);
-  return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve(value);
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-}
-
-export async function replaceExplorerEdges(source, edges) {
-  const db = await openDb();
-  const tx = db.transaction('edges', 'readwrite');
-  const store = tx.objectStore('edges');
-  const index = store.index('source');
-  const pending = new Map(edges.map((edge) => [edge.id, edge]));
-
-  await new Promise((resolve, reject) => {
-    const request = index.openCursor(source);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (!cursor) {
-        for (const edge of pending.values()) store.put(edge);
-        resolve();
-        return;
-      }
-
-      const existing = cursor.value;
-      const incoming = pending.get(existing.id);
-      if (incoming) {
-        store.put({
-          ...incoming,
-          manual: Boolean(existing.manual || incoming.manual),
-          derived: Boolean(existing.derived || incoming.derived),
-        });
-        pending.delete(existing.id);
-      } else if (!existing.manual && !existing.derived) {
-        cursor.delete();
-      }
-      cursor.continue();
-    };
-  });
+  const existing = (await requestAsPromise(store.get(id))) ?? null;
+  const value = update(existing);
+  if (value != null) store.put(value);
 
   return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => resolve(value ?? null);
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   });

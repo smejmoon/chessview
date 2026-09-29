@@ -254,3 +254,73 @@ test('composition propagates structural Explorer failure when no cached evidence
     /offline without cache/,
   );
 });
+
+test('Explorer refresh grows topology, updates returned statistics, and never retracts known edges', async () => {
+  await clearGraph();
+  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
+
+  const e4 = resolveMove(center, { uci: 'e2e4' });
+  const d4 = resolveMove(center, { uci: 'd2d4' });
+  const c4 = resolveMove(center, { uci: 'c2c4' });
+  const existing = [
+    {
+      id: '',
+      source: center,
+      target: e4.target,
+      uci: e4.uci,
+      san: e4.san,
+      games: 600,
+      share: 0.6,
+      qualifies: true,
+      manual: true,
+      derived: false,
+      updatedAt: 1,
+    },
+    {
+      id: '',
+      source: center,
+      target: d4.target,
+      uci: d4.uci,
+      san: d4.san,
+      games: 250,
+      share: 0.25,
+      qualifies: true,
+      manual: false,
+      derived: false,
+      updatedAt: 1,
+    },
+  ];
+  existing.forEach((edge) => { edge.id = edgeId(edge); });
+  await putEdges(existing);
+
+  const refreshedExplorer = {
+    white: 500,
+    draws: 200,
+    black: 300,
+    moves: [
+      { uci: 'e2e4', san: 'e4', white: 20, draws: 10, black: 10 },
+      { uci: 'c2c4', san: 'c4', white: 100, draws: 50, black: 50 },
+    ],
+  };
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => refreshedExplorer,
+    text: async () => '',
+  });
+
+  await loadExplorer(center, { force: true });
+
+  const edges = await getOutgoing(center);
+  const byUci = new Map(edges.map((edge) => [edge.uci, edge]));
+  assert.equal(edges.length, 3);
+  assert.equal(byUci.get('e2e4').games, 40);
+  assert.equal(byUci.get('e2e4').share, 0.04);
+  assert.equal(byUci.get('e2e4').qualifies, false);
+  assert.equal(byUci.get('e2e4').manual, true);
+  assert.equal(byUci.get('d2d4').games, 250);
+  assert.equal(byUci.get('d2d4').share, 0.25);
+  assert.equal(byUci.get('c2c4').games, 200);
+  assert.equal(byUci.get('c2c4').share, 0.2);
+  assert.equal(byUci.get('c2c4').target, c4.target);
+});

@@ -59,9 +59,11 @@ Global Weather follows the critical structural layer, not completion of every su
 
 ## Cross-product commitments
 
+- Chess rules define one fixed graph of legal canonical positions and Moves; because that graph is impractically large, Chessview durably materializes only a discovered useful subset. That persisted topology is monotonic: once a legal position or edge is known, later statistical refreshes do not retract it, while attached statistical evidence may change.
 - The graph is built from canonical chess positions connected by single legal [Moves](glossary.md#move) represented as directed [graph edges](glossary.md#graph-edge); transpositions merge.
 - Rated standard Lichess Opening Explorer is the primary human-statistical source. Masters data is a comparison population, and adequate-depth Lichess cloud evaluation supplies engine evidence.
 - Knowledge acquisition and Constellation composition are separate concerns: acquisition owns durable graph/evidence enrichment, while Constellation owns the coherent current-view projection.
+- Automatic admission of newly discovered graph relationships is an acquisition decision; it may use human-frequency/sample evidence as a lower usefulness boundary, but that first-admission rule is not a later retention rule and is separate from Constellation visibility/selection thresholds.
 - Automatic Constellation selection is currently bounded by usable rated Lichess Explorer frequency data. Rated frequency orders eligible candidates locally when they share the same source position; it is not one global rank across unrelated source positions. Rare candidates may remain eligible when engine quality or favorable human results make them significant.
 - Missing, failed, or insufficient rescue evidence remains unknown and is not negative evidence for automatic Constellation selection.
 - The visible Constellation is sized for available presentation space and legibility rather than a fixed product-level board count.

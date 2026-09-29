@@ -3,7 +3,6 @@ import {
   EXPLORER_TTL_MS,
   canonicalPosition,
   decorateExplorerMoves,
-  edgeId,
   resolveMove,
   stableEdgeOrder,
   toPlayableFen,
@@ -15,7 +14,6 @@ import {
   hasLineCandidates,
   takeLineCandidate,
 } from './line-frontier.js';
-import { replaceExplorerEdges } from './db.js';
 import { debugLog } from './debug.js';
 import { lichessSession } from './lichess-session.js';
 import { lichessGateway } from './lichess-gateway.js';
@@ -46,26 +44,26 @@ async function reconcileExplorerSnapshot(canonical, explorer) {
     try {
       const resolved = resolveMove(canonical, { uci: move.uci });
       const edge = {
-        id: '',
         source: canonical,
         target: resolved.target,
         uci: resolved.uci,
-        san: move.san || resolved.san,
+        san: resolved.san,
         games: move.games,
         share: move.share,
         qualifies: move.qualifies,
         manual: false,
+        derived: false,
         updatedAt: Date.now(),
       };
-      edge.id = edgeId(edge);
-      edges.push(edge);
+
       await positionRepository.merge(resolved.target, { fen: resolved.fen });
+      const stored = await positionGraph.updateEdge(edge, { create: true });
+      if (stored) edges.push(stored);
     } catch (error) {
       debugLog('ignored explorer move', { position: canonical, uci: move.uci, error: error?.message ?? String(error) }, 'warn');
     }
   }
 
-  await replaceExplorerEdges(canonical, edges);
   return edges;
 }
 

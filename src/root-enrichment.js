@@ -1,6 +1,6 @@
-import { getIncoming } from './db.js';
 import { START_FEN, canonicalPosition } from './graph.js';
 import { reconstructPgnPath } from './pgn.js';
+import { positionGraph } from './position-graph.js';
 import { expandMoveOrderTranspositions } from './transpositions.js';
 
 const START = canonicalPosition(START_FEN);
@@ -19,7 +19,7 @@ async function referencePathFor(target, { maxDepth = 32 } = {}) {
     const current = queue.shift();
     if (seen.has(current.key) || current.depth >= maxDepth) continue;
     seen.add(current.key);
-    const incoming = await getIncoming(current.key);
+    const incoming = await positionGraph.incoming(current.key);
     incomingByTarget.set(current.key, incoming);
     if (incoming.some((edge) => edge.source === START)) break;
     for (const edge of incoming) {

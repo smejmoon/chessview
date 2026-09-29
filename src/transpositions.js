@@ -4,7 +4,7 @@ import {
   canonicalPosition,
   edgeId,
 } from './graph.js';
-import { getOutgoing, putEdges } from './db.js';
+import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 
 const START = canonicalPosition(START_FEN);
@@ -117,14 +117,17 @@ export async function persistTranspositionPaths(paths) {
 
   const additions = [];
   for (const [source, edges] of bySource) {
-    const existing = new Set((await getOutgoing(source)).map((edge) => edge.id));
+    const existing = new Set((await positionGraph.outgoing(source)).map((edge) => edge.id));
     for (const edge of edges) {
       if (!existing.has(edge.id)) additions.push(edge);
     }
   }
 
+  for (const edge of edgesById.values()) {
+    await positionGraph.ensureEdge(edge, { derived: true });
+  }
+
   if (!additions.length) return { addedEdges: 0, addedNodes: 0 };
-  await putEdges(additions);
 
   const nodeKeys = new Set();
   for (const edge of additions) {

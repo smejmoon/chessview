@@ -1,4 +1,3 @@
-import { getIncoming, getOutgoing } from './db.js';
 import {
   START_FEN,
   canonicalPosition,
@@ -6,6 +5,7 @@ import {
 } from './graph.js';
 import { chooseLineNeighborhood, chooseRootNeighborhood } from './visible-graph.js';
 import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
+import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 import { rootTranspositionEnricher } from './root-enrichment.js';
 import { loadExplorer } from './explorer.js';
@@ -93,14 +93,14 @@ function createCandidateSource(signal) {
   }
 
   async function outgoing(source) {
-    const edges = await getOutgoing(source);
+    const edges = await positionGraph.outgoing(source);
     throwIfAborted(signal);
     const candidates = (await Promise.all(edges.map(candidate))).filter(Boolean);
     return rankSameSourceCandidates(candidates).map((item) => item.edge);
   }
 
   async function incoming(target) {
-    const edges = await getIncoming(target);
+    const edges = await positionGraph.incoming(target);
     throwIfAborted(signal);
     const candidates = (await Promise.all(edges.map(candidate))).filter(Boolean);
     return rankCrossSourceCandidates(candidates).map((item) => item.edge);
@@ -156,7 +156,7 @@ async function collectIncomingToStart(target, { maxDepth = 32, signal } = {}) {
     const current = queue.shift();
     if (seen.has(current.key) || current.depth >= maxDepth) continue;
     seen.add(current.key);
-    const incoming = await getIncoming(current.key);
+    const incoming = await positionGraph.incoming(current.key);
     throwIfAborted(signal);
     incomingByTarget.set(current.key, incoming);
     if (incoming.some((edge) => edge.source === START)) break;
@@ -204,7 +204,7 @@ export async function composeNodusStructure({ center, mode, max, signal }) {
   throwIfAborted(signal);
 
   const candidateSource = createCandidateSource(signal);
-  const incomingEdges = await getIncoming(center);
+  const incomingEdges = await positionGraph.incoming(center);
   throwIfAborted(signal);
 
   let selected;

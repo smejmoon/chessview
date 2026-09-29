@@ -15,10 +15,11 @@ import {
   hasLineCandidates,
   takeLineCandidate,
 } from './line-frontier.js';
-import { getOutgoing, replaceExplorerEdges } from './db.js';
+import { replaceExplorerEdges } from './db.js';
 import { debugLog } from './debug.js';
 import { lichessSession } from './lichess-session.js';
 import { lichessGateway } from './lichess-gateway.js';
+import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
@@ -144,7 +145,7 @@ export async function discoverForViewport(centerKey, budget, onProgress, { signa
   if (signal?.aborted) return centerNode;
   onProgress?.();
 
-  const roots = (await getOutgoing(center))
+  const roots = (await positionGraph.outgoing(center))
     .filter((edge) => edge.qualifies)
     .sort(stableEdgeOrder);
 
@@ -174,7 +175,7 @@ export async function discoverForViewport(centerKey, budget, onProgress, { signa
         inspected += 1;
         onProgress?.();
         if ((node.games ?? 0) < AUTO_SAMPLE_FLOOR) continue;
-        const next = (await getOutgoing(item.key))
+        const next = (await positionGraph.outgoing(item.key))
           .filter((edge) => edge.qualifies)
           .sort(stableEdgeOrder)
           .map((edge, index) => ({

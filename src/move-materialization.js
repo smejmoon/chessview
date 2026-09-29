@@ -1,6 +1,6 @@
-import { canonicalPosition, edgeId, resolveMove } from './graph.js';
-import { putManualEdge } from './db.js';
+import { canonicalPosition, resolveMove } from './graph.js';
 import { debugLog } from './debug.js';
+import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 
 export async function materializeMove({ source, move } = {}) {
@@ -35,17 +35,15 @@ export async function materializeMove({ source, move } = {}) {
     games: 0,
     share: 0,
     qualifies: false,
-    manual: true,
     updatedAt: Date.now(),
   };
-  edge.id = edgeId(edge);
 
   await positionRepository.ensure(resolved.target);
-  const storedEdge = await putManualEdge(edge);
+  const storedEdge = await positionGraph.ensureEdge(edge, { manual: true });
   debugLog('move materialization stored', {
     san: resolved.san,
-    uci: edge.uci,
-    source: edge.source,
+    uci: storedEdge.uci,
+    source: storedEdge.source,
     target: resolved.target,
   });
   return { edge: storedEdge, target: resolved.target };

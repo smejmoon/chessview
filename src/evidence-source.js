@@ -1,4 +1,3 @@
-import { getOutgoing } from './db.js';
 import {
   ENGINE_MIN_DEPTH,
   HUMAN_SAMPLE_FLOOR,
@@ -11,6 +10,7 @@ import {
   railWorthy,
   rootRarity,
 } from './eval.js';
+import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 
 function abortError() {
@@ -70,7 +70,7 @@ async function visibleRelationshipEvidence(composition, mode, signal) {
 async function lineRailEvidence(center, signal) {
   const [node, outgoing, sourceEval, masters] = await Promise.all([
     positionRepository.get(center),
-    getOutgoing(center),
+    positionGraph.outgoing(center),
     loadCloudEval(center, { signal }),
     loadMasters(center, { signal }),
   ]);

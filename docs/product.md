@@ -15,7 +15,7 @@ Chessview's core job is to establish and navigate a trustworthy position graph t
 - the Constellation is established well enough that the positions the visitor is expected to navigate are known and represented coherently;
 - known Roots come from trustworthy incoming graph edges;
 - Knowledge acquisition can obtain or reconcile graph information required to compose the current Constellation when persisted knowledge is insufficient;
-- acquisition and visibility remain independent: Chessview may know more positions than the current Constellation shows, and visible-space limits do not become acquisition limits;
+- acquisition and visibility remain independent: Chessview may know more positions than the current Constellation shows, and visible-space limits do not become acquisition admission/retention limits;
 - Constellation composition preserves Root/Line direction, distinct branch/family structure until genuine canonical convergence, and the distinction between durable graph identity and the current projection;
 - evidence explicitly required to decide current Constellation membership or ordering is treated as structural input for that decision rather than as merely decorative annotation;
 - current-view critical structural work has reached a terminal outcome. Work that can still add, remove, or structurally rearrange the Constellation blocks successful Weather until it succeeds, establishes legitimate absence, fails explicitly, or becomes obsolete;
@@ -63,7 +63,8 @@ Global Weather follows the critical structural layer, not completion of every su
 - The graph is built from canonical chess positions connected by single legal [Moves](glossary.md#move) represented as directed [graph edges](glossary.md#graph-edge); transpositions merge.
 - Rated standard Lichess Opening Explorer is the primary human-statistical source. Masters data is a comparison population, and adequate-depth Lichess cloud evaluation supplies engine evidence.
 - Knowledge acquisition and Constellation composition are separate concerns: acquisition owns durable graph/evidence enrichment, while Constellation owns the coherent current-view projection.
-- Automatic admission of newly discovered graph relationships is an acquisition decision; it may use human-frequency/sample evidence as a lower usefulness boundary, but that first-admission rule is not a later retention rule and is separate from Constellation visibility/selection thresholds.
+- An [Explorer Reading](components/knowledge-acquisition.md#terms) is refreshable source evidence for one canonical position; [Edge Admission](components/knowledge-acquisition.md#terms) is the one-time acquisition decision that lets a newly observed legal relationship enter durable graph knowledge.
+- Automatic Edge Admission uses source-sample sufficiency rather than move-share visibility: once a Reading is sufficiently sampled, every legal returned relationship may be admitted. That admission rule is not a retention rule and is separate from Constellation visibility/selection thresholds.
 - Automatic Constellation selection is currently bounded by usable rated Lichess Explorer frequency data. Rated frequency orders eligible candidates locally when they share the same source position; it is not one global rank across unrelated source positions. Rare candidates may remain eligible when engine quality or favorable human results make them significant.
 - Missing, failed, or insufficient rescue evidence remains unknown and is not negative evidence for automatic Constellation selection.
 - The visible Constellation is sized for available presentation space and legibility rather than a fixed product-level board count.

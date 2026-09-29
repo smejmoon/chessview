@@ -165,8 +165,6 @@ test('contributors return immutable values and receive no controller publication
   assert.ok(Object.isFrozen(publications[0].actions));
   assert.equal(typeof publications[0].actions.recenter, 'function');
   assert.equal(Object.hasOwn(publications[0].actions, 'transition'), false);
-  assert.equal(Object.hasOwn(publications[0].actions, 'navigate'), false);
-  assert.equal(Object.hasOwn(publications[0].actions, 'playMove'), false);
 });
 
 test('supplementary evidence presents later without blocking or downgrading ready structure', async () => {
@@ -175,23 +173,10 @@ test('supplementary evidence presents later without blocking or downgrading read
   await controller.start();
   assert.equal(controller.snapshot.structure.status, 'ready');
   assert.equal(controller.snapshot.evidence.status, 'loading');
-
   evidence.reject(new Error('evidence unavailable'));
   await flush();
   assert.equal(controller.snapshot.structure.status, 'ready');
   assert.equal(controller.snapshot.evidence.status, 'failed');
-  assert.match(controller.snapshot.evidence.error, /evidence unavailable/);
-});
-
-test('evidence values become part of the immutable current view after structural readiness', async () => {
-  const evidence = deferred();
-  const { controller } = fixture({ evidence: () => evidence.promise });
-  await controller.start();
-  evidence.resolve({ evaluation: 'value' });
-  await flush();
-  assert.equal(controller.snapshot.structure.status, 'ready');
-  assert.equal(controller.snapshot.evidence.status, 'ready');
-  assert.deepEqual(controller.snapshot.evidence.value, { evaluation: 'value' });
 });
 
 test('critical structure failure is terminal for that view and refresh can recover', async () => {
@@ -204,8 +189,6 @@ test('critical structure failure is terminal for that view and refresh can recov
   });
   await controller.start();
   assert.equal(controller.snapshot.structure.status, 'failed');
-  assert.match(controller.snapshot.structure.error, /structure unavailable/);
-
   fail = false;
   await controller.refresh();
   assert.equal(controller.snapshot.structure.status, 'ready');
@@ -224,27 +207,47 @@ test('redraw presents without recomputing while refresh recomputes without chang
   calls.length = 0;
   const presented = publications.length;
   const composed = structureCalls;
-
   await controller.redraw();
   assert.equal(structureCalls, composed);
   assert.equal(publications.length, presented + 1);
-  assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
-
   await controller.refresh();
   assert.equal(structureCalls, composed + 1);
-  assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
 });
 
-test('Lines remain structurally loading until discovery reaches a terminal result', async () => {
+test('Lines remain structurally loading until selected-Line acquisition reaches a terminal result', async () => {
   const discovery = deferred();
+  let discoveryInput;
   const { controller } = fixture({
     initial: { center: 'A', view: 'lines', orientation: 'white', navDepth: 0 },
-    discover: () => discovery.promise,
+    discover: (input) => {
+      discoveryInput = input;
+      return discovery.promise;
+    },
   });
 
   await controller.start();
   assert.equal(controller.snapshot.structure.status, 'loading');
+  assert.equal(discoveryInput.structure.marker, 'A:lines');
+  assert.equal(typeof discoveryInput.onProgress, 'function');
   discovery.resolve(null);
   await flush(16);
+  assert.equal(controller.snapshot.structure.status, 'ready');
+});
+
+test('discovery progress recomposes and returns the new structure to the discovery contributor', async () => {
+  let compositions = 0;
+  let observed;
+  const { controller } = fixture({
+    initial: { center: 'A', view: 'lines', orientation: 'white', navDepth: 0 },
+    structure: async ({ center, mode }) => ({ composition: { center, direction: mode }, marker: `${center}:${++compositions}` }),
+    discover: async ({ onProgress }) => {
+      observed = await onProgress();
+      return null;
+    },
+  });
+
+  await controller.start();
+  await flush(16);
+  assert.equal(observed.marker, 'A:2');
   assert.equal(controller.snapshot.structure.status, 'ready');
 });

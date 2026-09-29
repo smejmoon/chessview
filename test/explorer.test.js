@@ -25,7 +25,8 @@ globalThis.window = { location: { href: 'https://example.test/chessview/', searc
 globalThis.history = { state: null, replaceState() {} };
 
 const { clearGraph, getOutgoing, putEdges, putNode } = await import('../src/db.js');
-const { discoverForViewport, loadExplorer } = await import('../src/explorer.js');
+const { loadExplorer } = await import('../src/explorer.js');
+const { discoverSelectedLines } = await import('../src/constellation-discovery.js');
 const { composeNodusStructure } = await import('../src/nodus-structure.js');
 
 const center = canonicalPosition(START_FEN);
@@ -68,95 +69,42 @@ function positionAfter(sequence) {
   return { key: canonicalPosition(chess.fen()), fen: chess.fen() };
 }
 
-function explorerWithMoves(moves) {
+function explorerWithMoves(moves, total = 100) {
+  const moveGames = moves.reduce((sum, [, games]) => sum + games, 0);
+  if (moveGames > total) throw new Error('move games exceed source sample');
   return {
-    white: 50,
-    draws: 20,
-    black: 30,
+    white: total,
+    draws: 0,
+    black: 0,
     moves: moves.map(([uci, games]) => ({ uci, white: games, draws: 0, black: 0 })),
   };
 }
 
-async function putFreshExplorer(position, moves) {
-  const explorer = explorerWithMoves(moves);
+async function putFreshExplorer(position, moves, total = 100) {
+  const explorer = explorerWithMoves(moves, total);
   await putNode({
     key: position.key,
     fen: position.fen,
     explorer,
     explorerFetchedAt: Date.now(),
-    games: 100,
+    games: total,
   });
 }
 
 test('401 clears the stored Lichess access token', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'expired-token');
-  globalThis.fetch = async () => ({
-    ok: false,
-    status: 401,
-    text: async () => 'unauthorized',
-  });
-
+  globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => 'unauthorized' });
   await assert.rejects(loadExplorer(center, { force: true }), (error) => error?.status === 401);
   assert.equal(localStorage.getItem('chessview.lichess.accessToken'), null);
 });
 
-test('aborted discovery stops before requesting descendant positions', async () => {
-  await clearGraph();
-  const explorer = {
-    white: 60,
-    draws: 20,
-    black: 20,
-    moves: [],
-  };
-  await putNode({
-    key: center,
-    fen: START_FEN,
-    explorer,
-    explorerFetchedAt: Date.now(),
-    games: 100,
-  });
-  await putEdges([
-    {
-      id: `${center}|e2e4|child`,
-      source: center,
-      target: 'child',
-      uci: 'e2e4',
-      san: 'e4',
-      games: 60,
-      share: 0.6,
-      qualifies: true,
-      manual: false,
-    },
-  ]);
-
-  let networkCalls = 0;
-  globalThis.fetch = async () => {
-    networkCalls += 1;
-    throw new Error('network should not be reached');
-  };
-
-  const controller = new AbortController();
-  await discoverForViewport(center, 10, () => controller.abort(), { signal: controller.signal });
-  assert.equal(networkCalls, 0);
-});
-
-test('discovery reaches a qualifying sibling instead of collapsing to one descendant spine', async () => {
+test('selected Line acquisition reads selected positions but not unselected candidates', async () => {
   await clearGraph();
   const e4 = positionAfter(['e4']);
   const d4 = positionAfter(['d4']);
-  const e4e5 = positionAfter(['e4', 'e5']);
-  const e4c5 = positionAfter(['e4', 'c5']);
-  const d4d5 = positionAfter(['d4', 'd5']);
-  const e4e5nf3 = positionAfter(['e4', 'e5', 'Nf3']);
-
-  await putFreshExplorer({ key: center, fen: START_FEN }, [['e2e4', 60], ['d2d4', 30]]);
-  await putFreshExplorer(e4, [['e7e5', 60], ['c7c5', 30]]);
+  await putFreshExplorer(e4, [['e7e5', 60]]);
   await putFreshExplorer(d4, [['d7d5', 70]]);
-  await putFreshExplorer(e4e5, [['g1f3', 70]]);
-  await putFreshExplorer(d4d5, []);
-  await putFreshExplorer(e4e5nf3, []);
-  await putFreshExplorer(e4c5, [['g1f3', 70]]);
 
   let networkCalls = 0;
   globalThis.fetch = async () => {
@@ -164,58 +112,108 @@ test('discovery reaches a qualifying sibling instead of collapsing to one descen
     throw new Error('fresh Explorer cache should avoid network');
   };
 
-  await discoverForViewport(center, 6);
+  const structure = { composition: { nodes: [{ key: e4.key }] } };
+  await discoverSelectedLines(center, structure, async () => structure);
 
   assert.equal(networkCalls, 0);
-  assert.ok((await getOutgoing(e4c5.key)).some((edge) => edge.uci === 'g1f3'));
+  assert.deepEqual((await getOutgoing(e4.key)).map((edge) => edge.uci), ['e7e5']);
+  assert.deepEqual(await getOutgoing(d4.key), []);
 });
 
-test('fresh cached Explorer snapshot repairs a corrupted manual edge without network', async () => {
+test('selected Line acquisition stops when recomposition exposes no unread selected position', async () => {
   await clearGraph();
-  const explorer = cachedStartExplorer();
-  await putFreshStartExplorer(explorer);
+  const e4 = positionAfter(['e4']);
+  await putFreshExplorer(e4, []);
+  let progressCalls = 0;
+  const structure = { composition: { nodes: [{ key: e4.key }] } };
+  await discoverSelectedLines(center, structure, async () => {
+    progressCalls += 1;
+    return { composition: { nodes: [{ key: e4.key }] } };
+  });
+  assert.equal(progressCalls, 1);
+});
+
+test('fresh cached Explorer Reading repairs a corrupted manual edge without network', async () => {
+  await clearGraph();
+  await putFreshStartExplorer();
   const resolved = resolveMove(center, { uci: 'e2e4' });
   const corrupted = {
-    id: '',
-    source: center,
-    target: resolved.target,
-    uci: resolved.uci,
-    san: resolved.san,
-    games: 0,
-    share: 0,
-    qualifies: false,
-    manual: true,
-    updatedAt: 1,
+    id: '', source: center, target: resolved.target, uci: resolved.uci, san: resolved.san,
+    games: 0, share: 0, qualifies: false, manual: true, updatedAt: 1,
   };
   corrupted.id = edgeId(corrupted);
   await putEdges([corrupted]);
 
   let networkCalls = 0;
-  globalThis.fetch = async () => {
-    networkCalls += 1;
-    throw new Error('fresh Explorer cache should avoid network');
-  };
-
+  globalThis.fetch = async () => { networkCalls += 1; throw new Error('fresh cache should avoid network'); };
   await loadExplorer(center);
 
-  assert.equal(networkCalls, 0);
   const repaired = (await getOutgoing(center)).find((edge) => edge.uci === 'e2e4');
+  assert.equal(networkCalls, 0);
   assert.ok(repaired);
   assert.equal(repaired.manual, true);
   assert.equal(repaired.games, 600);
   assert.equal(repaired.share, 0.6);
-  assert.equal(repaired.qualifies, true);
+  assert.equal(Object.hasOwn(repaired, 'qualifies'), false);
 });
 
-test('composition reconciles a fresh cached Explorer snapshot before reading outgoing edges', async () => {
+test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal move', async () => {
+  await clearGraph();
+  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
+  const rare = resolveMove(center, { uci: 'a2a3' });
+  const explorer = {
+    white: 1000,
+    draws: 0,
+    black: 0,
+    moves: [{ uci: 'a2a3', white: 1, draws: 0, black: 0 }],
+  };
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => explorer, text: async () => '' });
+
+  await loadExplorer(center, { force: true });
+
+  const stored = (await getOutgoing(center)).find((edge) => edge.uci === 'a2a3');
+  assert.ok(stored);
+  assert.equal(stored.target, rare.target);
+  assert.equal(stored.games, 1);
+  assert.equal(stored.share, 0.001);
+});
+
+test('insufficient Explorer Reading refreshes a known edge but does not Edge Admit an unknown one', async () => {
+  await clearGraph();
+  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
+  const e4 = resolveMove(center, { uci: 'e2e4' });
+  const c4 = resolveMove(center, { uci: 'c2c4' });
+  const known = {
+    id: '', source: center, target: e4.target, uci: e4.uci, san: e4.san,
+    games: 400, share: 0.4, manual: true, derived: false, updatedAt: 1,
+  };
+  known.id = edgeId(known);
+  await putEdges([known]);
+
+  const explorer = {
+    white: 50, draws: 0, black: 0,
+    moves: [
+      { uci: 'e2e4', white: 20, draws: 0, black: 0 },
+      { uci: 'c2c4', white: 10, draws: 0, black: 0 },
+    ],
+  };
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => explorer, text: async () => '' });
+
+  await loadExplorer(center, { force: true });
+
+  const edges = await getOutgoing(center);
+  const refreshed = edges.find((edge) => edge.uci === 'e2e4');
+  assert.equal(refreshed.games, 20);
+  assert.equal(refreshed.share, 0.4);
+  assert.equal(refreshed.manual, true);
+  assert.equal(edges.some((edge) => edge.target === c4.target), false);
+});
+
+test('composition reconciles a fresh cached Explorer Reading before reading outgoing edges', async () => {
   await clearGraph();
   await putFreshStartExplorer();
-
   let networkCalls = 0;
-  globalThis.fetch = async () => {
-    networkCalls += 1;
-    throw new Error('fresh Explorer cache should avoid network');
-  };
+  globalThis.fetch = async () => { networkCalls += 1; throw new Error('fresh cache should avoid network'); };
 
   const structure = await composeNodusStructure({ center, mode: 'lines', max: 1 });
 
@@ -224,16 +222,12 @@ test('composition reconciles a fresh cached Explorer snapshot before reading out
   assert.deepEqual(structure.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
 });
 
-test('composition can use and reconcile stale Explorer when refresh fails', async () => {
+test('composition can use and reconcile a stale Explorer Reading when refresh fails', async () => {
   await clearGraph();
   await putStaleStartExplorer();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
-
   let networkCalls = 0;
-  globalThis.fetch = async () => {
-    networkCalls += 1;
-    throw new Error('offline');
-  };
+  globalThis.fetch = async () => { networkCalls += 1; throw new Error('offline'); };
 
   const structure = await composeNodusStructure({ center, mode: 'lines', max: 1 });
 
@@ -242,20 +236,14 @@ test('composition can use and reconcile stale Explorer when refresh fails', asyn
   assert.deepEqual(structure.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
 });
 
-test('composition propagates structural Explorer failure when no cached evidence exists', async () => {
+test('composition propagates structural Explorer failure when no cached Reading exists', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
-  globalThis.fetch = async () => {
-    throw new Error('offline without cache');
-  };
-
-  await assert.rejects(
-    composeNodusStructure({ center, mode: 'lines', max: 1 }),
-    /offline without cache/,
-  );
+  globalThis.fetch = async () => { throw new Error('offline without cache'); };
+  await assert.rejects(composeNodusStructure({ center, mode: 'lines', max: 1 }), /offline without cache/);
 });
 
-test('Explorer refresh grows topology, updates returned statistics, and never retracts known edges', async () => {
+test('Explorer Reading refresh grows admitted topology, updates returned statistics, and never retracts known edges', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
 
@@ -263,52 +251,20 @@ test('Explorer refresh grows topology, updates returned statistics, and never re
   const d4 = resolveMove(center, { uci: 'd2d4' });
   const c4 = resolveMove(center, { uci: 'c2c4' });
   const existing = [
-    {
-      id: '',
-      source: center,
-      target: e4.target,
-      uci: e4.uci,
-      san: e4.san,
-      games: 600,
-      share: 0.6,
-      qualifies: true,
-      manual: true,
-      derived: false,
-      updatedAt: 1,
-    },
-    {
-      id: '',
-      source: center,
-      target: d4.target,
-      uci: d4.uci,
-      san: d4.san,
-      games: 250,
-      share: 0.25,
-      qualifies: true,
-      manual: false,
-      derived: false,
-      updatedAt: 1,
-    },
+    { id: '', source: center, target: e4.target, uci: e4.uci, san: e4.san, games: 600, share: 0.6, manual: true, derived: false, updatedAt: 1 },
+    { id: '', source: center, target: d4.target, uci: d4.uci, san: d4.san, games: 250, share: 0.25, manual: false, derived: false, updatedAt: 1 },
   ];
   existing.forEach((edge) => { edge.id = edgeId(edge); });
   await putEdges(existing);
 
   const refreshedExplorer = {
-    white: 500,
-    draws: 200,
-    black: 300,
+    white: 500, draws: 200, black: 300,
     moves: [
       { uci: 'e2e4', san: 'e4', white: 20, draws: 10, black: 10 },
       { uci: 'c2c4', san: 'c4', white: 100, draws: 50, black: 50 },
     ],
   };
-  globalThis.fetch = async () => ({
-    ok: true,
-    status: 200,
-    json: async () => refreshedExplorer,
-    text: async () => '',
-  });
-
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => refreshedExplorer, text: async () => '' });
   await loadExplorer(center, { force: true });
 
   const edges = await getOutgoing(center);
@@ -316,7 +272,6 @@ test('Explorer refresh grows topology, updates returned statistics, and never re
   assert.equal(edges.length, 3);
   assert.equal(byUci.get('e2e4').games, 40);
   assert.equal(byUci.get('e2e4').share, 0.04);
-  assert.equal(byUci.get('e2e4').qualifies, false);
   assert.equal(byUci.get('e2e4').manual, true);
   assert.equal(byUci.get('d2d4').games, 250);
   assert.equal(byUci.get('d2d4').share, 0.25);

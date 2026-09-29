@@ -4,16 +4,9 @@ import {
   canonicalPosition,
   decorateExplorerMoves,
   resolveMove,
-  stableEdgeOrder,
   toPlayableFen,
   totalGames,
 } from './graph.js';
-import {
-  addLineCandidates,
-  createLineFrontier,
-  hasLineCandidates,
-  takeLineCandidate,
-} from './line-frontier.js';
 import { debugLog } from './debug.js';
 import { lichessSession } from './lichess-session.js';
 import { lichessGateway } from './lichess-gateway.js';
@@ -38,8 +31,10 @@ function httpError(status, message) {
   return error;
 }
 
-async function reconcileExplorerSnapshot(canonical, explorer) {
+async function reconcileExplorerReading(canonical, explorer) {
   const edges = [];
+  const admitUnknown = totalGames(explorer) >= AUTO_SAMPLE_FLOOR;
+
   for (const move of decorateExplorerMoves(explorer)) {
     try {
       const resolved = resolveMove(canonical, { uci: move.uci });
@@ -50,17 +45,21 @@ async function reconcileExplorerSnapshot(canonical, explorer) {
         san: resolved.san,
         games: move.games,
         share: move.share,
-        qualifies: move.qualifies,
         manual: false,
         derived: false,
         updatedAt: Date.now(),
       };
 
+      const stored = await positionGraph.updateEdge(edge, { create: admitUnknown });
+      if (!stored) continue;
       await positionRepository.merge(resolved.target, { fen: resolved.fen });
-      const stored = await positionGraph.updateEdge(edge, { create: true });
-      if (stored) edges.push(stored);
+      edges.push(stored);
     } catch (error) {
-      debugLog('ignored explorer move', { position: canonical, uci: move.uci, error: error?.message ?? String(error) }, 'warn');
+      debugLog('ignored Explorer Reading move', {
+        position: canonical,
+        uci: move.uci,
+        error: error?.message ?? String(error),
+      }, 'warn');
     }
   }
 
@@ -70,12 +69,11 @@ async function reconcileExplorerSnapshot(canonical, explorer) {
 async function staleExplorerOrThrow(error, canonical, cached) {
   if (error?.name === 'AbortError') throw error;
   if (!cached?.explorer) throw error;
-  const edges = await reconcileExplorerSnapshot(canonical, cached.explorer);
-  debugLog('explorer refresh failed; using stale cache', {
+  const edges = await reconcileExplorerReading(canonical, cached.explorer);
+  debugLog('Explorer refresh failed; using stale Reading', {
     position: canonical,
     error: error?.message ?? String(error),
     edges: edges.length,
-    qualifying: edges.filter((edge) => edge.qualifies).length,
   }, 'warn');
   return cached;
 }
@@ -87,12 +85,11 @@ export function loadExplorer(key, { force = false, signal } = {}) {
     const cached = await positionRepository.get(canonical);
     const fresh = cached?.explorer && Date.now() - (cached.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS;
     if (!force && fresh) {
-      const edges = await reconcileExplorerSnapshot(canonical, cached.explorer);
-      debugLog('explorer cache hit', {
+      const edges = await reconcileExplorerReading(canonical, cached.explorer);
+      debugLog('Explorer Reading cache hit', {
         position: canonical,
         games: cached.games ?? 0,
         edges: edges.length,
-        qualifying: edges.filter((edge) => edge.qualifies).length,
       });
       return cached;
     }
@@ -136,76 +133,12 @@ export function loadExplorer(key, { force = false, signal } = {}) {
         games: totalGames(explorer),
       });
 
-      const edges = await reconcileExplorerSnapshot(canonical, explorer);
-      debugLog('explorer stored', { position: canonical, games: node.games, edges: edges.length, qualifying: edges.filter((edge) => edge.qualifies).length });
+      const edges = await reconcileExplorerReading(canonical, explorer);
+      debugLog('Explorer Reading stored', { position: canonical, games: node.games, edges: edges.length });
       return node;
     } catch (error) {
       debugLog('explorer refresh failed', { position: canonical, error: error?.message ?? String(error) }, 'error');
       return staleExplorerOrThrow(error, canonical, cached);
     }
   }, { signal });
-}
-
-export async function discoverForViewport(centerKey, budget, onProgress, { signal } = {}) {
-  const center = canonicalPosition(centerKey);
-  debugLog('discovery start', { center, budget });
-  if (signal?.aborted) return null;
-
-  const centerNode = await loadExplorer(center, { signal });
-  if (signal?.aborted) return centerNode;
-  onProgress?.();
-
-  const roots = (await positionGraph.outgoing(center))
-    .filter((edge) => edge.qualifies)
-    .sort(stableEdgeOrder);
-
-  const frontiers = roots.map((edge) => createLineFrontier(
-    edge.uci,
-    { key: edge.target, depth: 1, breadth: 0 },
-    edge.share ?? 0,
-  ));
-  const seen = new Set([center]);
-  let inspected = 0;
-  const requestBudget = Math.max(3, Math.min(14, budget));
-
-  while (hasLineCandidates(frontiers) && inspected < requestBudget && !signal?.aborted) {
-    let progressed = false;
-    for (const frontier of frontiers) {
-      if (inspected >= requestBudget || signal?.aborted) break;
-      const item = takeLineCandidate(frontier, (candidate) => !seen.has(candidate.key));
-      if (!item) continue;
-      seen.add(item.key);
-      progressed = true;
-
-      const known = await positionRepository.get(item.key);
-      if ((known?.games ?? Infinity) < AUTO_SAMPLE_FLOOR && known?.explorer) continue;
-      try {
-        const node = await loadExplorer(item.key, { signal });
-        if (signal?.aborted) break;
-        inspected += 1;
-        onProgress?.();
-        if ((node.games ?? 0) < AUTO_SAMPLE_FLOOR) continue;
-        const next = (await positionGraph.outgoing(item.key))
-          .filter((edge) => edge.qualifies)
-          .sort(stableEdgeOrder)
-          .map((edge, index) => ({
-            key: edge.target,
-            depth: item.depth + 1,
-            breadth: item.breadth + index,
-          }));
-        addLineCandidates(frontier, next);
-      } catch (error) {
-        if (signal?.aborted) break;
-        if (error?.status === 429) {
-          debugLog('discovery paused by rate limit', { position: item.key, branch: frontier.branch, depth: item.depth }, 'warn');
-          return centerNode;
-        }
-        debugLog('branch discovery failed', { position: item.key, branch: frontier.branch, depth: item.depth, error: error?.message ?? String(error) }, 'warn');
-      }
-    }
-    if (!progressed) break;
-  }
-
-  debugLog(signal?.aborted ? 'discovery cancelled' : 'discovery complete', { center, inspected, roots: roots.length });
-  return centerNode;
 }

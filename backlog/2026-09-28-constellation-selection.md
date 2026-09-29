@@ -14,7 +14,7 @@ Knowledge acquisition owns which legal relationships have entered the durable gr
 
 # Edges:
 
-Knowledge acquisition remains the separate `backlog/2026-09-28-knowledge-acquisition.md` outcome and owns first admission, transport, persistence, reconciliation, and stale-cache policy. Semantic engine/human/frequency signal calculation remains the separate `backlog/2026-09-28-evidence-signals.md` outcome. `docs/components/interface.md` §Requirements owns presentation-space constraints. `docs/components/rail.md` §Requirements permits omitted Constellation moves to remain navigable from the Rail. Genuine canonical transpositions merge; synthetic grouping for overflow branches is not required by the current durable contract.
+`docs/components/knowledge-acquisition.md` owns Explorer Reading acquisition, Edge Admission, persistence, reconciliation, and stale-cache policy. Semantic engine/human/frequency signal calculation remains the separate `backlog/2026-09-28-evidence-signals.md` outcome. `docs/components/interface.md` §Requirements owns presentation-space constraints. `docs/components/rail.md` §Requirements permits omitted Constellation moves to remain navigable from the Rail. Genuine canonical transpositions merge; synthetic grouping for overflow branches is not required by the current durable contract.
 
 Only evidence that can still alter current membership/order is a structural dependency for settlement. Supplementary evidence must not delay the Constellation or global Weather.
 

@@ -21,14 +21,14 @@ Chess rules define one fixed graph of legal canonical positions and Moves. Chess
 - Resolving a Move is the pure directional operation `source + Move -> canonical target + target FEN + SAN/UCI`. The same operation may produce an outgoing Line relationship or validate that a known incoming Root relationship reaches the current Nodus; it does not derive predecessor positions by running chess backward.
 - Edge identity is canonical `source + move + target` and is independent of how the edge became known.
 - `PositionGraph` canonicalizes edge source and target identities, resolves the supplied move from the canonical source, rejects mismatched targets, and computes the durable edge ID rather than trusting a caller-supplied ID.
-- Durable topology is monotonic. Once Chessview has established a legal graph edge, ordinary product workflows do not remove that edge because later statistical evidence changes, falls below an acquisition/selection threshold, or omits the move from a later source snapshot.
-- Graph existence is durable chess knowledge; games, share, qualification, timestamps, and similar statistical fields are mutable evidence attached to that identity.
+- Durable topology is monotonic. Once Chessview has established a legal graph edge, ordinary product workflows do not remove that edge because later statistical evidence changes, falls below an acquisition/selection threshold, or omits the move from a later source Reading.
+- Graph existence is durable chess knowledge; games, share, timestamps, and similar statistical fields are mutable evidence attached to that identity.
 - Explorer, manual exploration, and derived/transposition knowledge may coexist on one edge rather than replacing one another.
 - Independent retention provenance consists only of `manual` and `derived` booleans for now. Those flags may be added but are not cleared by statistical refresh. No provenance history, source records, or generic provenance framework is required.
 - Ensuring an already-known edge preserves its current mutable fields and independent provenance while adding any supplied `manual` or `derived` provenance.
 - Updating an already-known edge may replace its mutable fields, but it preserves canonical graph identity and any already-established `manual` / `derived` provenance.
-- A caller may request that an update create a previously unknown legal edge; the caller that owns acquisition policy decides whether first admission is allowed. `PositionGraph` validates and persists the result but does not decide usefulness thresholds.
-- Concurrent topology/provenance/statistics mutations of the same edge must not lose already-established provenance or overwrite a later committed statistical update with an earlier snapshot.
+- A caller may request that an update create a previously unknown legal edge; [Knowledge acquisition](knowledge-acquisition.md#terms) owns Explorer-backed Edge Admission and decides whether creation is allowed. `PositionGraph` validates and persists the result but does not decide usefulness thresholds.
+- Concurrent topology/provenance/statistics mutations of the same edge must not lose already-established provenance or overwrite a later committed statistical update with an earlier Reading.
 - Materializing a played Move delegates its chess resolution to Resolve Move, then ensures the durable graph edge exists with explicit/manual provenance and ensures the target position record exists.
 - Move materialization establishes graph knowledge only; it does not decide whether the target becomes the current Nodus or belongs in the current Constellation.
 - Graph state persists in IndexedDB so navigation and previously discovered transpositions survive reloads.
@@ -59,7 +59,7 @@ positionGraph.updateEdge(edge, {
 
 Neither operation can retarget an existing edge or withdraw graph topology.
 
-Higher-level graph mutation workflows remain outside this boundary. `move-materialization.js` owns `source + Move -> target record + explicit edge`. Transposition expansion owns which derived relationships should be materialized. [Knowledge acquisition](knowledge-acquisition.md) owns whether newly observed statistical relationships should be admitted automatically and which mutable evidence fields a refresh supplies.
+Higher-level graph mutation workflows remain outside this boundary. `move-materialization.js` owns `source + Move -> target record + explicit edge`. Transposition expansion owns which derived relationships should be materialized. [Knowledge acquisition](knowledge-acquisition.md) owns whether newly observed statistical relationships receive Edge Admission and which mutable evidence fields an Explorer Reading supplies.
 
 ## Implementation
 
@@ -71,7 +71,7 @@ Higher-level graph mutation workflows remain outside this boundary. `move-materi
 - [`PositionRepository`](../architecture/position-repository.md) owns application-level access to node records: one in-memory record per canonical key, IndexedDB fallback/persistence, and independently cancellable shared hydration of position-backed data facets.
 - IndexedDB stores nodes and edges; graph persistence is independent of the current Constellation. `db.js` is the low-level persistence adapter under `PositionRepository` and `PositionGraph`, not the application/domain edge boundary.
 - `db.js` provides an atomic per-edge read/modify/write primitive so `PositionGraph` can preserve topology, provenance, and current statistics across concurrent mutations without moving graph semantics into the persistence adapter.
-- [Knowledge acquisition](knowledge-acquisition.md) owns Explorer-backed enrichment: it uses Resolve Move to interpret Explorer moves, asks `PositionGraph` to update known-edge statistics, may admit newly observed edges according to acquisition policy, and never treats a refresh as authority to delete already-known topology.
+- [Knowledge acquisition](knowledge-acquisition.md) owns Explorer-backed enrichment: it uses Resolve Move to interpret an Explorer Reading, asks `PositionGraph` to update known-edge statistics, may Edge Admit newly observed edges according to acquisition policy, and never treats a refresh as authority to delete already-known topology.
 - Presentation code may use product terms such as Root and Line, but storage and graph algorithms should use directional graph terms where clearer.
 
 ## Verification
@@ -90,12 +90,12 @@ Deterministic tests should cover:
 - concurrent manual/derived ensures retaining both provenance flags;
 - concurrent statistical refresh and provenance addition retaining both the refreshed statistics and provenance;
 - updating mutable statistics without changing edge identity;
-- an update not creating an unknown edge unless the caller explicitly permits first admission;
+- an update not creating an unknown edge unless the caller explicitly permits Edge Admission;
 - materialization of a played legal Move into its canonical target and durable edge;
 - transposition merge behavior and derived provenance retention;
 - persistence of nodes and edges;
 - in-memory node reuse and IndexedDB fallback through `PositionRepository`;
-- Explorer refresh updating known-edge statistics while never deleting a previously materialized legal edge solely because it is absent or no longer significant in the new snapshot.
+- Explorer Reading refresh updating known-edge statistics while never deleting a previously materialized legal edge solely because it is absent or no longer significant in the new Reading.
 
 ## Related components
 

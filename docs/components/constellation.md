@@ -9,8 +9,10 @@ A Constellation is a projection of Chessview's durable graph, not the durable gr
 ## Requirements
 
 - The set of positions Chessview knows and the set represented in the current Constellation are independent. Known positions may be omitted from a view without being removed from durable graph knowledge.
-- Constellation determines what graph and evidence information it needs for composition. [Knowledge acquisition](knowledge-acquisition.md) is responsible for supplying or enriching that information; Constellation does not own fetching, derivation, reconciliation, caching, or persistence mechanics.
+- Constellation determines what graph and evidence information it needs for composition. [Knowledge acquisition](knowledge-acquisition.md) is responsible for supplying or enriching that information; Constellation does not own fetching, derivation, reconciliation, caching, persistence mechanics, or Edge Admission.
 - A Constellation request may cover one position or a larger graph region. Acquisition granularity is not part of the Constellation contract.
+- Line composition begins from acquired outgoing knowledge at the Nodus. While visible capacity remains and outgoing knowledge for a currently selected Line position is unresolved, Constellation may request an [Explorer Reading](knowledge-acquisition.md#terms) for that selected position and recompose from the enriched durable graph. It does not expand through an unselected candidate merely to spend an acquisition/request budget.
+- Once additional outgoing knowledge cannot change the current constrained composition, Constellation stops requesting deeper Explorer Readings for that composition. This is a caller decision about information still needed, not an acquisition retention or Edge Admission rule.
 - Constellation optimizes for a coherent, understandable structure rather than maximum coverage.
 - The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count. Presentation may provide the constraints needed to compose an appropriate view.
 - Visible depth has no arbitrary fixed opening-depth cap. Useful depth emerges from available presentation space, available knowledge, branch significance, and coherence; a narrow Line may deepen when doing so remains the best use of the view.
@@ -30,6 +32,8 @@ Deterministic tests should cover:
 - the same durable graph composing differently under different presentation-space constraints without changing graph knowledge;
 - coherent representation of multiple significant branches when space allows;
 - a narrow useful Line deepening without an independent fixed opening-depth cap;
+- selected Line positions requesting additional acquisition only while another Explorer Reading can still change constrained composition;
+- unselected automatic candidates not causing deeper acquisition merely because they are known;
 - distinct immediate Root/Line families remaining distinct before genuine convergence;
 - canonical transpositions appearing once while retaining every selected relationship and branch/family membership into or out of the convergence;
 - Constellation requesting additional knowledge without itself performing transport or persistence side effects;

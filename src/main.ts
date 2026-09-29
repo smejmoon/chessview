@@ -5,7 +5,7 @@ import './style.css';
 import './debug.css';
 
 import { canonicalPosition } from './graph.js';
-import { discoverForViewport } from './explorer.js';
+import { discoverSelectedLines } from './constellation-discovery.js';
 import { debugLog } from './debug.js';
 import { materializeMove } from './move-materialization.js';
 import { NodusController } from './nodus-controller.js';
@@ -15,7 +15,6 @@ import { createNodusRenderer } from './nodus-renderer.js';
 import { createNodusPresenter } from './nodus-presenter.js';
 import { createRouteLedger } from './route-ledger.js';
 import { preferenceStore } from './preference-store.js';
-import { positionRepository } from './position-repository.js';
 
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
@@ -36,16 +35,14 @@ const presenter = createNodusPresenter({
   log: (message, detail) => { debugLog(message, detail, 'error'); },
 });
 
-async function discover({ center, signal, onProgress }) {
+async function discover({ center, structure, signal, onProgress }) {
   try {
-    await discoverForViewport(center, boardBudget(), onProgress, { signal });
+    await discoverSelectedLines(center, structure, onProgress, { signal });
     return null;
   } catch (error) {
     if (signal.aborted) return null;
-    debugLog('discovery failed', { center, error: error?.message ?? String(error) }, 'error');
-    let hasPersistedExplorer = false;
-    try { hasPersistedExplorer = Boolean((await positionRepository.get(center))?.explorer); } catch {}
-    return { error, criticalFailure: !hasPersistedExplorer };
+    debugLog('selected Line acquisition failed', { center, error: error?.message ?? String(error) }, 'error');
+    return { error, criticalFailure: true };
   }
 }
 

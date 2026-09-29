@@ -104,7 +104,6 @@ export class NodusController {
     const hasTarget = request != null && request.target != null;
     const hasMove = request?.move != null;
     if (hasTarget === hasMove) return false;
-
     if (hasTarget) return this.#commitRecenter(request.target);
     if (typeof this.#materializeMove !== 'function') return false;
 
@@ -194,13 +193,7 @@ export class NodusController {
   }
 
   #isCurrent(run) {
-    return Boolean(
-      run
-      && !this.#disposed
-      && this.#run === run
-      && run.revision === this.#revision
-      && !run.abortController.signal.aborted
-    );
+    return Boolean(run && !this.#disposed && this.#run === run && run.revision === this.#revision && !run.abortController.signal.aborted);
   }
 
   async #commitRecenter(position) {
@@ -224,36 +217,22 @@ export class NodusController {
   async #startView(reason) {
     this.#run?.abortController.abort();
     this.#revision += 1;
-    const run = {
-      revision: this.#revision,
-      abortController: new AbortController(),
-      composeTail: Promise.resolve(),
-    };
+    const run = { revision: this.#revision, abortController: new AbortController(), composeTail: Promise.resolve() };
     this.#run = run;
     this.#state.structure = lifecycle('loading');
     this.#state.evidence = lifecycle('idle');
-    this.#log('Nodus view started', {
-      revision: run.revision,
-      center: this.#state.center,
-      mode: this.#state.mode,
-      reason,
-    });
+    this.#log('Nodus view started', { revision: run.revision, center: this.#state.center, mode: this.#state.mode, reason });
     await this.#presentCurrent('start');
 
     const hasDiscovery = this.#state.mode === 'lines' && typeof this.#discover === 'function';
-    const composed = await this.#queueComposition(run, {
-      status: hasDiscovery ? 'loading' : 'ready',
-    });
+    const composed = await this.#queueComposition(run, { status: hasDiscovery ? 'loading' : 'ready' });
     if (!composed || !this.#isCurrent(run)) return;
-
     if (hasDiscovery) void this.#runDiscovery(run);
     else void this.#hydrateEvidence(run);
   }
 
   #queueComposition(run, options = {}) {
-    run.composeTail = run.composeTail
-      .catch(() => false)
-      .then(() => this.#composeCurrent(run, options));
+    run.composeTail = run.composeTail.catch(() => false).then(() => this.#composeCurrent(run, options));
     return run.composeTail;
   }
 
@@ -261,11 +240,7 @@ export class NodusController {
     if (!this.#isCurrent(run)) return false;
     let value;
     try {
-      value = await this.#structure(Object.freeze({
-        center: this.#state.center,
-        mode: this.#state.mode,
-        signal: run.abortController.signal,
-      }));
+      value = await this.#structure(Object.freeze({ center: this.#state.center, mode: this.#state.mode, signal: run.abortController.signal }));
     } catch (structureError) {
       if (!this.#isCurrent(run) || structureError?.name === 'AbortError') return false;
       this.#state.structure = lifecycle('failed', null, structureError);
@@ -287,9 +262,12 @@ export class NodusController {
       result = await this.#discover(Object.freeze({
         center: this.#state.center,
         mode: this.#state.mode,
+        structure: this.#state.structure.value,
         signal: run.abortController.signal,
-        onProgress: () => {
-          if (this.#isCurrent(run)) void this.#queueComposition(run, { status: 'loading' });
+        onProgress: async () => {
+          if (!this.#isCurrent(run)) return null;
+          const composed = await this.#queueComposition(run, { status: 'loading' });
+          return composed && this.#isCurrent(run) ? this.#state.structure.value : null;
         },
       }));
     } catch (error) {
@@ -310,12 +288,7 @@ export class NodusController {
     await this.#presentCurrent('update');
     let value;
     try {
-      value = await this.#evidence(Object.freeze({
-        center: this.#state.center,
-        mode: this.#state.mode,
-        structure: this.#state.structure.value,
-        signal: run.abortController.signal,
-      }));
+      value = await this.#evidence(Object.freeze({ center: this.#state.center, mode: this.#state.mode, structure: this.#state.structure.value, signal: run.abortController.signal }));
     } catch (error) {
       if (!this.#isCurrent(run) || error?.name === 'AbortError') return;
       this.#state.evidence = lifecycle('failed', null, error);

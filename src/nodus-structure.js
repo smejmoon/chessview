@@ -39,14 +39,16 @@ function immutable(value) {
   return value;
 }
 
-function createCandidateSource(signal) {
+function createCandidateSource(signal, { hydrateExplorer = true } = {}) {
   const explorerLoads = new Map();
 
   function explorerFor(source) {
     if (explorerLoads.has(source)) return explorerLoads.get(source);
     const pending = (async () => {
       throwIfAborted(signal);
-      const loaded = await loadExplorer(source, { signal });
+      const loaded = hydrateExplorer
+        ? await loadExplorer(source, { signal })
+        : await positionRepository.get(source);
       throwIfAborted(signal);
       return loaded?.explorer ?? null;
     })();
@@ -85,7 +87,7 @@ function createCandidateSource(signal) {
   }
 
   async function outgoing(source) {
-    await explorerFor(source);
+    if (hydrateExplorer) await explorerFor(source);
     throwIfAborted(signal);
     const edges = await positionGraph.outgoing(source);
     throwIfAborted(signal);
@@ -195,9 +197,10 @@ export async function composeNodusStructure({ center, mode, max, signal }) {
   throwIfAborted(signal);
   const capacity = Math.max(1, Number.isFinite(max) ? Math.floor(max) : 1);
   if (mode === 'roots') await rootTranspositionEnricher.ensure(center, { signal });
+  else await loadExplorer(center, { signal });
   throwIfAborted(signal);
 
-  const candidateSource = createCandidateSource(signal);
+  const candidateSource = createCandidateSource(signal, { hydrateExplorer: mode === 'roots' });
   const incomingEdges = await positionGraph.incoming(center);
   throwIfAborted(signal);
 

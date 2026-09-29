@@ -1,26 +1,20 @@
 # Do:
 
-Implement the Constellation composition behavior in `docs/components/constellation.md` §Requirements and the automatic eligibility/local-ordering behavior in `docs/components/constellation-selection.md` §Eligibility and §Ranking. Replace the current fixed `5%` automatic-expansion rule and fixed `19`-board visibility budget as product behavior while preserving canonical convergence, distinct branch/family structure until genuine convergence, useful depth without an arbitrary fixed opening-depth cap, same-source frequency ordering, and rare-candidate rescue without treating unknown evidence as negative evidence.
+Finish Constellation composition against `docs/components/constellation.md` §Requirements and `docs/components/constellation-selection.md` §Eligibility / §Ranking. `src/constellation-selection.js` owns semantic candidate classification and local/cross-source ordering, while `src/nodus-structure.js` derives automatic candidates from each source position's rated-Explorer snapshot and `src/visible-graph.js` now preserves the supplied cross-source Root order instead of re-ranking unrelated local percentages. Complete structural engine-rescue hydration and integration-level verification before closing this outcome.
 
 # Because:
 
-`docs/components/constellation.md` §Purpose / §Requirements now owns the coherent current-view subgraph independently from durable knowledge acquisition and two-dimensional rendering. `docs/components/constellation-selection.md` §Eligibility / §Ranking owns automatic candidacy and comparable same-source ordering, while `docs/product.md` §Cross-product commitments keeps source-local frequency from becoming one global rank across unrelated branches.
+`docs/components/constellation.md` §Purpose / §Requirements owns the coherent current-view subgraph independently from durable knowledge acquisition and two-dimensional rendering. `docs/components/constellation-selection.md` §Eligibility / §Ranking owns automatic candidacy and comparable same-source ordering, while `docs/product.md` §Cross-product commitments keeps source-local frequency from becoming one global rank across unrelated branches. The current implementation treats usable rated Explorer data at the candidate's immediate source as automatic-candidacy evidence; unhydrated or failed source statistics do not become zero-frequency evidence.
 
 # Edges:
 
-Knowledge acquisition is a separate outcome under `docs/components/knowledge-acquisition.md` §Requirements: this entry may consume whatever graph/evidence state that boundary provides, but it does not own Explorer transport, persistence, or reconciliation. Semantic engine/human/frequency signal calculation is the separate `backlog/2026-09-28-evidence-signals.md` outcome; this entry consumes those signals rather than redefining them. `docs/components/interface.md` §Requirements owns deriving presentation-space constraints. `docs/components/rail.md` §Requirements permits omitted Constellation moves to remain navigable from the Rail.
+Knowledge acquisition remains a separate outcome under `docs/components/knowledge-acquisition.md` §Requirements: this entry may request source Explorer or engine hydration but does not own transport, persistence, or reconciliation. Semantic engine/human/frequency signal calculation remains the separate `backlog/2026-09-28-evidence-signals.md` outcome. `docs/components/interface.md` §Requirements owns deriving presentation-space constraints. `docs/components/rail.md` §Requirements permits omitted Constellation moves to remain navigable from the Rail. Genuine canonical transpositions merge; synthetic grouping for overflow branches is not currently required.
 
 # Unsettled:
 
-Choose the selection-side rarity criterion, which supplied engine-quality states count as rescue or bad evidence, and same-source tie-breaking criteria consistent with `docs/components/constellation-selection.md` §Eligibility / §Ranking. Human-result favorable/unfavorable scoring and sample sufficiency belong to the Evidence outcome rather than this one.
+Determine the smallest structural engine-evidence request rule for rare candidates when cached engine evidence is absent and an engine rescue could change which branches survive constrained composition. Only unresolved evidence that can still alter membership should block settlement; missing, failed, or insufficient evidence must not become negative evidence.
 
-Decide the shape of the presentation-space constraint passed into Constellation composition: a simple capacity may be sufficient initially, but the implementation must not recreate `19` as an invariant when available width, height, board legibility, or relationship geometry is what actually constrains the view.
-
-Decide how pending or late engine/human evidence used for rare-candidate rescue interacts with current-view settlement. Evidence that can still alter current Constellation membership is structural under `docs/product.md` §Product usability bar; the implementation must choose a deterministic point at which selection has enough information to settle without making missing, failed, or insufficient evidence equivalent to negative evidence.
-
-Decide how Constellation allocates scarce space across branches whose candidate percentages come from different immediate source positions. The implementation may use local candidate ordering and structural/evidence inputs, but it must preserve `docs/components/constellation.md` §Requirements coherence and must not manufacture one global rank solely from unrelated source-local percentages.
-
-If a position has more distinct significant non-transposing continuations than the available presentation can show, decide the initial UX for the omitted eligible branches. Genuine canonical transpositions must merge; synthetic grouping is not yet a requirement.
+Validate whether the current cross-source allocation rule—known omit-first candidates after other Root candidates, then stable identity while preserving round-robin family breadth—is sufficient for dense Root positions. Any replacement must preserve coherence without turning unrelated source-local percentages into one global score.
 
 # Complete:
 

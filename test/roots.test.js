@@ -81,12 +81,12 @@ test('ancestry above a transposition inherits all converged Root families', () =
   assert.deepEqual(upstream.edges.map((item) => item.target), ['shared']);
 });
 
-test('Roots selection is deterministic and respects its visible budget', () => {
+test('Roots selection is deterministic, preserves supplied order, and respects its visible budget', () => {
   const incomingByTarget = new Map([
     ['center', [edge('b', 'center', 'b1b2', 10), edge('a', 'center', 'a1a2', 10), edge('c', 'center', 'c1c2', 5)]],
   ]);
   const first = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 2 });
   const second = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 2 });
   assert.deepEqual(first, second);
-  assert.deepEqual(first.nodes.map((item) => item.key), ['a', 'b']);
+  assert.deepEqual(first.nodes.map((item) => item.key), ['b', 'a']);
 });

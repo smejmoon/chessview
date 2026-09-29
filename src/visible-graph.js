@@ -150,14 +150,6 @@ function createVisibleGraph({ center, direction, max = 19 }) {
   };
 }
 
-function stableIncomingEdgeOrder(a, b) {
-  return (b.games ?? 0) - (a.games ?? 0)
-    || (b.share ?? 0) - (a.share ?? 0)
-    || (a.uci ?? '').localeCompare(b.uci ?? '')
-    || a.source.localeCompare(b.source)
-    || a.target.localeCompare(b.target);
-}
-
 function lineChildren(outgoingBySource, key, distance, breadth = 0) {
   return (outgoingBySource.get(key) ?? [])
     .filter((edge) => edge.qualifies)
@@ -251,8 +243,6 @@ export function chooseLineNeighborhood({ center, incoming = [], outgoingBySource
 
 function rootCandidates(incomingByTarget, target, distance) {
   return (incomingByTarget.get(target) ?? [])
-    .slice()
-    .sort(stableIncomingEdgeOrder)
     .map((edge) => ({ key: edge.source, edge, distance }));
 }
 
@@ -261,9 +251,7 @@ export function chooseRootNeighborhood({ center, incomingByTarget = new Map(), m
   const visible = createVisibleGraph({ center, direction: 'roots', max });
   const frontiers = [];
 
-  const immediate = (incomingByTarget.get(center) ?? [])
-    .slice()
-    .sort(stableIncomingEdgeOrder);
+  const immediate = (incomingByTarget.get(center) ?? []).slice();
 
   for (const edge of immediate) {
     const family = edge.source;

@@ -2,13 +2,20 @@ import { getIncoming, getOutgoing } from './db.js';
 import {
   START_FEN,
   canonicalPosition,
-  stableEdgeOrder,
   toPlayableFen,
 } from './graph.js';
 import { chooseLineNeighborhood, chooseRootNeighborhood } from './visible-graph.js';
 import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { positionRepository } from './position-repository.js';
 import { rootTranspositionEnricher } from './root-enrichment.js';
+import { loadExplorer } from './explorer.js';
+import { moveEvaluation } from './eval.js';
+import { humanResultQuality, moveFrequency } from './evidence-signals.js';
+import {
+  rankCrossSourceCandidates,
+  rankSameSourceCandidates,
+  selectionCandidate,
+} from './constellation-selection.js';
 
 const START = canonicalPosition(START_FEN);
 
@@ -32,38 +39,110 @@ function immutable(value) {
   return value;
 }
 
-async function collectOutgoingGraph(center, max, signal) {
+function createCandidateSource(signal) {
+  const explorerLoads = new Map();
+
+  function explorerFor(source) {
+    if (explorerLoads.has(source)) return explorerLoads.get(source);
+    const pending = (async () => {
+      throwIfAborted(signal);
+      const cached = await positionRepository.get(source);
+      throwIfAborted(signal);
+      if (cached?.explorer) return cached.explorer;
+      try {
+        const loaded = await loadExplorer(source, { signal });
+        throwIfAborted(signal);
+        return loaded?.explorer ?? null;
+      } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        return null;
+      }
+    })();
+    explorerLoads.set(source, pending);
+    return pending;
+  }
+
+  async function candidate(edge) {
+    if (!edge) return null;
+    if (edge.manual) {
+      return selectionCandidate({ edge: { ...edge, qualifies: true } });
+    }
+
+    const explorer = await explorerFor(edge.source);
+    throwIfAborted(signal);
+    const frequency = moveFrequency(explorer, edge);
+    if (!frequency) return null;
+
+    const [sourceNode, targetNode] = await Promise.all([
+      positionRepository.get(edge.source),
+      positionRepository.get(edge.target),
+    ]);
+    throwIfAborted(signal);
+    const projectedEdge = {
+      ...edge,
+      games: frequency.games,
+      share: frequency.share,
+      qualifies: true,
+    };
+    return selectionCandidate({
+      edge: projectedEdge,
+      frequency,
+      engineQuality: moveEvaluation(edge.source, edge, sourceNode?.cloudEval, targetNode?.cloudEval),
+      humanResult: humanResultQuality(explorer, edge, edge.source),
+    });
+  }
+
+  async function outgoing(source) {
+    const edges = await getOutgoing(source);
+    throwIfAborted(signal);
+    const candidates = (await Promise.all(edges.map(candidate))).filter(Boolean);
+    return rankSameSourceCandidates(candidates).map((item) => item.edge);
+  }
+
+  async function incoming(target) {
+    const edges = await getIncoming(target);
+    throwIfAborted(signal);
+    const candidates = (await Promise.all(edges.map(candidate))).filter(Boolean);
+    return rankCrossSourceCandidates(candidates).map((item) => item.edge);
+  }
+
+  return Object.freeze({ outgoing, incoming });
+}
+
+async function collectOutgoingGraph(center, capacity, candidateSource, signal) {
   const outgoingBySource = new Map();
-  const queue = [{ key: center, depth: 0 }];
+  const queue = [center];
   const visited = new Set();
-  while (queue.length && visited.size < max * 3) {
+  while (queue.length && visited.size < capacity) {
     throwIfAborted(signal);
-    const current = queue.shift();
-    if (visited.has(current.key) || current.depth > max) continue;
-    visited.add(current.key);
-    const edges = await getOutgoing(current.key);
+    const key = queue.shift();
+    if (visited.has(key)) continue;
+    visited.add(key);
+    const edges = await candidateSource.outgoing(key);
     throwIfAborted(signal);
-    outgoingBySource.set(current.key, edges);
-    for (const edge of edges.filter((item) => item.qualifies || item.manual).sort(stableEdgeOrder)) {
-      if (!visited.has(edge.target)) queue.push({ key: edge.target, depth: current.depth + 1 });
+    outgoingBySource.set(key, edges);
+    for (const edge of edges) {
+      if (!visited.has(edge.target)) queue.push(edge.target);
     }
   }
   return outgoingBySource;
 }
 
-async function collectIncomingGraph(center, max, signal) {
+async function collectIncomingGraph(center, capacity, candidateSource, signal) {
   const incomingByTarget = new Map();
-  const queue = [{ key: center, depth: 0 }];
+  const queue = [center];
   const visited = new Set();
-  while (queue.length && visited.size < max * 3) {
+  while (queue.length && visited.size < capacity) {
     throwIfAborted(signal);
-    const current = queue.shift();
-    if (visited.has(current.key) || current.depth > max) continue;
-    visited.add(current.key);
-    const edges = await getIncoming(current.key);
+    const key = queue.shift();
+    if (visited.has(key)) continue;
+    visited.add(key);
+    const edges = await candidateSource.incoming(key);
     throwIfAborted(signal);
-    incomingByTarget.set(current.key, edges);
-    for (const edge of edges) if (!visited.has(edge.source)) queue.push({ key: edge.source, depth: current.depth + 1 });
+    incomingByTarget.set(key, edges);
+    for (const edge of edges) {
+      if (!visited.has(edge.source)) queue.push(edge.source);
+    }
   }
   return incomingByTarget;
 }
@@ -111,31 +190,32 @@ async function rootRows(composition, signal) {
  * @typedef {Object} ComposeNodusStructureOptions
  * @property {string} center
  * @property {NodusMode} mode
- * @property {number} [max]
+ * @property {number} max
  * @property {AbortSignal} [signal]
  */
 
 /**
  * @param {ComposeNodusStructureOptions} options
  */
-export async function composeNodusStructure({ center, mode, max = 19, signal }) {
+export async function composeNodusStructure({ center, mode, max, signal }) {
   throwIfAborted(signal);
+  const capacity = Math.max(1, Number.isFinite(max) ? Math.floor(max) : 1);
   if (mode === 'roots') await rootTranspositionEnricher.ensure(center, { signal });
   throwIfAborted(signal);
 
-  const [incomingEdges, outgoingEdges] = await Promise.all([
-    getIncoming(center),
-    getOutgoing(center),
-  ]);
+  const candidateSource = createCandidateSource(signal);
+  const incomingEdges = await getIncoming(center);
   throwIfAborted(signal);
 
   let selected;
+  let lineEdges = [];
   if (mode === 'roots') {
-    const incomingByTarget = await collectIncomingGraph(center, max, signal);
-    selected = chooseRootNeighborhood({ center, incomingByTarget, max });
+    const incomingByTarget = await collectIncomingGraph(center, capacity, candidateSource, signal);
+    selected = chooseRootNeighborhood({ center, incomingByTarget, max: capacity });
   } else {
-    const outgoingBySource = await collectOutgoingGraph(center, max, signal);
-    selected = chooseLineNeighborhood({ center, incoming: [], outgoingBySource, max });
+    const outgoingBySource = await collectOutgoingGraph(center, capacity, candidateSource, signal);
+    selected = chooseLineNeighborhood({ center, incoming: [], outgoingBySource, max: capacity });
+    lineEdges = (outgoingBySource.get(center) ?? []).map((edge) => immutable({ ...edge }));
   }
   throwIfAborted(signal);
 
@@ -151,12 +231,6 @@ export async function composeNodusStructure({ center, mode, max = 19, signal }) 
     ...node,
     record: records.get(node.key) ?? { key: node.key, fen: toPlayableFen(node.key) },
   }));
-
-  const lineEdges = outgoingEdges
-    .filter((edge) => edge.qualifies || edge.manual)
-    .slice()
-    .sort(stableEdgeOrder)
-    .map((edge) => immutable({ ...edge }));
 
   return immutable({
     composition,

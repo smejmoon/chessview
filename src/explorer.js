@@ -69,6 +69,19 @@ async function reconcileExplorerSnapshot(canonical, explorer) {
   return edges;
 }
 
+async function staleExplorerOrThrow(error, canonical, cached) {
+  if (error?.name === 'AbortError') throw error;
+  if (!cached?.explorer) throw error;
+  const edges = await reconcileExplorerSnapshot(canonical, cached.explorer);
+  debugLog('explorer refresh failed; using stale cache', {
+    position: canonical,
+    error: error?.message ?? String(error),
+    edges: edges.length,
+    qualifying: edges.filter((edge) => edge.qualifies).length,
+  }, 'warn');
+  return cached;
+}
+
 export function loadExplorer(key, { force = false, signal } = {}) {
   const canonical = canonicalPosition(key);
   const facet = force ? 'explorer:force' : 'explorer';
@@ -86,53 +99,52 @@ export function loadExplorer(key, { force = false, signal } = {}) {
       return cached;
     }
 
-    const token = await lichessSession.requireAccessToken();
-    const url = explorerUrl(canonical);
-    debugLog('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
-
-    let response;
     try {
-      response = await lichessGateway.request(url, {
+      const token = await lichessSession.requireAccessToken();
+      const url = explorerUrl(canonical);
+      debugLog('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
+
+      const response = await lichessGateway.request(url, {
         signal: requestSignal,
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
       });
+
+      debugLog('explorer response', { position: canonical, status: response.status, ok: response.ok });
+      if (!response.ok) {
+        let body = '';
+        try { body = (await response.text()).slice(0, 500); } catch {}
+        debugLog('explorer HTTP error', { position: canonical, status: response.status, body }, 'error');
+        if (response.status === 401) {
+          lichessSession.clearAccessToken();
+          throw httpError(401, 'Lichess authorization expired. Reload to sign in again.');
+        }
+        if (response.status === 429) {
+          const retryAfterMs = Math.max(0, lichessGateway.cooldownUntil - Date.now());
+          debugLog('explorer cooldown started', { retryAfterMs }, 'warn');
+          throw httpError(429, 'Lichess explorer is rate-limited. Requests are paused for one minute.');
+        }
+        throw httpError(response.status, `Lichess explorer returned ${response.status}`);
+      }
+
+      const explorer = await response.json();
+      const node = await positionRepository.merge(canonical, {
+        fen: cached?.fen ?? toPlayableFen(canonical),
+        opening: explorer.opening ?? cached?.opening ?? null,
+        explorer,
+        explorerFetchedAt: Date.now(),
+        games: totalGames(explorer),
+      });
+
+      const edges = await reconcileExplorerSnapshot(canonical, explorer);
+      debugLog('explorer stored', { position: canonical, games: node.games, edges: edges.length, qualifying: edges.filter((edge) => edge.qualifies).length });
+      return node;
     } catch (error) {
-      debugLog('explorer network error', { position: canonical, url: url.toString(), error: error?.message ?? String(error) }, 'error');
-      throw error;
+      debugLog('explorer refresh failed', { position: canonical, error: error?.message ?? String(error) }, 'error');
+      return staleExplorerOrThrow(error, canonical, cached);
     }
-
-    debugLog('explorer response', { position: canonical, status: response.status, ok: response.ok });
-    if (!response.ok) {
-      let body = '';
-      try { body = (await response.text()).slice(0, 500); } catch {}
-      debugLog('explorer HTTP error', { position: canonical, status: response.status, body }, 'error');
-      if (response.status === 401) {
-        lichessSession.clearAccessToken();
-        throw httpError(401, 'Lichess authorization expired. Reload to sign in again.');
-      }
-      if (response.status === 429) {
-        const retryAfterMs = Math.max(0, lichessGateway.cooldownUntil - Date.now());
-        debugLog('explorer cooldown started', { retryAfterMs }, 'warn');
-        throw httpError(429, 'Lichess explorer is rate-limited. Requests are paused for one minute.');
-      }
-      throw httpError(response.status, `Lichess explorer returned ${response.status}`);
-    }
-
-    const explorer = await response.json();
-    const node = await positionRepository.merge(canonical, {
-      fen: cached?.fen ?? toPlayableFen(canonical),
-      opening: explorer.opening ?? cached?.opening ?? null,
-      explorer,
-      explorerFetchedAt: Date.now(),
-      games: totalGames(explorer),
-    });
-
-    const edges = await reconcileExplorerSnapshot(canonical, explorer);
-    debugLog('explorer stored', { position: canonical, games: node.games, edges: edges.length, qualifying: edges.filter((edge) => edge.qualifies).length });
-    return node;
   }, { signal });
 }
 

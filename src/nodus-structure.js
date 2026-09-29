@@ -46,17 +46,9 @@ function createCandidateSource(signal) {
     if (explorerLoads.has(source)) return explorerLoads.get(source);
     const pending = (async () => {
       throwIfAborted(signal);
-      const cached = await positionRepository.get(source);
+      const loaded = await loadExplorer(source, { signal });
       throwIfAborted(signal);
-      if (cached?.explorer) return cached.explorer;
-      try {
-        const loaded = await loadExplorer(source, { signal });
-        throwIfAborted(signal);
-        return loaded?.explorer ?? null;
-      } catch (error) {
-        if (error?.name === 'AbortError') throw error;
-        return null;
-      }
+      return loaded?.explorer ?? null;
     })();
     explorerLoads.set(source, pending);
     return pending;
@@ -93,6 +85,8 @@ function createCandidateSource(signal) {
   }
 
   async function outgoing(source) {
+    await explorerFor(source);
+    throwIfAborted(signal);
     const edges = await positionGraph.outgoing(source);
     throwIfAborted(signal);
     const candidates = (await Promise.all(edges.map(candidate))).filter(Boolean);

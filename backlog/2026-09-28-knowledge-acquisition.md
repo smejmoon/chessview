@@ -1,10 +1,10 @@
 # Do:
 
-Change the current Explorer/discovery implementation so it satisfies `docs/components/knowledge-acquisition.md` §Requirements: fetching, deriving, hydrating, reconciling, and persisting graph/evidence information remain independent of what the current Constellation shows. Remove visible-board budgets and Constellation membership from acquisition stopping rules except where a caller explicitly limits the information it requests.
+Change the current Explorer/discovery implementation so it satisfies `docs/components/knowledge-acquisition.md` §Requirements: fetching, deriving, hydrating, reconciling, and persisting graph/evidence information remain independent of what the current Constellation shows. Explorer facet freshness, stale fallback, and source-snapshot reconciliation now remain inside `loadExplorer()` before structural outgoing reads; finish removing visible-board budgets and Constellation membership from acquisition stopping rules except where a caller explicitly limits the information it requests.
 
 # Because:
 
-`docs/components/knowledge-acquisition.md` §Purpose / §Requirements separates durable knowledge acquisition from `docs/components/constellation.md` §Requirements. The product contract in `docs/product.md` §Product usability bar requires that Chessview may acquire and retain a larger graph region than the current Constellation and that visible-space limits do not become acquisition limits.
+`docs/components/knowledge-acquisition.md` §Purpose / §Requirements separates durable knowledge acquisition from `docs/components/constellation.md` §Requirements. The product contract in `docs/product.md` §Product usability bar requires that Chessview may acquire and retain a larger graph region than the current Constellation and that visible-space limits do not become acquisition limits. A fresh cached Explorer snapshot now repairs persisted outgoing edges before composition relies on them; an expired snapshot is refreshed when possible and remains usable/reconciled when refresh fails; without cached Explorer evidence, acquisition failure remains a failure instead of becoming ordinary absence.
 
 # Edges:
 

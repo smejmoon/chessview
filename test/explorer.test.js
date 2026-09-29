@@ -2,7 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
-import { canonicalPosition, edgeId, resolveMove, START_FEN } from '../src/graph.js';
+import {
+  EXPLORER_TTL_MS,
+  canonicalPosition,
+  edgeId,
+  resolveMove,
+  START_FEN,
+} from '../src/graph.js';
 
 globalThis.indexedDB = fakeIndexedDB;
 
@@ -20,6 +26,7 @@ globalThis.history = { state: null, replaceState() {} };
 
 const { clearGraph, getOutgoing, putEdges, putNode } = await import('../src/db.js');
 const { discoverForViewport, loadExplorer } = await import('../src/explorer.js');
+const { composeNodusStructure } = await import('../src/nodus-structure.js');
 
 const center = canonicalPosition(START_FEN);
 
@@ -41,6 +48,16 @@ async function putFreshStartExplorer(explorer = cachedStartExplorer()) {
     fen: START_FEN,
     explorer,
     explorerFetchedAt: Date.now(),
+    games: explorer.white + explorer.draws + explorer.black,
+  });
+}
+
+async function putStaleStartExplorer(explorer = cachedStartExplorer()) {
+  await putNode({
+    key: center,
+    fen: START_FEN,
+    explorer,
+    explorerFetchedAt: Date.now() - EXPLORER_TTL_MS - 1,
     games: explorer.white + explorer.draws + explorer.black,
   });
 }
@@ -188,4 +205,52 @@ test('fresh cached Explorer snapshot repairs a corrupted manual edge without net
   assert.equal(repaired.games, 600);
   assert.equal(repaired.share, 0.6);
   assert.equal(repaired.qualifies, true);
+});
+
+test('composition reconciles a fresh cached Explorer snapshot before reading outgoing edges', async () => {
+  await clearGraph();
+  await putFreshStartExplorer();
+
+  let networkCalls = 0;
+  globalThis.fetch = async () => {
+    networkCalls += 1;
+    throw new Error('fresh Explorer cache should avoid network');
+  };
+
+  const structure = await composeNodusStructure({ center, mode: 'lines', max: 1 });
+
+  assert.equal(networkCalls, 0);
+  assert.deepEqual((await getOutgoing(center)).map((edge) => edge.uci).sort(), ['d2d4', 'e2e4']);
+  assert.deepEqual(structure.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
+});
+
+test('composition can use and reconcile stale Explorer when refresh fails', async () => {
+  await clearGraph();
+  await putStaleStartExplorer();
+  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
+
+  let networkCalls = 0;
+  globalThis.fetch = async () => {
+    networkCalls += 1;
+    throw new Error('offline');
+  };
+
+  const structure = await composeNodusStructure({ center, mode: 'lines', max: 1 });
+
+  assert.equal(networkCalls, 1);
+  assert.ok((await getOutgoing(center)).some((edge) => edge.uci === 'e2e4'));
+  assert.deepEqual(structure.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
+});
+
+test('composition propagates structural Explorer failure when no cached evidence exists', async () => {
+  await clearGraph();
+  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
+  globalThis.fetch = async () => {
+    throw new Error('offline without cache');
+  };
+
+  await assert.rejects(
+    composeNodusStructure({ center, mode: 'lines', max: 1 }),
+    /offline without cache/,
+  );
 });

@@ -12,6 +12,7 @@ A Constellation is a projection of Chessview's durable graph, not the durable gr
 - Constellation determines what graph and evidence information it needs for composition. [Knowledge acquisition](knowledge-acquisition.md) is responsible for supplying or enriching that information; Constellation does not own fetching, derivation, reconciliation, caching, persistence mechanics, or Edge Admission.
 - A Constellation request may cover one position or a larger graph region. Acquisition granularity is not part of the Constellation contract.
 - Line composition begins from acquired outgoing knowledge at the Nodus. While visible capacity remains and outgoing knowledge for a currently selected Line position is unresolved, Constellation may request an [Explorer Reading](knowledge-acquisition.md#terms) for that selected position and recompose from the enriched durable graph. It does not expand through an unselected candidate merely to spend an acquisition/request budget.
+- Selection membership and unresolved structural acquisition are separate facts. Line composition exposes a Reading frontier containing only selected positions for which another Explorer Reading can still affect the constrained composition; discovery consumes that frontier rather than treating every selected unread position as unresolved.
 - Once additional outgoing knowledge cannot change the current constrained composition, Constellation stops requesting deeper Explorer Readings for that composition. This is a caller decision about information still needed, not an acquisition retention or Edge Admission rule.
 - Constellation optimizes for a coherent, understandable structure rather than maximum coverage.
 - The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count. Presentation may provide the constraints needed to compose an appropriate view.
@@ -33,6 +34,7 @@ Deterministic tests should cover:
 - coherent representation of multiple significant branches when space allows;
 - a narrow useful Line deepening without an independent fixed opening-depth cap;
 - selected Line positions requesting additional acquisition only while another Explorer Reading can still change constrained composition;
+- a selected position with unresolved Explorer data disappearing from the Reading frontier once constrained composition is already structurally settled;
 - unselected automatic candidates not causing deeper acquisition merely because they are known;
 - distinct immediate Root/Line families remaining distinct before genuine convergence;
 - canonical transpositions appearing once while retaining every selected relationship and branch/family membership into or out of the convergence;

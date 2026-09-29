@@ -2,22 +2,22 @@ import { debugLog } from './debug.js';
 import { loadExplorer } from './explorer.js';
 
 export async function discoverSelectedLines(center, structure, onProgress, { signal } = {}) {
-  const inspected = new Set([center]);
+  const inspected = new Set();
   let current = structure;
 
   while (!signal?.aborted) {
-    const selected = current?.composition?.nodes ?? [];
-    const next = selected.find((node) => node?.key && !inspected.has(node.key));
+    const frontier = current?.readingFrontier ?? [];
+    const next = frontier.find((key) => key && !inspected.has(key));
     if (!next) break;
 
-    inspected.add(next.key);
-    debugLog('selected Line requests Explorer Reading', {
+    inspected.add(next);
+    debugLog('structural Line frontier requests Explorer Reading', {
       center,
-      position: next.key,
-      selected: selected.length,
+      position: next,
+      frontier: frontier.length,
     });
 
-    await loadExplorer(next.key, { signal });
+    await loadExplorer(next, { signal });
     if (signal?.aborted) break;
     const recomposed = await onProgress?.();
     if (recomposed) current = recomposed;
@@ -25,7 +25,7 @@ export async function discoverSelectedLines(center, structure, onProgress, { sig
 
   debugLog(signal?.aborted ? 'selected Line acquisition cancelled' : 'selected Line acquisition complete', {
     center,
-    readings: Math.max(0, inspected.size - 1),
+    readings: inspected.size,
   });
   return current;
 }

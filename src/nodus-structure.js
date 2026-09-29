@@ -1,6 +1,7 @@
 import {
   START_FEN,
   canonicalPosition,
+  legalDestinations,
   toPlayableFen,
 } from './graph.js';
 import { chooseLineNeighborhood, chooseRootNeighborhood } from './visible-graph.js';
@@ -228,11 +229,17 @@ export async function composeNodusStructure({ center, mode, max, signal }) {
     ...node,
     record: records.get(node.key) ?? { key: node.key, fen: toPlayableFen(node.key) },
   }));
+  const readingFrontier = mode === 'lines' && composition.nodes.length < capacity
+    ? positions
+      .filter((position) => !position.record?.explorer && legalDestinations(position.key).size > 0)
+      .map((position) => position.key)
+    : [];
 
   return immutable({
     composition,
     centerNode: records.get(center) ?? { key: center, fen: toPlayableFen(center) },
     positions,
+    readingFrontier,
     incomingCount: incomingEdges.length,
     lineEdges,
     rootRows: mode === 'roots' ? await rootRows(composition, signal) : [],

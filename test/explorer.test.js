@@ -99,7 +99,7 @@ test('401 clears the stored Lichess access token', async () => {
   assert.equal(localStorage.getItem('chessview.lichess.accessToken'), null);
 });
 
-test('selected Line acquisition reads selected positions but not unselected candidates', async () => {
+test('selected Line acquisition reads only positions exposed by the structural Reading frontier', async () => {
   await clearGraph();
   const e4 = positionAfter(['e4']);
   const d4 = positionAfter(['d4']);
@@ -112,23 +112,29 @@ test('selected Line acquisition reads selected positions but not unselected cand
     throw new Error('fresh Explorer cache should avoid network');
   };
 
-  const structure = { composition: { nodes: [{ key: e4.key }] } };
-  await discoverSelectedLines(center, structure, async () => structure);
+  const structure = {
+    composition: { nodes: [{ key: e4.key }, { key: d4.key }] },
+    readingFrontier: [e4.key],
+  };
+  await discoverSelectedLines(center, structure, async () => ({ ...structure, readingFrontier: [] }));
 
   assert.equal(networkCalls, 0);
   assert.deepEqual((await getOutgoing(e4.key)).map((edge) => edge.uci), ['e7e5']);
   assert.deepEqual(await getOutgoing(d4.key), []);
 });
 
-test('selected Line acquisition stops when recomposition exposes no unread selected position', async () => {
+test('selected Line acquisition stops when recomposition clears the structural Reading frontier', async () => {
   await clearGraph();
   const e4 = positionAfter(['e4']);
   await putFreshExplorer(e4, []);
   let progressCalls = 0;
-  const structure = { composition: { nodes: [{ key: e4.key }] } };
+  const structure = {
+    composition: { nodes: [{ key: e4.key }] },
+    readingFrontier: [e4.key],
+  };
   await discoverSelectedLines(center, structure, async () => {
     progressCalls += 1;
-    return { composition: { nodes: [{ key: e4.key }] } };
+    return { composition: { nodes: [{ key: e4.key }] }, readingFrontier: [] };
   });
   assert.equal(progressCalls, 1);
 });
@@ -220,6 +226,31 @@ test('composition reconciles a fresh cached Explorer Reading before reading outg
   assert.equal(networkCalls, 0);
   assert.deepEqual((await getOutgoing(center)).map((edge) => edge.uci).sort(), ['d2d4', 'e2e4']);
   assert.deepEqual(structure.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
+  assert.deepEqual(structure.readingFrontier, []);
+});
+
+test('composition exposes unresolved Reading frontier only while selected Lines can still grow', async () => {
+  await clearGraph();
+  await putFreshStartExplorer();
+  const e4 = positionAfter(['e4']);
+  const d4 = positionAfter(['d4']);
+  let networkCalls = 0;
+  globalThis.fetch = async () => { networkCalls += 1; throw new Error('no Explorer request is expected'); };
+
+  const open = await composeNodusStructure({ center, mode: 'lines', max: 3 });
+  assert.deepEqual(open.readingFrontier.slice().sort(), [d4.key, e4.key].sort());
+
+  const settled = await composeNodusStructure({ center, mode: 'lines', max: 1 });
+  assert.equal(settled.composition.nodes.length, 1);
+  assert.deepEqual(settled.readingFrontier, []);
+
+  let progressCalls = 0;
+  await discoverSelectedLines(center, settled, async () => {
+    progressCalls += 1;
+    return settled;
+  });
+  assert.equal(progressCalls, 0);
+  assert.equal(networkCalls, 0);
 });
 
 test('composition can use and reconcile a stale Explorer Reading when refresh fails', async () => {

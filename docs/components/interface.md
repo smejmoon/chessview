@@ -20,6 +20,8 @@ Interface does not decide durable graph identity, acquire graph knowledge, selec
 - Root rarity remains a separate presentation channel supplied by Evidence. Rare Roots may use a diamond, reduced emphasis, and dashed connectors; stronger rarity treatment may apply to very rare Roots. Rarity may change dash/opacity but not connector color or Line-popularity width.
 - Siblings, cousins, and merged transpositions may occupy lateral context where useful without changing Root/Line direction semantics.
 - Interface derives the presentation-space constraints needed to fit readable boards and relationships in the available viewport and supplies those constraints to Constellation composition. It does not convert a fixed desktop board count into a product rule.
+- A trustworthy provisional Constellation remains visible and navigable while [Weather](weather.md) reports that structural refinement is still `Updating…`; presentation must not treat unsettled as unavailable.
+- Accepted current-generation refinements may add, remove, or rearrange visible boards and relationships. Interface may debounce or coalesce transient recompositions to avoid distracting fidgeting, but it must keep ongoing refinement perceptible through Weather and must not manufacture a settled state merely to suppress motion.
 - All visible boards share one global orientation controlled by the flip action.
 - Evidence presentation follows the Evidence component rather than deriving chess meaning from DOM layout.
 - Rail behavior follows the Rail component; Weather presentation follows the Weather component; position-centered navigation follows the Nodus component.
@@ -36,6 +38,9 @@ Deterministic/browser contract tests should cover:
 - one rendered canonical board at a visible transposition with every selected connector preserved;
 - a merged Root board with several downstream relationships suppressing a misleading single board-level move cue;
 - ancestry above a Root convergence remaining shared rather than duplicating canonical positions;
+- a trustworthy provisional Constellation remaining visible and interactive while Weather is still `Updating…`;
+- accepted refinement updating the visible Constellation without requiring the prior trustworthy view to disappear first;
+- debounce/coalescing avoiding unnecessary visual fidgeting without concealing that structural refinement is ongoing or falsely presenting settlement;
 - global orientation behavior;
 - stable identity between rendered positions/connectors and their Constellation relationships;
 - Line descendants inheriting the first move's Nodus share for connector-width semantics;
@@ -43,4 +48,4 @@ Deterministic/browser contract tests should cover:
 - different viewport constraints being supplied to Constellation without Interface independently changing graph identity or persistence;
 - normal presentation failure falling back to a degraded/unavailable surface without changing structural truth.
 
-Manual verification should include dense Root and Line Constellations, a transposition, responsive layouts, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. It should confirm that distinct Root families remain legible before convergence, that genuine convergence produces one shared board with every selected connector and no misleading single move cue, and that the presentation remains legible as available screen space changes without assuming a fixed number of surrounding boards.
+Manual verification should include dense Root and Line Constellations, a transposition, responsive layouts, progressive refinement, and evidence-rich positions where visual cues remain attached to the correct edge after recentering. It should confirm that distinct Root families remain legible before convergence, that genuine convergence produces one shared board with every selected connector and no misleading single move cue, that useful provisional structure remains usable during visible refinement without distracting fidgeting, and that the presentation remains legible as available screen space changes without assuming a fixed number of surrounding boards.

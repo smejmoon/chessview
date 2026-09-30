@@ -48,6 +48,8 @@ A user notices an alternative Line and compares its human and engine evidence in
 
 **Shape before detail.** Show meaningful alternatives before spending excessive space on one continuation. Broad positions retain breadth; narrow Lines can deepen.
 
+**Progressive truth.** Show the best trustworthy view we can construct now. Continue acquiring information that may improve it in the background, visibly. Do not withhold a usable view merely because it may still change. Practical presentation may coalesce refinements to avoid distracting fidgeting without concealing that work is ongoing.
+
 **One connected map.** Recentring should feel like moving through the same chess space, and transpositions should feel like convergence on the same place.
 
 **Evidence supports understanding.** Statistics and engine evidence enrich the graph and may help choose what deserves scarce visible space, but they do not redefine canonical graph identity.

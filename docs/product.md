@@ -6,24 +6,26 @@
 
 Feature criticality answers a different question from release scope. A supplementary or decorative feature may still be required, but its absence or failure must not make the core graph unusable or keep the current view permanently unsettled.
 
+Chessview distinguishes a **usable published view** from a **settled view**. A trustworthy Constellation supported by currently available knowledge may be published and navigated while structural acquisition or evidence that could still improve it continues in the background. Ongoing refinement must remain visible through Weather or the relevant local evidence surface; publication must not falsely imply that the result is settled. Presentation may debounce or coalesce intermediate recompositions to avoid distracting fidgeting without concealing that refinement is still underway.
+
 ### Critical — the product is not usable without this
 
-Chessview's core job is to establish and navigate a trustworthy position graph through a coherent current Constellation. The product is usable only when all of the following hold for the current view:
+Chessview's core job is to establish and navigate a trustworthy position graph through a coherent current Constellation. The product is usable only when all of the following hold for the currently published view:
 
 - the Nodus is a valid canonical chess position and legal moves can recenter it;
 - graph identity and one-move edges are correct, including transposition merging;
-- the Constellation is established well enough that the positions the visitor is expected to navigate are known and represented coherently;
+- the Constellation is established well enough from currently available trustworthy knowledge that the positions it presents are represented coherently;
 - known Roots come from trustworthy incoming graph edges;
-- Knowledge acquisition can obtain or reconcile graph information required to compose the current Constellation when persisted knowledge is insufficient;
+- Knowledge acquisition can obtain or reconcile graph information that may improve the current Constellation when persisted knowledge is insufficient;
 - acquisition and visibility remain independent: Chessview may know more positions than the current Constellation shows, and visible-space limits do not become acquisition admission/retention limits;
 - Constellation composition preserves Root/Line direction, distinct branch/family structure until genuine canonical convergence, and the distinction between durable graph identity and the current projection;
-- evidence explicitly required to decide current Constellation membership or ordering is treated as structural input for that decision rather than as merely decorative annotation;
-- current-view critical structural work has reached a terminal outcome. Work that can still add, remove, or structurally rearrange the Constellation blocks successful Weather until it succeeds, establishes legitimate absence, fails explicitly, or becomes obsolete;
+- evidence explicitly required to decide current Constellation membership or ordering is treated as structural input for refinement rather than as merely decorative annotation;
+- unresolved structural work that can still add, remove, or rearrange the Constellation keeps Weather unsettled but does not by itself make an already trustworthy published view unusable;
 - recentering and browser history preserve position-centered navigation semantics.
 
-A fresh network response is not inherently critical if existing persisted graph data is already sufficient to establish the Constellation. Conversely, rated Explorer or other selection evidence becomes critical when unresolved information prevents the current Constellation from being determined. Criticality follows the capability needed by the current view, not the endpoint that happened to run.
+A fresh network response is not inherently critical if existing persisted graph data is already sufficient to publish a trustworthy Constellation. Conversely, rated Explorer or other selection evidence becomes structurally relevant when unresolved information can still change the current Constellation. Criticality follows the capability needed by the current view, not the endpoint that happened to run.
 
-An explicit critical failure ends loading but does not make the product usable. If Chessview cannot establish the required visible structure, Weather must show a degraded/unavailable outcome rather than the normal success-style `Ready` / check state.
+A structural failure makes the view globally degraded/unavailable only when Chessview cannot establish trustworthy current structure from what it has. Failure to obtain additional information for an already trustworthy published view settles that dependency as failed/unknown as appropriate; it does not invalidate trustworthy structure already established.
 
 ### Supplementary — useful meaning that must not block core usability
 
@@ -49,11 +51,11 @@ A treatment stops being decorative when it is the only way a required distinctio
 
 ## Weather
 
-Global Weather follows the critical structural layer, not completion of every supplementary request.
+Global Weather follows structural settlement, not whether a trustworthy current view can already be shown.
 
-- `Updating…` means unresolved critical structural work can still materially change the Constellation or its structural associations.
-- Normal `Ready` / subtle check means the critical visible structure has been established successfully, including legitimate empty or absent structure where applicable. Supplementary evidence may still be hydrating.
-- A critical structural failure is terminal for loading but must use a degraded/unavailable global state rather than the normal success-style settled state.
+- `Updating…` means unresolved structural work can still materially change the published Constellation or its structural associations; the currently trustworthy view may remain visible and navigable while that work continues.
+- Normal `Ready` / subtle check means the critical visible structure has settled successfully, including legitimate empty or absent structure where applicable. Supplementary evidence may still be hydrating.
+- A structural failure uses a degraded/unavailable global state when it prevents Chessview from establishing trustworthy current structure. Failure of additional refinement does not replace an already trustworthy published view with an unavailable one merely because a better result could not be obtained.
 - Supplementary failures remain visible at their local evidence surface and do not reopen or downgrade an otherwise successfully established view.
 - Background work that cannot alter the current Constellation never blocks Weather.
 

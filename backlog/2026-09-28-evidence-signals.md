@@ -4,17 +4,19 @@ Establish the smallest Evidence-owned engine-evidence value needed by consumers 
 
 Keep the existing source-local frequency, human-result quality, and Root-rarity derivation in `src/evidence-signals.js`, and route Constellation selection, Rail, and Interface through the Evidence semantic boundary so they stop reconstructing meaning from raw endpoint/cache values. Default to plain derived semantic values or helpers, not a new persisted per-edge lifecycle or class hierarchy. Keep acquisition/loading control flow in the existing facet owners.
 
+Ensure the semantic value is sufficient for progressive Constellation refinement: unresolved engine evidence may keep Weather unsettled only while its result can still change structural selection; a terminal failure/absence/insufficient result remains unknown rather than negative chess evidence and must allow an already trustworthy published Constellation to remain usable.
+
 # Because:
 
 `docs/components/evidence.md` §Purpose makes Evidence the sole owner of signal meaning, calculation, and epistemic state. `docs/components/constellation-selection.md` §Eligibility consumes engine/human signals for rare-candidate rescue/omission, `docs/components/rail.md` §Requirements consumes them for Rail filtering/navigation, and `docs/components/interface.md` §Requirements renders their visual treatment.
 
-The semantic boundary must preserve distinctions that affect behavior while keeping missing, failed, absent, or insufficient evidence unknown rather than negative chess evidence. Source-position facet hydration remains owned by `PositionRepository`; Evidence must not introduce a second loading state machine.
+`docs/vision.md` §Experience principles and `docs/product.md` §Product usability bar now require progressive truth: trustworthy current structure may be published before structurally relevant evidence settles. The semantic boundary must therefore preserve distinctions that affect later refinement while keeping missing, failed, absent, or insufficient evidence unknown rather than negative chess evidence. Source-position facet hydration remains owned by `PositionRepository`; Evidence must not introduce a second loading state machine.
 
 # Edges:
 
 Rated Explorer, Masters, and cloud-evaluation transport/failure behavior remains subject to `docs/components/lichess-access.md` §Data sources / §Cache and failure semantics and `docs/architecture/lichess-gateway.md` §Boundary. Prefer keeping transport/cache mechanics in `eval.js` and semantic interpretation beside `src/evidence-signals.js`; move only judgment logic that consumers otherwise duplicate.
 
-`backlog/2026-09-28-constellation-selection.md` can proceed with broad-Line composition independently. Its structural engine-rescue outcome is blocked until this entry exposes the engine-evidence semantics above; once available, Constellation selection owns when unresolved evidence is structurally worth requesting and what eligibility consequence the semantic result has. Rail owns Rail keep/suppress behavior, and Interface owns rendered evidence channels.
+`backlog/2026-09-28-constellation-selection.md` can proceed with broad-Line composition and Explorer-driven progressive refinement independently. Its structural engine-rescue outcome is blocked until this entry exposes the engine-evidence semantics above; once available, Constellation selection owns when unresolved evidence is structurally worth requesting and what eligibility consequence the semantic result has. Weather owns whether that unresolved structural dependency keeps the current published view unsettled. Rail owns Rail keep/suppress behavior, and Interface owns rendered evidence channels.
 
 # Unsettled:
 
@@ -24,7 +26,7 @@ If `eval.js` currently mixes transport mechanics with semantic chess judgments, 
 
 # Complete:
 
-Focused deterministic tests prove the semantic contract once: engine quality plus usable/failure/absence/insufficient/stale-usable distinctions, human-result favorable/unfavorable/unknown state, source-local frequency, and Root rarity are calculated by an Evidence owner and consumed without reinterpretation by selection, Rail, or Interface behavior. Reuse acquisition/cache tests for transport behavior and avoid duplicate tests that merely restate helper implementation.
+Focused deterministic tests prove the semantic contract once: engine quality plus usable/failure/absence/insufficient/stale-usable distinctions, human-result favorable/unfavorable/unknown state, source-local frequency, and Root rarity are calculated by an Evidence owner and consumed without reinterpretation by selection, Rail, or Interface behavior. Structural consumers can terminally settle failed/absent/insufficient engine evidence as unknown without invalidating a trustworthy published Constellation. Reuse acquisition/cache tests for transport behavior and avoid duplicate tests that merely restate helper implementation.
 
 # Sync:
 

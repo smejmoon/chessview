@@ -8,11 +8,13 @@ Evidence owns the meaning, calculation, and epistemic state of those signals. Co
 
 ## Product criticality
 
-Evidence is not critical or supplementary solely because of its source. Criticality follows how the current view uses it.
+Evidence is not structural or supplementary solely because of its source. Criticality follows how the current view uses it.
 
-Evidence explicitly required to decide the current Constellation's structural membership or ordering is part of critical structural work for that decision. Evidence used only to annotate an already established Constellation or enrich the Rail is supplementary and may continue hydrating without blocking normal Weather.
+Evidence explicitly required to decide whether the current Constellation can still change is part of structural settlement for that decision. It may remain unresolved while a trustworthy current Constellation is already published; in that case it keeps [Weather](weather.md) unsettled rather than acting as a publication gate. Evidence used only to annotate an already established Constellation or enrich the Rail is supplementary and may continue hydrating without blocking normal Weather.
 
 Rated Lichess Explorer frequency used by Constellation selection is structural input. Engine and human-result evidence may also become structural input when Constellation selection requests them to decide whether a rare candidate remains eligible. The same engine or human evidence remains supplementary when it is used only for labels, colors, mismatch markers, rarity treatment, or Rail enrichment.
+
+A terminal failure, genuine absence, insufficient depth/sample, or other unavailable structural-evidence result remains unknown rather than negative chess evidence. If a trustworthy Constellation was already published without that refinement, such a terminal unknown may settle the dependency without invalidating the trustworthy structure already established.
 
 Failure of supplementary evidence reduces richness rather than structural usability. Request failure must remain distinguishable from genuine absence at the local evidence surface, but it must not by itself reopen Weather or remove the normal settled check from a structurally established view.
 
@@ -71,6 +73,8 @@ Deterministic tests should cover:
 - move loss from source MultiPV and target-position fallback;
 - the 0.5 / 1.0 pawn quality thresholds;
 - unavailable/failed engine evidence remaining distinct from strong, dubious, or bad quality;
+- structural evidence remaining able to refine an already published trustworthy Constellation without being required for its initial publication;
+- terminal failed/absent/insufficient structural evidence settling as unknown without invalidating already trustworthy structure;
 - human-result quality preserving favorable, unfavorable, and unknown/insufficient states independently from frequency;
 - human-result mismatch direction and sample gating;
 - Root rarity thresholds and evidence gating;

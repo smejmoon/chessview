@@ -229,6 +229,22 @@ test('composition reconciles a fresh cached Explorer Reading before reading outg
   assert.deepEqual(structure.readingFrontier, []);
 });
 
+test('composition reconciles a selected descendant cached Reading before treating it as known', async () => {
+  await clearGraph();
+  await putFreshStartExplorer();
+  const e4 = positionAfter(['e4']);
+  const e5 = positionAfter(['e4', 'e5']);
+  await putFreshExplorer(e4, [['e7e5', 60]]);
+  let networkCalls = 0;
+  globalThis.fetch = async () => { networkCalls += 1; throw new Error('fresh cache should avoid network'); };
+
+  const structure = await composeNodusStructure({ center, mode: 'lines', max: 3 });
+
+  assert.equal(networkCalls, 0);
+  assert.deepEqual((await getOutgoing(e4.key)).map((edge) => edge.uci), ['e7e5']);
+  assert.ok(structure.composition.nodes.some((node) => node.key === e5.key));
+});
+
 test('composition exposes unresolved Reading frontier only while selected Lines can still grow', async () => {
   await clearGraph();
   await putFreshStartExplorer();

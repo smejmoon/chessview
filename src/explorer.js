@@ -66,6 +66,14 @@ async function reconcileExplorerReading(canonical, explorer) {
   return edges;
 }
 
+export async function reconcileCachedExplorerReading(key) {
+  const canonical = canonicalPosition(key);
+  const cached = await positionRepository.get(canonical);
+  if (!cached?.explorer) return null;
+  await reconcileExplorerReading(canonical, cached.explorer);
+  return cached;
+}
+
 async function staleExplorerOrThrow(error, canonical, cached) {
   if (error?.name === 'AbortError') throw error;
   if (!cached?.explorer) throw error;

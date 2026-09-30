@@ -1,9 +1,3 @@
-import {
-  addLineCandidates,
-  createLineFrontier,
-  hasLineCandidates,
-  takeLineCandidate,
-} from './line-frontier.js';
 import { edgeId, stableEdgeOrder } from './graph.js';
 
 /**
@@ -150,22 +144,59 @@ function createVisibleGraph({ center, direction, max = 19 }) {
   };
 }
 
-function lineChildren(outgoingBySource, key, distance, breadth = 0) {
+function rankedLineEdges(outgoingBySource, key) {
   return (outgoingBySource.get(key) ?? [])
-    .filter((edge) => edge.qualifies)
+    .filter((edge) => edge.qualifies || edge.manual)
     .slice()
-    .sort(stableEdgeOrder)
-    .map((edge, index) => ({
-      key: edge.target,
-      edge,
-      distance,
-      depth: distance,
-      breadth: breadth + index,
-    }));
+    .sort(stableEdgeOrder);
 }
 
-/** @returns {VisibleComposition} */
-export function chooseLineNeighborhood({ center, incoming = [], outgoingBySource = new Map(), max = 19 }) {
+function compareLineStructure(a, b) {
+  return a.pathCost - b.pathCost
+    || a.depth - b.depth
+    || a.localOrder - b.localOrder
+    || a.rootOrder - b.rootOrder;
+}
+
+function compareLineCandidates(a, b) {
+  return compareLineStructure(a, b)
+    || a.family.localeCompare(b.family)
+    || a.edge.uci.localeCompare(b.edge.uci)
+    || a.edge.target.localeCompare(b.edge.target);
+}
+
+function lineChildren(outgoingBySource, key, context) {
+  return rankedLineEdges(outgoingBySource, key).map((edge, localOrder) => ({
+    key: edge.target,
+    edge,
+    family: context.family,
+    lineShare: context.lineShare,
+    rootOrder: context.rootOrder,
+    localOrder,
+    depth: context.depth + 1,
+    pathCost: context.pathCost + 1 + localOrder,
+  }));
+}
+
+function bestUnknownContinuation(contexts = []) {
+  return contexts
+    .map((context) => ({
+      pathCost: context.pathCost + 1,
+      depth: context.depth + 1,
+      localOrder: 0,
+      rootOrder: context.rootOrder,
+    }))
+    .sort(compareLineStructure)[0] ?? null;
+}
+
+export function composeLineNeighborhood({
+  center,
+  incoming = [],
+  outgoingBySource = new Map(),
+  unresolvedReadings = new Set(),
+  legalTargetsBySource = new Map(),
+  max = 19,
+}) {
   const visible = createVisibleGraph({ center, direction: 'lines', max });
 
   incoming
@@ -174,71 +205,109 @@ export function chooseLineNeighborhood({ center, incoming = [], outgoingBySource
     .slice(0, Math.min(4, Math.max(1, Math.floor(max / 4))))
     .forEach((item) => visible.addNode({ ...item, relation: 'incoming', distance: 1 }));
 
-  const roots = (outgoingBySource.get(center) ?? [])
-    .filter((edge) => edge.qualifies || edge.manual)
-    .slice()
-    .sort(stableEdgeOrder);
+  const agenda = rankedLineEdges(outgoingBySource, center).map((edge, rootOrder) => ({
+    key: edge.target,
+    edge,
+    family: edge.uci,
+    lineShare: edge.share ?? 0,
+    rootOrder,
+    localOrder: rootOrder,
+    depth: 1,
+    pathCost: 1 + rootOrder,
+  }));
+  const expandedContexts = new Set();
+  const contextsByNode = new Map();
+  const selectedRank = new Map();
 
-  const lineFrontiers = [];
-  for (const root of roots) {
-    if (!visible.hasNode(root.target) && visible.boardCount() >= max) continue;
-    const family = root.uci;
-    const lineShare = root.share ?? 0;
-    visible.ensureFamily(family, { lineShare, rootEdgeId: edgeId(root) });
+  function noteContext(key, context) {
+    if (!contextsByNode.has(key)) contextsByNode.set(key, []);
+    const contexts = contextsByNode.get(key);
+    if (!contexts.some((item) => item.family === context.family)) contexts.push(context);
+  }
+
+  function expand(key, context) {
+    const id = `${context.family}\u0000${key}`;
+    if (expandedContexts.has(id)) return;
+    expandedContexts.add(id);
+    agenda.push(...lineChildren(outgoingBySource, key, context));
+    agenda.sort(compareLineCandidates);
+  }
+
+  agenda.sort(compareLineCandidates);
+  while (agenda.length) {
+    const next = agenda.shift();
+    if (!visible.hasNode(next.key) && visible.boardCount() >= max) continue;
+
+    if (next.depth === 1) {
+      visible.ensureFamily(next.family, {
+        lineShare: next.lineShare,
+        rootEdgeId: edgeId(next.edge),
+      });
+    } else {
+      visible.ensureFamily(next.family, { lineShare: next.lineShare });
+    }
+
     const result = visible.addNode({
-      key: root.target,
-      edge: root,
-      relation: 'outgoing',
-      distance: 1,
-      branch: family,
-      lineShare,
-      families: [family],
+      key: next.key,
+      edge: next.edge,
+      relation: next.depth === 1 ? 'outgoing' : 'descendant',
+      distance: next.depth,
+      branch: next.family,
+      lineShare: next.lineShare,
+      families: [next.family],
     });
     if (!result.node) continue;
-    visible.addRelationship({ edge: root, family, distance: 1 });
 
-    const frontier = createLineFrontier(family, null, lineShare);
-    frontier.seenEdges = new Set([edgeId(root)]);
-    addLineCandidates(frontier, lineChildren(outgoingBySource, root.target, 2));
-    lineFrontiers.push(frontier);
+    visible.addRelationship({
+      edge: next.edge,
+      family: next.family,
+      distance: next.depth,
+    });
+
+    const context = {
+      family: next.family,
+      lineShare: next.lineShare,
+      rootOrder: next.rootOrder,
+      depth: next.depth,
+      pathCost: next.pathCost,
+    };
+    noteContext(next.key, context);
+    if (result.added) selectedRank.set(next.key, next);
+    expand(next.key, context);
   }
 
-  while (hasLineCandidates(lineFrontiers)) {
-    let progressed = false;
-    for (const frontier of lineFrontiers) {
-      const next = takeLineCandidate(frontier, (candidate) => (
-        !frontier.seenEdges.has(edgeId(candidate.edge))
-        && (visible.hasNode(candidate.key) || visible.boardCount() < max)
-      ));
-      if (!next) continue;
-      frontier.seenEdges.add(edgeId(next.edge));
-
-      const result = visible.addNode({
-        ...next,
-        relation: 'descendant',
-        branch: frontier.branch,
-        lineShare: frontier.lineShare,
-        families: [frontier.branch],
-      });
-      if (!result.node) continue;
-
-      visible.addRelationship({
-        edge: next.edge,
-        family: frontier.branch,
-        distance: next.distance,
-      });
-      addLineCandidates(frontier, lineChildren(
-        outgoingBySource,
-        next.key,
-        next.distance + 1,
-        next.breadth,
-      ));
-      progressed = true;
-    }
-    if (!progressed) break;
+  const composition = visible.result();
+  const constrained = composition.nodes.length >= max;
+  const marginal = constrained
+    ? [...selectedRank.values()].sort(compareLineStructure).at(-1) ?? null
+    : null;
+  const visibleKeys = new Set([center, ...composition.nodes.map((node) => node.key)]);
+  const selectedTargets = new Map();
+  for (const relationship of composition.relationships) {
+    if (!selectedTargets.has(relationship.source)) selectedTargets.set(relationship.source, new Set());
+    selectedTargets.get(relationship.source).add(relationship.target);
   }
 
-  return visible.result();
+  const readingFrontier = composition.nodes
+    .filter((node) => unresolvedReadings.has(node.key))
+    .filter((node) => {
+      const legalTargets = legalTargetsBySource.get(node.key) ?? new Set();
+      const knownTargets = selectedTargets.get(node.key) ?? new Set();
+      if ([...legalTargets].some((target) => visibleKeys.has(target) && !knownTargets.has(target))) {
+        return true;
+      }
+      if (!constrained) return true;
+      const best = bestUnknownContinuation(contextsByNode.get(node.key));
+      return Boolean(best && marginal && compareLineStructure(best, marginal) <= 0);
+    })
+    .map((node) => node.key);
+
+  return { composition, readingFrontier };
+}
+
+/** @returns {VisibleComposition} */
+export function chooseLineNeighborhood(options) {
+  return composeLineNeighborhood(options).composition;
 }
 
 function rootCandidates(incomingByTarget, target, distance) {

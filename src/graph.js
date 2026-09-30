@@ -95,6 +95,17 @@ export function legalDestinations(positionKey) {
   return destinations;
 }
 
+export function legalMoveTargets(positionKey) {
+  const chess = new Chess(toPlayableFen(positionKey));
+  const targets = new Set();
+  for (const move of chess.moves({ verbose: true })) {
+    chess.move({ from: move.from, to: move.to, promotion: move.promotion });
+    targets.add(canonicalPosition(chess.fen()));
+    chess.undo();
+  }
+  return targets;
+}
+
 export function stableEdgeOrder(a, b) {
   return (b.share ?? 0) - (a.share ?? 0) || a.uci.localeCompare(b.uci) || a.target.localeCompare(b.target);
 }

@@ -2,14 +2,15 @@ import {
   START_FEN,
   canonicalPosition,
   legalDestinations,
+  legalMoveTargets,
   toPlayableFen,
 } from './graph.js';
-import { chooseLineNeighborhood, chooseRootNeighborhood } from './visible-graph.js';
+import { composeLineNeighborhood, chooseRootNeighborhood } from './visible-graph.js';
 import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 import { rootTranspositionEnricher } from './root-enrichment.js';
-import { loadExplorer } from './explorer.js';
+import { loadExplorer, reconcileCachedExplorerReading } from './explorer.js';
 import { moveEvaluation } from './eval.js';
 import { humanResultQuality, moveFrequency } from './evidence-signals.js';
 import {
@@ -49,7 +50,7 @@ function createCandidateSource(signal, { hydrateExplorer = true } = {}) {
       throwIfAborted(signal);
       const loaded = hydrateExplorer
         ? await loadExplorer(source, { signal })
-        : await positionRepository.get(source);
+        : await reconcileCachedExplorerReading(source);
       throwIfAborted(signal);
       return loaded?.explorer ?? null;
     })();
@@ -88,7 +89,7 @@ function createCandidateSource(signal, { hydrateExplorer = true } = {}) {
   }
 
   async function outgoing(source) {
-    if (hydrateExplorer) await explorerFor(source);
+    await explorerFor(source);
     throwIfAborted(signal);
     const edges = await positionGraph.outgoing(source);
     throwIfAborted(signal);
@@ -103,26 +104,55 @@ function createCandidateSource(signal, { hydrateExplorer = true } = {}) {
     return rankCrossSourceCandidates(candidates).map((item) => item.edge);
   }
 
-  return Object.freeze({ outgoing, incoming });
+  async function hasExplorer(source) {
+    return Boolean(await explorerFor(source));
+  }
+
+  return Object.freeze({ outgoing, incoming, hasExplorer });
 }
 
-async function collectOutgoingGraph(center, capacity, candidateSource, signal) {
+async function composeKnownLineGraph(center, capacity, candidateSource, signal) {
   const outgoingBySource = new Map();
-  const queue = [center];
-  const visited = new Set();
-  while (queue.length && visited.size < capacity) {
+  const readingKnown = new Map();
+
+  async function inspect(source) {
+    if (outgoingBySource.has(source)) return;
+    const [edges, hasExplorer] = await Promise.all([
+      candidateSource.outgoing(source),
+      candidateSource.hasExplorer(source),
+    ]);
     throwIfAborted(signal);
-    const key = queue.shift();
-    if (visited.has(key)) continue;
-    visited.add(key);
-    const edges = await candidateSource.outgoing(key);
-    throwIfAborted(signal);
-    outgoingBySource.set(key, edges);
-    for (const edge of edges) {
-      if (!visited.has(edge.target)) queue.push(edge.target);
-    }
+    outgoingBySource.set(source, edges);
+    readingKnown.set(source, hasExplorer);
   }
-  return outgoingBySource;
+
+  await inspect(center);
+  let plan = composeLineNeighborhood({ center, outgoingBySource, max: capacity });
+
+  while (true) {
+    throwIfAborted(signal);
+    const uninspected = plan.composition.nodes
+      .map((node) => node.key)
+      .filter((key) => !outgoingBySource.has(key));
+    if (!uninspected.length) break;
+    await Promise.all(uninspected.map(inspect));
+    plan = composeLineNeighborhood({ center, outgoingBySource, max: capacity });
+  }
+
+  const unresolvedReadings = new Set(plan.composition.nodes
+    .map((node) => node.key)
+    .filter((key) => readingKnown.get(key) === false && legalDestinations(key).size > 0));
+  const legalTargetsBySource = new Map([...unresolvedReadings]
+    .map((key) => [key, legalMoveTargets(key)]));
+  plan = composeLineNeighborhood({
+    center,
+    outgoingBySource,
+    unresolvedReadings,
+    legalTargetsBySource,
+    max: capacity,
+  });
+
+  return { ...plan, outgoingBySource };
 }
 
 async function collectIncomingGraph(center, capacity, candidateSource, signal) {
@@ -206,14 +236,16 @@ export async function composeNodusStructure({ center, mode, max, signal }) {
   throwIfAborted(signal);
 
   let selected;
+  let readingFrontier = [];
   let lineEdges = [];
   if (mode === 'roots') {
     const incomingByTarget = await collectIncomingGraph(center, capacity, candidateSource, signal);
     selected = chooseRootNeighborhood({ center, incomingByTarget, max: capacity });
   } else {
-    const outgoingBySource = await collectOutgoingGraph(center, capacity, candidateSource, signal);
-    selected = chooseLineNeighborhood({ center, incoming: [], outgoingBySource, max: capacity });
-    lineEdges = (outgoingBySource.get(center) ?? []).map((edge) => immutable({ ...edge }));
+    const line = await composeKnownLineGraph(center, capacity, candidateSource, signal);
+    selected = line.composition;
+    readingFrontier = line.readingFrontier;
+    lineEdges = (line.outgoingBySource.get(center) ?? []).map((edge) => immutable({ ...edge }));
   }
   throwIfAborted(signal);
 
@@ -229,11 +261,6 @@ export async function composeNodusStructure({ center, mode, max, signal }) {
     ...node,
     record: records.get(node.key) ?? { key: node.key, fen: toPlayableFen(node.key) },
   }));
-  const readingFrontier = mode === 'lines' && composition.nodes.length < capacity
-    ? positions
-      .filter((position) => !position.record?.explorer && legalDestinations(position.key).size > 0)
-      .map((position) => position.key)
-    : [];
 
   return immutable({
     composition,

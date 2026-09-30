@@ -93,7 +93,7 @@ test('branch-balanced neighborhood gives roots space before going deeper', () =>
   assert.equal(selected.nodes.length, 4);
 });
 
-test('bushy Line siblings remain reachable while first-level Lines stay round-robin', () => {
+test('bushy Line siblings remain reachable before extra equal-cost depth', () => {
   const outgoingBySource = new Map([
     ['center', [
       { source: 'center', target: 'a1', uci: 'a', share: 0.6, qualifies: true },
@@ -110,7 +110,7 @@ test('bushy Line siblings remain reachable while first-level Lines stay round-ro
   ]);
 
   const selected = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 7 });
-  assert.deepEqual(selected.nodes.map((item) => item.key), ['a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'ax']);
+  assert.deepEqual(selected.nodes.map((item) => item.key), ['a1', 'b1', 'a2', 'b2', 'ax', 'a3', 'b3']);
   assert.equal(selected.nodes.find((item) => item.key === 'ax')?.branch, 'a');
 });
 

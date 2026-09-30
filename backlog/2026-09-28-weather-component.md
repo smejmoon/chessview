@@ -8,7 +8,7 @@ The outcome does not require a separate Weather module if the existing implement
 
 # Because:
 
-`docs/components/weather.md` §Purpose / §Requirements owns current-view structural lifecycle/readiness semantics and explicitly permits trustworthy structure to remain visible during refinement. `docs/product.md` §Product usability bar distinguishes a usable published view from a settled view. `docs/architecture/current-view.md` §Publication boundary owns which asynchronous results may become current. `docs/components/evidence.md` §Product criticality distinguishes evidence that is structural for selection from evidence that is only supplementary.
+`docs/components/weather.md` §Purpose / §Requirements owns current-view structural lifecycle/readiness semantics and explicitly permits trustworthy structure to remain visible during refinement. `docs/product.md` §Progressive truth distinguishes a trustworthy published view from a structurally settled view. `docs/architecture/current-view.md` §Publication boundary owns which asynchronous results may become current. `docs/components/evidence.md` §Product criticality distinguishes evidence that is structural for selection from evidence that is only supplementary.
 
 # Edges:
 
@@ -32,4 +32,4 @@ Deterministic/browser tests exercise `docs/components/weather.md` §Verification
 
 # Sync:
 
-After any implementation or verification step that changes what remains, and before ending an implementation pass, rewrite this entry around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.
+After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.

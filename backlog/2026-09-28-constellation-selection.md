@@ -8,7 +8,7 @@ Keep Prevalence and Salience distinct. Prevalence remains observed local human-p
 
 # Because:
 
-`docs/vision.md` §Experience principles requires Progressive truth: show the best trustworthy view available now, continue useful acquisition visibly in the background, and do not withhold a usable view merely because it may still change. `docs/product.md` §Product usability bar distinguishes a usable published view from a settled view. `docs/components/constellation.md` §Requirements owns coherent constrained composition and its structural Reading frontier; `docs/components/constellation-selection.md` §Eligibility / §Salience / §Ranking owns automatic candidacy and comparable same-source ordering.
+`docs/vision.md` §Experience principles and `docs/product.md` §Progressive truth require Chessview to show the best trustworthy view available now, continue useful refinement visibly, and not withhold a usable view merely because it may still change. `docs/components/constellation.md` §Requirements owns coherent constrained composition and its structural Reading frontier; `docs/components/constellation-selection.md` §Eligibility / §Salience / §Ranking owns automatic candidacy and comparable same-source ordering.
 
 Knowledge acquisition owns which legal relationships have entered the durable graph and remains permissive enough for rare-candidate rescue. `LichessEval` owns cloud-evaluation source usability/acquisition policy; Evidence owns engine/human/Prevalence meaning; Constellation selection owns only the request trigger and the resulting eligibility, Salience, and visible-composition consequences. No usable provider value therefore means unknown engine evidence regardless of whether the provider internally encountered absence, insufficient depth, stale fallback, or request failure.
 
@@ -16,7 +16,7 @@ Knowledge acquisition owns which legal relationships have entered the durable gr
 
 `docs/components/knowledge-acquisition.md` owns Explorer Reading acquisition, Edge Admission, persistence, reconciliation, and stale-cache policy. Cached Explorer Readings are reconciled into durable graph knowledge before Constellation treats their outgoing knowledge as known. The implemented Explorer refinement asks for another Reading only when the constrained composition says it can still matter to visible membership or relationships; visibility limits do not tighten Edge Admission.
 
-Evidence now supplies the final `strong` / `dubious` / `bad` engine-quality grammar from usable `LichessEval` data. Constellation rescue should consume that semantic value directly; do not introduce an acquisition-state enum, revive `good` compatibility, or inspect `LichessEval` operational status.
+Evidence supplies the final `strong` / `dubious` / `bad` engine-quality grammar from usable `LichessEval` data. Constellation rescue should consume that semantic value directly; do not introduce an acquisition-state enum, revive `good` compatibility, or inspect `LichessEval` operational status.
 
 `backlog/2026-09-28-weather-component.md` owns global settlement/presentation semantics. A structurally relevant rescue request participates in Weather because Constellation/controller knows it is outstanding, not because `LichessEval.subscribe()` reports aggregate provider activity. Supplementary engine requests remain local and do not control Weather.
 

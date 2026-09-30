@@ -6,6 +6,8 @@ Own how Chessview turns engine and human statistical data into semantic evidence
 
 Evidence owns the meaning, calculation, and epistemic state of those signals. Consumers such as [Constellation selection](constellation-selection.md), [Rail](rail.md), and [Interface](interface.md) own how those signals affect eligibility, navigation, or presentation.
 
+Source clients own whether their source data is fit to expose. In particular, [`LichessEval`](../architecture/lichess-eval.md) owns cloud-evaluation acquisition, cache/freshness policy, validation, and minimum usable source depth; Evidence receives only usable cloud evaluation or absence and does not reinterpret transport/cache state.
+
 ## Product criticality
 
 Evidence is not structural or supplementary solely because of its source. Criticality follows how the current view uses it.
@@ -14,21 +16,21 @@ Evidence explicitly required to decide whether the current Constellation can sti
 
 Rated Lichess Explorer Prevalence used by Constellation selection is structural input. Engine and human-result evidence may also become structural input when Constellation selection requests them to decide whether a rare candidate remains eligible. The same engine or human evidence remains supplementary when it is used only for labels, colors, mismatch markers, rarity treatment, or Rail enrichment.
 
-A terminal failure, genuine absence, insufficient depth/sample, or other unavailable structural-evidence result remains unknown rather than negative chess evidence. If a trustworthy Constellation was already published without that refinement, such a terminal unknown may settle the dependency without invalidating the trustworthy structure already established.
+Unavailable structural evidence remains unknown rather than negative chess evidence. If a trustworthy Constellation was already published without that refinement, terminal unavailability may settle the dependency without invalidating the trustworthy structure already established.
 
-Failure of supplementary evidence reduces richness rather than structural usability. Request failure must remain distinguishable from genuine absence at the local evidence surface, but it must not by itself reopen Weather or remove the normal settled check from a structurally established view.
+Failure of supplementary acquisition reduces richness rather than structural usability. Source-specific operational failure remains available through the owning source client's operational channel; it must not be encoded as negative chess evidence or by itself reopen Weather.
 
 ## Engine evidence
 
-- Cached Lichess cloud evaluation is used only when it reaches adequate depth.
-- The current center position has an absolute-evaluation signal.
+- Evidence receives only cloud evaluations that `LichessEval` considers usable.
+- The current center position has an absolute-evaluation signal when usable engine source data exists.
 - Root and Line moves have a move-loss signal versus the best move rather than inheriting the target's absolute evaluation directly.
-- When source MultiPV does not include a move, a sufficiently deep target-position evaluation may be used to estimate that move's loss.
+- When source MultiPV does not include a move, a usable target-position evaluation may be used to estimate that move's loss.
 - Move-quality bands use one grammar:
   - under `0.5` pawn loss: strong;
   - `0.5` to under `1.0`: dubious;
   - `1.0+`: bad.
-- Missing, failed, or insufficient-depth engine evidence remains unavailable/unknown rather than being interpreted as strong, dubious, or bad.
+- Missing engine source data remains unavailable/unknown rather than being interpreted as strong, dubious, or bad.
 
 Constellation selection may consume engine quality as an independent rescue signal for rare candidates. That consumer owns the consequence for eligibility and ranking.
 
@@ -41,8 +43,7 @@ Constellation selection may consume engine quality as an independent rescue sign
 - Exact favorable/unfavorable score thresholds and sample-sufficiency thresholds are tunable until separately promoted into durable requirements.
 - Constellation selection may treat favorable human-result evidence as an independent rescue signal for a rare candidate. Evidence owns the signal; selection owns the eligibility consequence.
 - Human/engine mismatch evidence is produced only when sufficiently sampled human results materially disagree with the engine signal.
-- Failure to fetch Masters, rated Explorer, or engine evidence must not be interpreted as evidence that no disagreement, evaluation, favorable result, unfavorable result, or other signal exists.
-- When no stale evidence is available, evidence state distinguishes request failure from genuine missing, insufficient-depth, insufficient-sample, or no-mismatch outcomes.
+- Failure to fetch Masters, rated Explorer, or engine source data must not be interpreted as evidence that no disagreement, evaluation, favorable result, unfavorable result, or other signal exists.
 
 ## Prevalence
 
@@ -63,25 +64,23 @@ Root rarity is separate from move quality.
 
 ## Tunables
 
-- Engine evidence minimum depth: `18`.
-
-Move-quality and Root-rarity thresholds are specified in their owning behavior sections above. Rail selection thresholds belong to [Rail](rail.md). Constellation rescue and Salience rules belong to [Constellation selection](constellation-selection.md).
+Move-quality and Root-rarity thresholds are specified in their owning behavior sections above. Cloud-evaluation source-quality thresholds belong to `LichessEval`. Rail selection thresholds belong to [Rail](rail.md). Constellation rescue and Salience rules belong to [Constellation selection](constellation-selection.md).
 
 ## Verification
 
 Deterministic tests should cover:
 
-- minimum eval depth;
 - move loss from source MultiPV and target-position fallback;
 - the 0.5 / 1.0 pawn quality thresholds;
-- unavailable/failed engine evidence remaining distinct from strong, dubious, or bad quality;
+- unavailable engine source data remaining distinct from strong, dubious, or bad quality;
 - structural evidence remaining able to refine an already published trustworthy Constellation without being required for its initial publication;
-- terminal failed/absent/insufficient structural evidence settling as unknown without invalidating already trustworthy structure;
+- terminal unavailable structural evidence settling as unknown without invalidating already trustworthy structure;
 - human-result quality preserving favorable, unfavorable, and unknown/insufficient states independently from Prevalence;
 - human-result mismatch direction and sample gating;
 - Root rarity thresholds and evidence gating;
 - rated Explorer Prevalence remaining local to its source position;
-- request-failure values remaining distinct from genuine missing or insufficient evidence;
 - supplementary evidence completing, failing, or arriving late without blocking or reopening successful Weather when it is not a pending Constellation-selection dependency.
 
-Manual verification should include positions with both common and rare Root and Line moves and positions where Masters, rated Lichess, and engine evidence disagree in useful ways. It should also confirm that failed supplementary requests show an unavailable state rather than silently becoming negative evidence while leaving an otherwise established Constellation globally settled.
+`LichessEval` verification separately owns minimum source depth, absence versus provider issues, stale fallback, and request lifetime.
+
+Manual verification should include positions with both common and rare Root and Line moves and positions where Masters, rated Lichess, and engine evidence disagree in useful ways. It should also confirm that failed supplementary source acquisition is surfaced as source activity/issue rather than silently becoming negative evidence while leaving an otherwise established Constellation globally settled.

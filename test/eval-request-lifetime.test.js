@@ -5,7 +5,7 @@ import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 globalThis.indexedDB = fakeIndexedDB;
 
 const { clearGraph } = await import('../src/db.js');
-const { loadCloudEval } = await import('../src/eval.js');
+const { lichessEval } = await import('../src/lichess-eval.js');
 const { lichessGateway } = await import('../src/lichess-gateway.js');
 
 const SHARED = '8/8/8/8/8/8/8/K6k w - -';
@@ -31,8 +31,8 @@ test('obsolete cloud-eval caller detaches while a same-position caller keeps the
 
   const obsolete = new AbortController();
   const current = new AbortController();
-  const oldResult = loadCloudEval(SHARED, { signal: obsolete.signal });
-  const currentResult = loadCloudEval(SHARED, { signal: current.signal });
+  const oldResult = lichessEval.get(SHARED, { signal: obsolete.signal });
+  const currentResult = lichessEval.get(SHARED, { signal: current.signal });
   await started;
 
   const oldRejected = assert.rejects(oldResult, (error) => error?.name === 'AbortError');
@@ -70,8 +70,8 @@ test('cloud-eval work with no remaining caller is cancelled before queued fetch'
 
   const first = new AbortController();
   const second = new AbortController();
-  const firstResult = loadCloudEval(QUEUED, { signal: first.signal });
-  const secondResult = loadCloudEval(QUEUED, { signal: second.signal });
+  const firstResult = lichessEval.get(QUEUED, { signal: first.signal });
+  const secondResult = lichessEval.get(QUEUED, { signal: second.signal });
   const firstRejected = assert.rejects(firstResult, (error) => error?.name === 'AbortError');
   const secondRejected = assert.rejects(secondResult, (error) => error?.name === 'AbortError');
   first.abort();

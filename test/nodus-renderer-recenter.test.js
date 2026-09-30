@@ -20,6 +20,9 @@ class FakeElement {
     this.attributes = new Map();
     this.parentNode = null;
     this.style = new FakeStyle();
+    this.className = '';
+    this.textContent = '';
+    this.title = '';
     this.classList = {
       add() {},
       remove() {},
@@ -35,6 +38,9 @@ class FakeElement {
     if (this.id === 'app') {
       this.centerBoard = new FakeElement(this.ownerDocument, { id: 'center-board' });
       this.satellites = new FakeElement(this.ownerDocument, { id: 'satellites' });
+      this.networkStatus = new FakeElement(this.ownerDocument);
+      this.networkStatus.className = 'network-status';
+      this.networkStatus.textContent = 'Lichess · rated standard';
     } else if (this._innerHTML.includes('mini-board')) {
       this._miniBoard = new FakeElement(this.ownerDocument);
     }
@@ -65,6 +71,7 @@ class FakeElement {
     if (this.id === 'app') {
       if (selector === '#center-board') return this.centerBoard ?? null;
       if (selector === '#satellites') return this.satellites ?? null;
+      if (selector === '.network-status') return this.networkStatus ?? null;
     }
     if (selector === '.mini-board') return this._miniBoard;
     if (selector === '#promotion-choice') return this.find((node) => node.id === 'promotion-choice');
@@ -137,6 +144,29 @@ async function withRenderer(run) {
     await vite.close();
   }
 }
+
+test('NodusRenderer reapplies LichessEval status after full render replacement', async () => withRenderer(async (createNodusRenderer) => {
+  const source = canonicalPosition(START_FEN);
+  const document = new FakeDocument();
+  const app = new FakeElement(document, { id: 'app' });
+  const actions = { recenter() { return true; }, setMode() {}, back() {}, flip() {}, redraw() {} };
+  const renderer = createNodusRenderer({ app, preferences: {} });
+
+  renderer.renderLichessEvalStatus({ activity: 'requesting', pending: 2, issue: null });
+  renderer.render(viewFor(source), actions);
+  const first = app.networkStatus;
+  assert.equal(first.textContent, 'Lichess · loading engine data…');
+  assert.equal(first.className, 'network-status is-loading');
+
+  renderer.render(viewFor(source), actions);
+  assert.notEqual(app.networkStatus, first);
+  assert.equal(app.networkStatus.textContent, 'Lichess · loading engine data…');
+  assert.equal(app.networkStatus.className, 'network-status is-loading');
+
+  renderer.renderLichessEvalStatus({ activity: 'idle', pending: 0, issue: { kind: 'storage' } });
+  assert.equal(app.networkStatus.textContent, 'Lichess · cache issue');
+  assert.equal(app.networkStatus.className, 'network-status is-issue');
+}));
 
 test('NodusRenderer wires rendered targets and board moves to Recenter', async () => withRenderer(async (createNodusRenderer) => {
   const source = canonicalPosition(START_FEN);

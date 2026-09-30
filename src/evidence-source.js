@@ -1,15 +1,14 @@
 import {
-  ENGINE_MIN_DEPTH,
   HUMAN_SAMPLE_FLOOR,
   POPULAR_BAD_SHARE,
   humanMismatch,
-  loadCloudEval,
   loadMasters,
   moveEvaluation,
   positionEvaluation,
   railWorthy,
   rootRarity,
 } from './eval.js';
+import { lichessEval } from './lichess-eval.js';
 import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 
@@ -38,8 +37,8 @@ async function relationshipEvidence(relationship, mode, signal) {
   const sourceNode = await positionRepository.get(edge.source);
   throwIfAborted(signal);
   const [sourceEval, targetEval, masters] = await Promise.all([
-    loadCloudEval(edge.source, { signal }),
-    loadCloudEval(edge.target, { signal }),
+    lichessEval.get(edge.source, { signal }),
+    lichessEval.get(edge.target, { signal }),
     loadMasters(edge.source, { signal }),
   ]);
   throwIfAborted(signal);
@@ -71,7 +70,7 @@ async function lineRailEvidence(center, signal) {
   const [node, outgoing, sourceEval, masters] = await Promise.all([
     positionRepository.get(center),
     positionGraph.outgoing(center),
-    loadCloudEval(center, { signal }),
+    lichessEval.get(center, { signal }),
     loadMasters(center, { signal }),
   ]);
   throwIfAborted(signal);
@@ -85,11 +84,8 @@ async function lineRailEvidence(center, signal) {
     throwIfAborted(signal);
     let targetEval = null;
     let moveEval = moveEvaluation(center, edge, sourceEval, null);
-    const fallback = Boolean(sourceEval?.pvs?.length)
-      && Number.isFinite(sourceEval?.depth)
-      && sourceEval.depth >= ENGINE_MIN_DEPTH;
-    if (!moveEval && fallback) {
-      targetEval = await loadCloudEval(edge.target, { signal });
+    if (!moveEval && sourceEval) {
+      targetEval = await lichessEval.get(edge.target, { signal });
       throwIfAborted(signal);
       moveEval = moveEvaluation(center, edge, sourceEval, targetEval);
     }
@@ -112,7 +108,7 @@ export async function loadNodusEvidence({ center, mode, structure, signal } = {}
   const composition = structure?.composition;
   if (!composition) return immutable({ center: null, relationships: [], rail: { rows: [], masters: null } });
 
-  const centerCloudPromise = loadCloudEval(center, { signal });
+  const centerCloudPromise = lichessEval.get(center, { signal });
   const relationshipPromise = visibleRelationshipEvidence(composition, mode, signal);
   const railPromise = mode === 'lines'
     ? lineRailEvidence(center, signal)

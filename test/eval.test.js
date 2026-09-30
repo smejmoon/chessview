@@ -32,19 +32,13 @@ test('move evaluation distinguishes 0.5 and 1.0 pawn loss', () => {
   assert.equal(bad.quality, 'bad');
 });
 
-test('move evaluation requires adequate depth and can use child position eval', () => {
-  const shallow = { depth: 17, pvs: [{ cp: 20, moves: 'a1a2' }] };
-  assert.equal(moveEvaluation(SOURCE, { uci: 'a1a2' }, shallow), null);
-
+test('move evaluation can use a provider-supplied child position eval', () => {
   const sourceEval = { depth: 22, pvs: [{ cp: 30, moves: 'a1a2' }] };
   const targetEval = { depth: 21, pvs: [{ cp: -40, moves: 'h1h2' }] };
   const hydrated = moveEvaluation(SOURCE, { uci: 'a1b1' }, sourceEval, targetEval);
   assert.equal(hydrated.lossCp, 70);
   assert.equal(hydrated.quality, 'dubious');
   assert.equal(hydrated.fromMultiPv, false);
-
-  const shallowTarget = { depth: 17, pvs: [{ cp: -40, moves: 'h1h2' }] };
-  assert.equal(moveEvaluation(SOURCE, { uci: 'a1b1' }, sourceEval, shallowTarget), null);
 });
 
 test('human mismatch is silent on agreement and directional on disagreement', () => {

@@ -2,6 +2,7 @@ import '@lichess-org/chessground/assets/chessground.base.css';
 import '@lichess-org/chessground/assets/chessground.brown.css';
 import '@lichess-org/chessground/assets/chessground.cburnett.css';
 import './style.css';
+import './lichess-eval-presentation.css';
 import './debug.css';
 
 import { canonicalPosition } from './graph.js';
@@ -11,6 +12,8 @@ import { materializeMove } from './move-materialization.js';
 import { NodusController } from './nodus-controller.js';
 import { composeNodusStructure } from './nodus-structure.js';
 import { loadNodusEvidence } from './evidence-source.js';
+import { lichessEval } from './lichess-eval.js';
+import { createLichessEvalStatusPresenter } from './lichess-eval-presentation.js';
 import { createNodusRenderer } from './nodus-renderer.js';
 import { createNodusPresenter } from './nodus-presenter.js';
 import { createRouteLedger } from './route-ledger.js';
@@ -30,6 +33,11 @@ const renderer = createNodusRenderer({
   app: document.querySelector('#app'),
   preferences: preferenceStore,
 });
+const lichessEvalStatusPresenter = createLichessEvalStatusPresenter({
+  render: (status) => renderer.renderLichessEvalStatus(status),
+  log: (message, detail) => { debugLog(message, detail, 'error'); },
+});
+const stopLichessEvalStatus = lichessEval.subscribe(lichessEvalStatusPresenter.update);
 const presenter = createNodusPresenter({
   renderer,
   log: (message, detail) => { debugLog(message, detail, 'error'); },
@@ -74,6 +82,7 @@ window.addEventListener('resize', () => {
 });
 window.addEventListener('beforeunload', () => {
   stopRouteRestore();
+  stopLichessEvalStatus();
   controller.dispose();
   presenter.dispose();
 }, { once: true });

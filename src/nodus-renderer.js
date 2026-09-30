@@ -15,6 +15,7 @@ import {
   setDebugEnabled,
 } from './debug.js';
 import { decorateEvidencePresentation } from './eval-ui.js';
+import { decorateLichessEvalStatus } from './lichess-eval-presentation.js';
 import { decorateRootPresentation } from './root-presentation.js';
 import { createPromotionChooser } from './promotion-chooser.js';
 import {
@@ -120,6 +121,7 @@ export function createNodusRenderer({
   const window = document?.defaultView ?? globalThis.window;
   const boards = new Set();
   const promotionChooser = createPromotionChooser({ app });
+  let lichessEvalStatus = null;
 
   function disposeBoards() {
     for (const api of boards) api?.destroy?.();
@@ -199,6 +201,11 @@ export function createNodusRenderer({
     if (label) label.textContent = status.label;
   }
 
+  function renderLichessEvalStatus(status) {
+    lichessEvalStatus = status;
+    decorateLichessEvalStatus(app, status);
+  }
+
   function render(view, actions, presentation = 'hidden') {
     disposeBoards();
     const structure = view.structure.value ?? emptyStructure(view.center);
@@ -214,6 +221,7 @@ export function createNodusRenderer({
     const centerX = mapCenterX(window?.innerWidth ?? 1280);
 
     app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map mode-${view.mode}" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="center-position position" data-key="${escapeHtml(view.center)}" style="left:${centerX}%"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">${view.mode === 'roots' ? 'Known move orders converge here.' : 'Drag a legal move, or choose a Line.'}</div></div><div id="satellites"></div>${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</section><aside class="analysis-rail"><div class="rail-title">Rail</div><div class="rail-position rail-current-details"><div class="eyebrow">${centerNode.opening ? `${escapeHtml(centerNode.opening.eco ?? '')} · opening` : 'current position'}</div><h1>${escapeHtml(centerNode.opening?.name ?? 'Explore from here')}</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span>${view.mode === 'lines' && explorer && omittedShare(explorer) >= 0.005 ? `<span>other · ${percent(omittedShare(explorer))}</span>` : ''}</div></div><div class="mode-tabs" role="tablist"><button id="roots-tab" class="mode-tab ${view.mode === 'roots' ? 'is-active' : ''}" type="button">Roots <small>${rootCount}</small></button><button id="lines-tab" class="mode-tab ${view.mode === 'lines' ? 'is-active' : ''}" type="button">Lines <small>${lineCount}</small></button></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>${view.mode === 'roots' ? 'Root Explorer' : 'Opening Explorer'}</strong></div></div>${railExplorerHtml(view, structure)}</section>${debugRailHtml()}</aside></div></main>`;
+    renderLichessEvalStatus(lichessEvalStatus);
 
     const centerApi = Chessground(app.querySelector('#center-board'), {
       fen: toPlayableFen(view.center),
@@ -257,7 +265,8 @@ export function createNodusRenderer({
     disposeBoards();
     const status = viewStatusSpec(presentation);
     const detail = error?.message ?? String(error ?? 'Presentation failed');
-    app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view?.navigation?.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button" id="presentation-retry" type="button">Retry</button></div></header><div class="workspace"><section class="map"><div class="toast" title="${escapeHtml(detail)}">Chessview could not present this view.</div></section></div></main>`;
+    app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view?.navigation?.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button" id="presentation-retry" type="button">Retry</button></div></header><div class="workspace"><section class="map"><div class="toast" title="${escapeHtml(detail)}">Chessview could not present this view.</div></section></div></main>`;
+    renderLichessEvalStatus(lichessEvalStatus);
     app.querySelector('#back')?.addEventListener('click', actions.back);
     app.querySelector('#presentation-retry')?.addEventListener('click', () => { void actions.redraw(); });
   }
@@ -267,5 +276,5 @@ export function createNodusRenderer({
     disposeBoards();
   }
 
-  return Object.freeze({ render, renderFailure, renderStatus, dispose });
+  return Object.freeze({ render, renderFailure, renderStatus, renderLichessEvalStatus, dispose });
 }

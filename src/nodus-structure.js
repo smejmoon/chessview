@@ -12,6 +12,7 @@ import { positionRepository } from './position-repository.js';
 import { rootTranspositionEnricher } from './root-enrichment.js';
 import { loadExplorer, reconcileCachedExplorerReading } from './explorer.js';
 import { moveEvaluation } from './eval.js';
+import { lichessEval } from './lichess-eval.js';
 import { humanResultQuality, moveFrequency } from './evidence-signals.js';
 import {
   rankCrossSourceCandidates,
@@ -69,9 +70,9 @@ function createCandidateSource(signal, { hydrateExplorer = true } = {}) {
     const frequency = moveFrequency(explorer, edge);
     if (!frequency) return null;
 
-    const [sourceNode, targetNode] = await Promise.all([
-      positionRepository.get(edge.source),
-      positionRepository.get(edge.target),
+    const [sourceEval, targetEval] = await Promise.all([
+      lichessEval.available(edge.source),
+      lichessEval.available(edge.target),
     ]);
     throwIfAborted(signal);
     const projectedEdge = {
@@ -83,7 +84,7 @@ function createCandidateSource(signal, { hydrateExplorer = true } = {}) {
     return selectionCandidate({
       edge: projectedEdge,
       frequency,
-      engineQuality: moveEvaluation(edge.source, edge, sourceNode?.cloudEval, targetNode?.cloudEval),
+      engineQuality: moveEvaluation(edge.source, edge, sourceEval, targetEval),
       humanResult: humanResultQuality(explorer, edge, edge.source),
     });
   }

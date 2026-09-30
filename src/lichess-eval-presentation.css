@@ -1,0 +1,19 @@
+.network-status.is-issue {
+  color: #c8a579;
+}
+
+.network-status.is-loading.is-issue::before {
+  background: currentColor;
+  box-shadow: 0 0 0 4px rgba(200, 165, 121, .09);
+}
+
+@media (max-width: 760px) {
+  .network-status.is-loading,
+  .network-status.is-issue {
+    display: inline;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

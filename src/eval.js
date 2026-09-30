@@ -2,7 +2,6 @@ import { canonicalPosition, toPlayableFen } from './graph.js';
 import { lichessGateway } from './lichess-gateway.js';
 import { positionRepository } from './position-repository.js';
 
-export const ENGINE_MIN_DEPTH = 18;
 export const ENGINE_DUBIOUS_CP = 50;
 export const ENGINE_BAD_CP = 100;
 export const HUMAN_SAMPLE_FLOOR = 100;
@@ -12,9 +11,8 @@ export const HUMAN_MISMATCH_DELTA = 0.05;
 export const POPULAR_BAD_SHARE = 0.05;
 export const ROOT_RARE_SHARE = 0.05;
 export const ROOT_VERY_RARE_SHARE = 0.01;
-export const EVAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const MASTERS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-const CLOUD_ENDPOINT = 'https://lichess.org/api/cloud-eval';
 const MASTERS_ENDPOINT = 'https://explorer.lichess.org/masters';
 
 function moveGames(move) {
@@ -45,10 +43,6 @@ function displayPv(pv) {
   return null;
 }
 
-function usableDepth(value) {
-  return Number.isFinite(value?.depth) && value.depth >= ENGINE_MIN_DEPTH;
-}
-
 function httpError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -73,40 +67,11 @@ function staleOrFailure(error, cachedValue) {
   return requestFailure(error);
 }
 
-export function loadCloudEval(positionKey, { signal } = {}) {
-  const key = canonicalPosition(positionKey);
-  return positionRepository.load(key, 'cloud-eval', async ({ signal: requestSignal }) => {
-    const cached = await positionRepository.get(key);
-    if (cached?.cloudEvalFetchedAt && Date.now() - cached.cloudEvalFetchedAt < EVAL_TTL_MS) {
-      return cached.cloudEval ?? null;
-    }
-
-    const url = new URL(CLOUD_ENDPOINT);
-    url.searchParams.set('fen', toPlayableFen(key));
-    url.searchParams.set('variant', 'standard');
-    url.searchParams.set('multiPv', '5');
-
-    try {
-      const response = await lichessGateway.request(url, { signal: requestSignal, headers: { Accept: 'application/json' } });
-      if (response.status === 404) {
-        await positionRepository.merge(key, { cloudEval: null, cloudEvalFetchedAt: Date.now() });
-        return null;
-      }
-      if (!response.ok) throw httpError(response.status, `Lichess cloud eval returned ${response.status}`);
-      const value = await response.json();
-      await positionRepository.merge(key, { cloudEval: value, cloudEvalFetchedAt: Date.now() });
-      return value;
-    } catch (error) {
-      return staleOrFailure(error, cached?.cloudEval);
-    }
-  }, { signal });
-}
-
 export function loadMasters(positionKey, { signal } = {}) {
   const key = canonicalPosition(positionKey);
   return positionRepository.load(key, 'masters', async ({ signal: requestSignal }) => {
     const cached = await positionRepository.get(key);
-    if (cached?.mastersFetchedAt && Date.now() - cached.mastersFetchedAt < EVAL_TTL_MS) {
+    if (cached?.mastersFetchedAt && Date.now() - cached.mastersFetchedAt < MASTERS_TTL_MS) {
       return cached.mastersExplorer ?? null;
     }
 
@@ -128,7 +93,6 @@ export function loadMasters(positionKey, { signal } = {}) {
 }
 
 export function positionEvaluation(cloudEval) {
-  if (!usableDepth(cloudEval)) return null;
   const pv = cloudEval?.pvs?.[0];
   if (!pv) return null;
   return {
@@ -147,11 +111,11 @@ export function qualityClass(lossCp) {
 }
 
 export function moveEvaluation(sourceKey, edge, sourceEval, targetEval = null) {
-  if (!edge || !sourceEval?.pvs?.length || !usableDepth(sourceEval)) return null;
+  if (!edge || !sourceEval?.pvs?.length) return null;
   const best = sourceEval.pvs[0];
   const matching = sourceEval.pvs.find((pv) => firstMove(pv) === edge.uci);
-  if (!matching && !usableDepth(targetEval)) return null;
-  const movePv = matching ?? targetEval?.pvs?.[0];
+  if (!matching && !targetEval?.pvs?.length) return null;
+  const movePv = matching ?? targetEval.pvs[0];
   const bestValue = pvNumeric(best);
   const moveValue = pvNumeric(movePv);
   if (!Number.isFinite(bestValue) || !Number.isFinite(moveValue)) return null;

@@ -10,7 +10,9 @@ Top-level browser navigation to Lichess's OAuth authorization endpoint is a user
 
 ## Domain clients
 
-Explorer, Masters, cloud-evaluation, and authentication clients own the meaning of their data and endpoint-specific behavior. They remain responsible for request parameters, response parsing and validation, persistence fields and cache policy, authentication semantics, and chess-specific interpretation.
+Explorer, Masters, cloud-evaluation, and authentication clients own endpoint-specific behavior. They remain responsible for request parameters, response parsing and source validation, persistence fields and cache policy, authentication semantics, and deciding whether source data is fit to expose to the rest of Chessview.
+
+They do not thereby own every downstream semantic interpretation of that data. In particular, [`LichessEval`](lichess-eval.md) owns whether cloud-eval data is usable, while [Evidence](../components/evidence.md) owns derived chess meaning such as move loss and move quality.
 
 Position-backed clients use [`PositionRepository`](position-repository.md) for canonical node access and shared per-facet producer lifetime. That repository does not send Lichess traffic itself: the endpoint client still constructs and interprets its request, and the application-issued HTTP request still goes through `LichessGateway`.
 

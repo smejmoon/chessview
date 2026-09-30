@@ -4,13 +4,13 @@
 
 Own authentication, endpoint access, shared request policy, endpoint caches, and transport/failure semantics for Chessview's Lichess-backed data.
 
-The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). Canonical position record and shared facet lifetime are defined in [`docs/architecture/position-repository.md`](../architecture/position-repository.md). This component owns the observable request-policy requirements those boundaries must enforce.
+The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). Canonical position record and shared facet lifetime are defined in [`docs/architecture/position-repository.md`](../architecture/position-repository.md). Cloud-evaluation source usability is defined in [`docs/architecture/lichess-eval.md`](../architecture/lichess-eval.md). This component owns the observable request-policy requirements those boundaries must enforce.
 
 ## Data sources
 
 - Rated standard Lichess Opening Explorer is the primary human-statistical source.
 - Masters Opening Explorer is a separate comparison population.
-- Lichess cloud evaluation supplies cached engine evidence when adequate-depth data is available.
+- Lichess cloud evaluation supplies engine source data when `LichessEval` judges that data usable.
 
 ## Authentication
 
@@ -34,7 +34,7 @@ The gateway must:
 
 Position-backed endpoint clients may coalesce equivalent work for one canonical position and endpoint facet. One caller becoming obsolete must stop only that caller's participation without cancelling equivalent work still needed by another live caller. When every caller to shared queued work becomes obsolete, the shared producer must be cancelled so the queued request does not reach Lichess.
 
-Endpoint clients retain responsibility for request parameters, parsing, validation, persistence, cache policy, and chess-specific meaning. Facets retain independent freshness; a position record is not globally fresh or stale.
+Endpoint clients retain responsibility for request parameters, parsing, source validation, persistence, cache policy, and deciding whether source data is fit to expose. Facets retain independent freshness; a position record is not globally fresh or stale. Downstream semantic meaning belongs to the component that owns that evidence or product decision rather than to transport by default.
 
 ## Cache and failure semantics
 
@@ -43,7 +43,8 @@ Endpoint clients retain responsibility for request parameters, parsing, validati
 - Cloud-evaluation cache TTL: 7 days.
 - A supported cloud-eval `404` is successful absence and may be cached as such.
 - A transport or HTTP failure is not successful absence.
-- A non-null stale evidence value may be used when a refresh fails; when no evidence exists, failure remains explicit.
+- A non-null stale source value may be used when its endpoint client still judges it usable and a refresh fails.
+- Cloud-eval retrieval details are not exposed as evaluation values. `LichessEval` returns usable evaluation or absence and exposes request/failure activity separately through its operational status channel.
 - Authentication `401` handling remains endpoint/domain behavior, including clearing unusable authorization state.
 
 ## External constraint
@@ -61,7 +62,7 @@ Deterministic tests should cover:
 - cancellation of queued obsolete work before it reaches the network;
 - one obsolete caller detaching from shared same-position work while another live caller still receives it;
 - all callers becoming obsolete cancelling shared queued work before send;
-- cloud-eval successful absence versus request failure;
-- stale evidence fallback without converting failure into absence.
+- cloud-eval successful absence versus request failure at the provider operational boundary;
+- stale usable cloud-eval fallback without exposing retrieval-state sentinels as evaluation data.
 
 Manual verification should include a fresh authenticated browser session, an expired/revoked authorization session, and navigation during a real cooldown using already cached data.

@@ -16,11 +16,11 @@ Knowledge acquisition owns which legal relationships have entered the durable gr
 
 `docs/components/knowledge-acquisition.md` owns Explorer Reading acquisition, Edge Admission, persistence, reconciliation, and stale-cache policy. Cached Explorer Readings are reconciled into durable graph knowledge before Constellation treats their outgoing knowledge as known. The implemented Explorer refinement asks for another Reading only when the constrained composition says it can still matter to visible membership or relationships; visibility limits do not tighten Edge Admission.
 
-`backlog/2026-09-28-evidence-signals.md` still owns consolidation and the final `strong` / `dubious` / `bad` engine-quality vocabulary, but Constellation is no longer blocked on cloud-eval transport/cache-state modeling. Do not introduce a new acquisition-state enum or inspect `LichessEval` operational status to implement rescue; coordinate with the Evidence vocabulary migration rather than adding another compatibility layer.
+Evidence now supplies the final `strong` / `dubious` / `bad` engine-quality grammar from usable `LichessEval` data. Constellation rescue should consume that semantic value directly; do not introduce an acquisition-state enum, revive `good` compatibility, or inspect `LichessEval` operational status.
 
 `backlog/2026-09-28-weather-component.md` owns global settlement/presentation semantics. A structurally relevant rescue request participates in Weather because Constellation/controller knows it is outstanding, not because `LichessEval.subscribe()` reports aggregate provider activity. Supplementary engine requests remain local and do not control Weather.
 
-`docs/components/rail.md` owns Rail selection and presentation. Rail sibling ordering may consume Prevalence directly where candidates share the same source position; it does not consume Constellation Salience as a substitute for observed popularity. `docs/components/interface.md` owns presentation-space constraints and uses first-move Line Prevalence for connector width. Genuine canonical transpositions merge; synthetic grouping for overflow branches is not required.
+`docs/components/rail.md` owns Rail selection and presentation. Rail sibling ordering consumes Evidence Prevalence where candidates share the same source position; it does not consume Constellation Salience as a substitute for observed popularity. `docs/components/interface.md` owns presentation-space constraints and uses first-move Line Prevalence for connector width. Genuine canonical transpositions merge; synthetic grouping for overflow branches is not required.
 
 # Unsettled:
 
@@ -36,4 +36,4 @@ Focused deterministic/integration tests prove that structurally relevant rare-ca
 
 # Sync:
 
-After any implementation or verification step that changes what remains, and before ending an implementation pass, rewrite this entry around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.
+After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.

@@ -1,9 +1,5 @@
 import './eval-ui.css';
-import {
-  evidenceRequestFailed,
-  engineUnavailableLabel,
-  humanFailureIndicator,
-} from './evidence-presentation.js';
+import { isMastersRequestFailure } from './masters.js';
 import { bindRecenterTarget } from './recenter-input.js';
 
 function escapeHtml(value = '') {
@@ -19,17 +15,23 @@ function lossLabel(moveEval, empty = '—') {
   return (moveEval.lossCp / 100).toFixed(1);
 }
 
-function evidencedShareLabel(edge) {
-  const games = Number(edge?.games ?? 0);
-  if (!(games > 0) || !Number.isFinite(edge?.share) || edge.share <= 0) return '';
-  const value = edge.share * 100;
+function evaluationLabel(evaluation) {
+  if (Number.isFinite(evaluation?.cp)) {
+    const pawns = evaluation.cp / 100;
+    return `${pawns >= 0 ? '+' : ''}${pawns.toFixed(1)}`;
+  }
+  if (Number.isFinite(evaluation?.mate)) return `#${evaluation.mate}`;
+  return null;
+}
+
+function evidencedShareLabel(frequency) {
+  const games = Number(frequency?.games ?? 0);
+  if (!(games > 0) || !Number.isFinite(frequency?.share) || frequency.share <= 0) return '';
+  const value = frequency.share * 100;
   return value < 0.5 ? '<1%' : `${Math.round(value)}%`;
 }
 
-function humanMarkerHtml(mismatch, population, evidenceValue = null, { showFailure = true } = {}) {
-  const populationLabel = population === 'masters' ? 'Masters' : 'Lichess';
-  const failure = showFailure ? humanFailureIndicator(evidenceValue, populationLabel) : null;
-  if (failure) return `<span class="human-marker human-${population} human-unavailable" title="${escapeHtml(failure.title)}">${failure.text}</span>`;
+function humanMarkerHtml(mismatch, population) {
   if (!mismatch) return '';
   const arrow = mismatch.direction === 'up' ? '▲' : '▼';
   return `<span class="human-marker human-${population} human-${mismatch.direction}">${arrow}</span>`;
@@ -58,7 +60,7 @@ function renderGuide(root, visible) {
   if (!position) return;
   position.insertAdjacentHTML('beforebegin', `
     <section class="eval-guide" aria-label="Chessview guide">
-      <div><strong>Engine</strong><span class="guide-dot guide-good"></span>&lt;0.5 pawn <span class="guide-dot guide-dubious"></span>0.5–1.0 <span class="guide-dot guide-bad"></span>1.0+</div>
+      <div><strong>Engine</strong><span class="guide-dot guide-strong"></span>&lt;0.5 pawn <span class="guide-dot guide-dubious"></span>0.5–1.0 <span class="guide-dot guide-bad"></span>1.0+</div>
       <div><strong>Human mismatch</strong><span class="human-marker human-masters">▲</span> Masters <span class="human-marker human-lichess">▲</span> Lichess</div>
     </section>`);
 }
@@ -66,12 +68,13 @@ function renderGuide(root, visible) {
 function decorateCenter(root, evidence) {
   const stats = root.querySelector('.rail-current-details .position-stats');
   if (!stats || !evidence?.center) return;
-  const { cloud, evaluation } = evidence.center;
+  const evaluation = evidence.center.evaluation;
+  const label = evaluationLabel(evaluation);
   const badge = (root.ownerDocument ?? globalThis.document).createElement('span');
   badge.className = 'center-eval-detail';
-  badge.innerHTML = evaluation
-    ? `<strong>${escapeHtml(evaluation.label)}</strong>${evaluation.depth ? ` <span>d${evaluation.depth}</span>` : ''}`
-    : `<span>${escapeHtml(engineUnavailableLabel([cloud]))}</span>`;
+  badge.innerHTML = label
+    ? `<strong>${escapeHtml(label)}</strong>${evaluation.depth ? ` <span>d${evaluation.depth}</span>` : ''}`
+    : '<span>eval unavailable</span>';
   stats.appendChild(badge);
 }
 
@@ -97,11 +100,8 @@ function decorateSatellites(root, view, evidenceById) {
     if (!label) continue;
     const pill = (root.ownerDocument ?? globalThis.document).createElement('span');
     pill.className = 'mini-eval';
-    const failed = evidenceRequestFailed(evidence.sourceEval, evidence.targetEval);
-    pill.textContent = evidence.moveEval ? lossLabel(evidence.moveEval) : failed ? '!' : '·';
-    pill.title = evidence.moveEval
-      ? `${lossLabel(evidence.moveEval)} pawn loss vs best`
-      : engineUnavailableLabel([evidence.sourceEval, evidence.targetEval]);
+    pill.textContent = evidence.moveEval ? lossLabel(evidence.moveEval) : '·';
+    pill.title = evidence.moveEval ? `${lossLabel(evidence.moveEval)} pawn loss vs best` : 'eval unavailable';
     label.appendChild(pill);
   }
 }
@@ -117,11 +117,11 @@ function decorateConnectors(root, evidenceById) {
 
 function railRowHtml(row) {
   const quality = row.moveEval?.quality ?? 'unknown';
-  const failed = evidenceRequestFailed(row.sourceEval, row.targetEval);
-  const mismatch = `${humanMarkerHtml(row.mastersMismatch, 'masters', row.masters)}${humanMarkerHtml(row.lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
+  const share = evidencedShareLabel(row.frequency);
+  const mismatch = `${humanMarkerHtml(row.mastersMismatch, 'masters')}${humanMarkerHtml(row.lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
   return `<button class="eval-rail-row eval-${quality}" type="button" data-eval-nav="${escapeHtml(row.edge.target)}">
-    <span class="eval-rail-move">${escapeHtml(row.edge.san ?? row.edge.uci)}${evidencedShareLabel(row.edge) ? ` · ${evidencedShareLabel(row.edge)}` : ''}</span>
-    <span class="eval-badge">${row.moveEval ? lossLabel(row.moveEval) : failed ? '!' : '—'}</span>
+    <span class="eval-rail-move">${escapeHtml(row.edge.san ?? row.edge.uci)}${share ? ` · ${share}` : ''}</span>
+    <span class="eval-badge">${row.moveEval ? lossLabel(row.moveEval) : '—'}</span>
     <span class="eval-human-cell">${mismatch}</span><span class="eval-play">›</span></button>`;
 }
 
@@ -130,10 +130,10 @@ function decorateLineRail(root, view, actions, evidence) {
   const list = root.querySelector('.analysis-rail .rail-explorer .explorer-list');
   if (!list) return;
   const rows = evidence?.rail?.rows ?? [];
-  const mastersFailure = humanFailureIndicator(evidence?.rail?.masters, 'Masters');
+  const mastersFailed = isMastersRequestFailure(evidence?.rail?.masters);
   list.classList.add('eval-rail-list');
   list.innerHTML = rows.length
-    ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span>Human${mastersFailure ? ' !' : ''}</span><span></span></div>${rows.map(railRowHtml).join('')}`
+    ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span title="${mastersFailed ? 'Masters evidence request failed' : ''}">Human${mastersFailed ? ' !' : ''}</span><span></span></div>${rows.map(railRowHtml).join('')}`
     : '<div class="rail-empty">No Rail-worthy Lines yet.</div>';
   list.querySelectorAll('[data-eval-nav]').forEach((button) => {
     bindRecenterTarget(button, actions, () => button.dataset.evalNav);

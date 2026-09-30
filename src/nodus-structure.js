@@ -11,9 +11,8 @@ import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 import { rootTranspositionEnricher } from './root-enrichment.js';
 import { loadExplorer, reconcileCachedExplorerReading } from './explorer.js';
-import { moveEvaluation } from './eval.js';
+import { humanResultQuality, moveEvaluation, moveFrequency } from './evidence.js';
 import { lichessEval } from './lichess-eval.js';
-import { humanResultQuality, moveFrequency } from './evidence-signals.js';
 import {
   rankCrossSourceCandidates,
   rankSameSourceCandidates,

@@ -20,7 +20,7 @@ const { clearGraph } = await import('../src/db.js');
 const { START_FEN, canonicalPosition } = await import('../src/graph.js');
 const { loadExplorer } = await import('../src/explorer.js');
 const { lichessEval } = await import('../src/lichess-eval.js');
-const { loadMasters } = await import('../src/eval.js');
+const { loadMasters } = await import('../src/masters.js');
 
 const center = canonicalPosition(START_FEN);
 

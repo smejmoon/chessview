@@ -1,16 +1,16 @@
 import {
-  HUMAN_SAMPLE_FLOOR,
-  POPULAR_BAD_SHARE,
   humanMismatch,
-  loadMasters,
+  humanResultQuality,
   moveEvaluation,
+  moveFrequency,
   positionEvaluation,
-  railWorthy,
-  rootRarity,
-} from './eval.js';
+  rootRarityFromFrequency,
+} from './evidence.js';
 import { lichessEval } from './lichess-eval.js';
+import { loadMasters } from './masters.js';
 import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
+import { POPULAR_BAD_SHARE, RAIL_SAMPLE_FLOOR, railWorthy } from './rail-selection.js';
 
 function abortError() {
   const error = new Error('Evidence view became obsolete');
@@ -32,28 +32,39 @@ function immutable(value) {
   return value;
 }
 
+async function moveEngineEvidence(source, edge, signal) {
+  const sourceEval = await lichessEval.get(source, { signal });
+  throwIfAborted(signal);
+  let moveEval = moveEvaluation(source, edge, sourceEval);
+  if (!moveEval && sourceEval) {
+    const targetEval = await lichessEval.get(edge.target, { signal });
+    throwIfAborted(signal);
+    moveEval = moveEvaluation(source, edge, sourceEval, targetEval);
+  }
+  return moveEval;
+}
+
 async function relationshipEvidence(relationship, mode, signal) {
   const edge = relationship.edge;
   const sourceNode = await positionRepository.get(edge.source);
   throwIfAborted(signal);
-  const [sourceEval, targetEval, masters] = await Promise.all([
-    lichessEval.get(edge.source, { signal }),
-    lichessEval.get(edge.target, { signal }),
+  const [moveEval, masters] = await Promise.all([
+    moveEngineEvidence(edge.source, edge, signal),
     loadMasters(edge.source, { signal }),
   ]);
   throwIfAborted(signal);
-  const moveEval = moveEvaluation(edge.source, edge, sourceEval, targetEval);
   const lichess = sourceNode?.explorer ?? null;
+  const frequency = moveFrequency(lichess, edge);
+  const humanResult = humanResultQuality(lichess, edge, edge.source);
   return immutable({
     id: relationship.id,
     edge,
-    sourceEval,
-    targetEval,
+    frequency,
     moveEval,
-    masters,
+    humanResult,
     mastersMismatch: humanMismatch(masters, edge, edge.source, moveEval),
     lichessMismatch: humanMismatch(lichess, edge, edge.source, moveEval),
-    rarity: mode === 'roots' ? rootRarity(edge, sourceNode) : null,
+    rarity: mode === 'roots' ? rootRarityFromFrequency(frequency) : null,
   });
 }
 
@@ -66,6 +77,32 @@ async function visibleRelationshipEvidence(composition, mode, signal) {
   return immutable(result);
 }
 
+function railCandidate(edge, explorer, source) {
+  return {
+    edge,
+    frequency: moveFrequency(explorer, edge),
+    humanResult: humanResultQuality(explorer, edge, source),
+  };
+}
+
+function compareRailCandidates(a, b) {
+  const aShare = a.frequency?.share;
+  const bShare = b.frequency?.share;
+  const aHasShare = Number.isFinite(aShare);
+  const bHasShare = Number.isFinite(bShare);
+  if (aHasShare !== bHasShare) return aHasShare ? -1 : 1;
+  if (aHasShare && aShare !== bShare) return bShare - aShare;
+  return (a.edge?.uci ?? '').localeCompare(b.edge?.uci ?? '');
+}
+
+function canEnterAutomaticRail(candidate) {
+  if (candidate.edge?.manual) return true;
+  const games = candidate.frequency?.games ?? 0;
+  const share = candidate.frequency?.share;
+  return games >= RAIL_SAMPLE_FLOOR
+    || (Number.isFinite(share) && share >= POPULAR_BAD_SHARE);
+}
+
 async function lineRailEvidence(center, signal) {
   const [node, outgoing, sourceEval, masters] = await Promise.all([
     positionRepository.get(center),
@@ -76,26 +113,26 @@ async function lineRailEvidence(center, signal) {
   throwIfAborted(signal);
   const lichess = node?.explorer ?? null;
   const candidates = outgoing
-    .slice()
-    .sort((a, b) => (b.share ?? 0) - (a.share ?? 0) || (a.uci ?? '').localeCompare(b.uci ?? ''))
-    .filter((edge) => edge.manual || (edge.games ?? 0) >= HUMAN_SAMPLE_FLOOR || (edge.share ?? 0) > POPULAR_BAD_SHARE);
+    .map((edge) => railCandidate(edge, lichess, center))
+    .filter(canEnterAutomaticRail)
+    .sort(compareRailCandidates);
   const rows = [];
-  for (const edge of candidates) {
+
+  for (const candidate of candidates) {
     throwIfAborted(signal);
-    let targetEval = null;
-    let moveEval = moveEvaluation(center, edge, sourceEval, null);
+    const { edge, frequency, humanResult } = candidate;
+    let moveEval = moveEvaluation(center, edge, sourceEval);
     if (!moveEval && sourceEval) {
-      targetEval = await lichessEval.get(edge.target, { signal });
+      const targetEval = await lichessEval.get(edge.target, { signal });
       throwIfAborted(signal);
       moveEval = moveEvaluation(center, edge, sourceEval, targetEval);
     }
-    if (!railWorthy({ edge, sourceKey: center, lichessExplorer: lichess, moveQuality: moveEval })) continue;
+    if (!railWorthy({ edge, frequency, engineQuality: moveEval, humanResult })) continue;
     rows.push(immutable({
       edge,
-      sourceEval,
-      targetEval,
+      frequency,
       moveEval,
-      masters,
+      humanResult,
       mastersMismatch: humanMismatch(masters, edge, center, moveEval),
       lichessMismatch: humanMismatch(lichess, edge, center, moveEval),
     }));
@@ -122,10 +159,7 @@ export async function loadNodusEvidence({ center, mode, structure, signal } = {}
   throwIfAborted(signal);
 
   return immutable({
-    center: {
-      cloud: centerCloud,
-      evaluation: positionEvaluation(centerCloud),
-    },
+    center: { evaluation: positionEvaluation(centerCloud) },
     relationships,
     rail,
   });

@@ -33,7 +33,7 @@ Salience is the selection importance of an eligible candidate: how strongly Ches
 ## Ranking
 
 - Same-source Salience starts from descending Prevalence order.
-- Clear positive selection evidence — strong/good engine quality or favorable human-result evidence — promotes a candidate by one local sibling place. Clear negative selection evidence — bad engine quality or unfavorable human-result evidence — demotes it by one local sibling place.
+- Clear positive selection evidence — strong engine quality or favorable human-result evidence — promotes a candidate by one local sibling place. Clear negative selection evidence — bad engine quality or unfavorable human-result evidence — demotes it by one local sibling place.
 - Unknown evidence, neutral evidence, or conflicting positive and negative evidence does not adjust the Prevalence-derived order.
 - A rare candidate with known negative evidence and no positive rescue remains the first omission class and is ordered after otherwise eligible siblings when constrained space requires omission.
 - These promotions and demotions are local ordinal adjustments, not percentages or globally comparable scores. They preserve Prevalence as independent observed evidence while allowing Salience to express what is more important to represent.

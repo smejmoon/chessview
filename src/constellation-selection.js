@@ -1,13 +1,5 @@
 export const SELECTION_RARE_SHARE = 0.05;
 
-function engineState(value) {
-  return value?.quality ?? value ?? null;
-}
-
-function humanState(value) {
-  return value?.quality ?? value ?? null;
-}
-
 function stableEdgeOrder(a, b) {
   return (a?.uci ?? '').localeCompare(b?.uci ?? '')
     || (a?.target ?? '').localeCompare(b?.target ?? '')
@@ -49,10 +41,10 @@ export function selectionCandidate({ edge, frequency = null, engineQuality = nul
 
   if (!frequency || !Number.isFinite(frequency.share)) return null;
 
-  const engine = engineState(engineQuality);
-  const human = humanState(humanResult);
+  const engine = engineQuality?.quality ?? null;
+  const human = humanResult?.quality ?? null;
   const rare = frequency.share < SELECTION_RARE_SHARE;
-  const positive = engine === 'strong' || engine === 'good' || human === 'favorable';
+  const positive = engine === 'strong' || human === 'favorable';
   const negative = engine === 'bad' || human === 'unfavorable';
 
   return Object.freeze({

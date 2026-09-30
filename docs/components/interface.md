@@ -15,9 +15,9 @@ Interface does not decide durable graph identity, acquire graph knowledge, selec
 - A canonical position represented once in the Constellation is rendered once even when several visible paths converge there. Every selected relationship needed to communicate the convergence remains visible.
 - At a visible Root convergence with more than one selected downstream relationship, the shared board does not show one misleading board-level move cue; the connectors carry the distinct Move meanings instead.
 - Ancestry above a visible Root merge stays visually shared instead of splitting back into duplicate copies of the same canonical positions.
-- In Lines view, connector thickness encodes the first move's rated-Explorer share from the Nodus. Every deeper segment belonging to that Line inherits the same thickness; deeper local move shares do not change it.
-- Connector color does not encode popularity. It reflects per-edge move-quality evidence supplied by [Evidence](evidence.md): strong moves use green, dubious moves amber, bad moves red, and unavailable/unknown evaluation stays neutral.
-- Root rarity remains a separate presentation channel supplied by Evidence. Rare Roots may use a diamond, reduced emphasis, and dashed connectors; stronger rarity treatment may apply to very rare Roots. Rarity may change dash/opacity but not connector color or Line-popularity width.
+- In Lines view, connector thickness encodes the first move's Prevalence from the Nodus, represented by rated-Explorer move share. Every deeper segment belonging to that Line inherits the same thickness; deeper local Prevalence does not change it.
+- Connector color does not encode Prevalence. It reflects per-edge move-quality evidence supplied by [Evidence](evidence.md): strong moves use green, dubious moves amber, bad moves red, and unavailable/unknown evaluation stays neutral.
+- Root rarity remains a separate presentation channel supplied by Evidence. Rare Roots may use a diamond, reduced emphasis, and dashed connectors; stronger rarity treatment may apply to very rare Roots. Rarity may change dash/opacity but not connector color or Line-Prevalence width.
 - Siblings, cousins, and merged transpositions may occupy lateral context where useful without changing Root/Line direction semantics.
 - Interface derives the presentation-space constraints needed to fit readable boards and relationships in the available viewport and supplies those constraints to Constellation composition. It does not convert a fixed desktop board count into a product rule.
 - A trustworthy provisional Constellation remains visible and navigable while [Weather](weather.md) reports that structural refinement is still `Updating…`; presentation must not treat unsettled as unavailable.
@@ -43,8 +43,8 @@ Deterministic/browser contract tests should cover:
 - debounce/coalescing avoiding unnecessary visual fidgeting without concealing that structural refinement is ongoing or falsely presenting settlement;
 - global orientation behavior;
 - stable identity between rendered positions/connectors and their Constellation relationships;
-- Line descendants inheriting the first move's Nodus share for connector-width semantics;
-- move-quality color, Root-rarity treatment, and Line-popularity width remaining independent channels attached to the correct relationship;
+- Line descendants inheriting the first move's Nodus Prevalence for connector-width semantics;
+- move-quality color, Root-rarity treatment, and Line-Prevalence width remaining independent channels attached to the correct relationship;
 - different viewport constraints being supplied to Constellation without Interface independently changing graph identity or persistence;
 - normal presentation failure falling back to a degraded/unavailable surface without changing structural truth.
 

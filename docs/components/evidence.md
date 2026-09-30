@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Own how Chessview turns engine and human statistical data into semantic evidence signals such as move quality, human-result quality, mismatch, frequency, and Root rarity.
+Own how Chessview turns engine and human statistical data into semantic evidence signals such as move quality, human-result quality, mismatch, Prevalence, and Root rarity.
 
 Evidence owns the meaning, calculation, and epistemic state of those signals. Consumers such as [Constellation selection](constellation-selection.md), [Rail](rail.md), and [Interface](interface.md) own how those signals affect eligibility, navigation, or presentation.
 
@@ -12,7 +12,7 @@ Evidence is not structural or supplementary solely because of its source. Critic
 
 Evidence explicitly required to decide whether the current Constellation can still change is part of structural settlement for that decision. It may remain unresolved while a trustworthy current Constellation is already published; in that case it keeps [Weather](weather.md) unsettled rather than acting as a publication gate. Evidence used only to annotate an already established Constellation or enrich the Rail is supplementary and may continue hydrating without blocking normal Weather.
 
-Rated Lichess Explorer frequency used by Constellation selection is structural input. Engine and human-result evidence may also become structural input when Constellation selection requests them to decide whether a rare candidate remains eligible. The same engine or human evidence remains supplementary when it is used only for labels, colors, mismatch markers, rarity treatment, or Rail enrichment.
+Rated Lichess Explorer Prevalence used by Constellation selection is structural input. Engine and human-result evidence may also become structural input when Constellation selection requests them to decide whether a rare candidate remains eligible. The same engine or human evidence remains supplementary when it is used only for labels, colors, mismatch markers, rarity treatment, or Rail enrichment.
 
 A terminal failure, genuine absence, insufficient depth/sample, or other unavailable structural-evidence result remains unknown rather than negative chess evidence. If a trustworthy Constellation was already published without that refinement, such a terminal unknown may settle the dependency without invalidating the trustworthy structure already established.
 
@@ -36,7 +36,7 @@ Constellation selection may consume engine quality as an independent rescue sign
 
 - Rated Lichess Explorer is the primary practical population.
 - Masters is a separate comparison population rather than a replacement for rated Explorer.
-- Rated Explorer supplies human-frequency and game-result evidence for automatic Constellation selection.
+- Rated Explorer supplies Prevalence and game-result evidence for automatic Constellation selection.
 - Human-result quality preserves at least three semantic states for selection consumers: favorable, unfavorable, and unknown/insufficient. Missing or failed requests remain unknown rather than becoming unfavorable.
 - Exact favorable/unfavorable score thresholds and sample-sufficiency thresholds are tunable until separately promoted into durable requirements.
 - Constellation selection may treat favorable human-result evidence as an independent rescue signal for a rare candidate. Evidence owns the signal; selection owns the eligibility consequence.
@@ -44,11 +44,13 @@ Constellation selection may consume engine quality as an independent rescue sign
 - Failure to fetch Masters, rated Explorer, or engine evidence must not be interpreted as evidence that no disagreement, evaluation, favorable result, unfavorable result, or other signal exists.
 - When no stale evidence is available, evidence state distinguishes request failure from genuine missing, insufficient-depth, insufficient-sample, or no-mismatch outcomes.
 
-## Frequency evidence
+## Prevalence
+
+**Prevalence** is evidence of how commonly a move occurs in the observed human population at its immediate source position. It includes game count and move share. Prevalence describes observed play; it does not decide whether ChessView should show the move.
 
 - Rated Explorer move share is local to the move's immediate source position.
-- Shares from different source positions are separate local evidence and are not, by themselves, a globally comparable score across the Constellation.
-- Missing or unusable rated Explorer frequency remains unknown/unavailable rather than being treated as zero share.
+- Prevalence from different source positions is separate local evidence and is not, by itself, a globally comparable score across the Constellation.
+- Missing or unusable rated Explorer Prevalence remains unknown/unavailable rather than being treated as zero share.
 
 ## Root rarity
 
@@ -63,7 +65,7 @@ Root rarity is separate from move quality.
 
 - Engine evidence minimum depth: `18`.
 
-Move-quality and Root-rarity thresholds are specified in their owning behavior sections above. Rail selection thresholds belong to [Rail](rail.md). Constellation rescue and ranking thresholds belong to [Constellation selection](constellation-selection.md).
+Move-quality and Root-rarity thresholds are specified in their owning behavior sections above. Rail selection thresholds belong to [Rail](rail.md). Constellation rescue and Salience rules belong to [Constellation selection](constellation-selection.md).
 
 ## Verification
 
@@ -75,10 +77,10 @@ Deterministic tests should cover:
 - unavailable/failed engine evidence remaining distinct from strong, dubious, or bad quality;
 - structural evidence remaining able to refine an already published trustworthy Constellation without being required for its initial publication;
 - terminal failed/absent/insufficient structural evidence settling as unknown without invalidating already trustworthy structure;
-- human-result quality preserving favorable, unfavorable, and unknown/insufficient states independently from frequency;
+- human-result quality preserving favorable, unfavorable, and unknown/insufficient states independently from Prevalence;
 - human-result mismatch direction and sample gating;
 - Root rarity thresholds and evidence gating;
-- rated Explorer frequency remaining local to its source position;
+- rated Explorer Prevalence remaining local to its source position;
 - request-failure values remaining distinct from genuine missing or insufficient evidence;
 - supplementary evidence completing, failing, or arriving late without blocking or reopening successful Weather when it is not a pending Constellation-selection dependency.
 

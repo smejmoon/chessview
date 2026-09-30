@@ -14,6 +14,23 @@ function stableEdgeOrder(a, b) {
     || (a?.source ?? '').localeCompare(b?.source ?? '');
 }
 
+function comparePrevalence(a, b) {
+  const aShare = a?.frequency?.share;
+  const bShare = b?.frequency?.share;
+  const aHasPrevalence = Number.isFinite(aShare);
+  const bHasPrevalence = Number.isFinite(bShare);
+  if (aHasPrevalence !== bHasPrevalence) return aHasPrevalence ? -1 : 1;
+  if (aHasPrevalence && aShare !== bShare) return bShare - aShare;
+  return stableEdgeOrder(a?.edge, b?.edge);
+}
+
+function evidenceAdjustment(candidate) {
+  const positive = Boolean(candidate?.positive);
+  const negative = Boolean(candidate?.negative);
+  if (positive === negative) return 0;
+  return positive ? -1 : 1;
+}
+
 export function selectionCandidate({ edge, frequency = null, engineQuality = null, humanResult = null } = {}) {
   if (!edge) return null;
 
@@ -23,6 +40,7 @@ export function selectionCandidate({ edge, frequency = null, engineQuality = nul
       frequency,
       automatic: false,
       rare: false,
+      positive: false,
       rescued: false,
       negative: false,
       omitFirst: false,
@@ -34,7 +52,7 @@ export function selectionCandidate({ edge, frequency = null, engineQuality = nul
   const engine = engineState(engineQuality);
   const human = humanState(humanResult);
   const rare = frequency.share < SELECTION_RARE_SHARE;
-  const rescued = engine === 'strong' || engine === 'good' || human === 'favorable';
+  const positive = engine === 'strong' || engine === 'good' || human === 'favorable';
   const negative = engine === 'bad' || human === 'unfavorable';
 
   return Object.freeze({
@@ -42,21 +60,21 @@ export function selectionCandidate({ edge, frequency = null, engineQuality = nul
     frequency,
     automatic: true,
     rare,
-    rescued,
+    positive,
+    rescued: positive,
     negative,
-    omitFirst: rare && negative && !rescued,
+    omitFirst: rare && negative && !positive,
   });
 }
 
 export function compareSameSourceCandidates(a, b) {
-  const aShare = a?.frequency?.share;
-  const bShare = b?.frequency?.share;
-  const aHasFrequency = Number.isFinite(aShare);
-  const bHasFrequency = Number.isFinite(bShare);
-  if (aHasFrequency !== bHasFrequency) return aHasFrequency ? -1 : 1;
-  if (aHasFrequency && aShare !== bShare) return bShare - aShare;
-  if (Boolean(a?.omitFirst) !== Boolean(b?.omitFirst)) return a?.omitFirst ? 1 : -1;
-  return stableEdgeOrder(a?.edge, b?.edge);
+  const aOrder = a?.salience?.order;
+  const bOrder = b?.salience?.order;
+  const aHasSalience = Number.isFinite(aOrder);
+  const bHasSalience = Number.isFinite(bOrder);
+  if (aHasSalience !== bHasSalience) return aHasSalience ? -1 : 1;
+  if (aHasSalience && aOrder !== bOrder) return aOrder - bOrder;
+  return comparePrevalence(a, b);
 }
 
 export function compareCrossSourceCandidates(a, b) {
@@ -65,7 +83,38 @@ export function compareCrossSourceCandidates(a, b) {
 }
 
 export function rankSameSourceCandidates(candidates = []) {
-  return candidates.slice().sort(compareSameSourceCandidates);
+  const ranked = candidates
+    .slice()
+    .sort(comparePrevalence)
+    .map((candidate, prevalenceOrder) => {
+      const adjustment = evidenceAdjustment(candidate);
+      return {
+        candidate,
+        prevalenceOrder,
+        evidenceAdjustment: adjustment,
+        localCost: prevalenceOrder + adjustment,
+      };
+    });
+
+  ranked.sort((a, b) => {
+    if (Boolean(a.candidate?.omitFirst) !== Boolean(b.candidate?.omitFirst)) {
+      return a.candidate?.omitFirst ? 1 : -1;
+    }
+    return a.localCost - b.localCost
+      || a.evidenceAdjustment - b.evidenceAdjustment
+      || a.prevalenceOrder - b.prevalenceOrder
+      || stableEdgeOrder(a.candidate?.edge, b.candidate?.edge);
+  });
+
+  return ranked.map((entry, order) => Object.freeze({
+    ...entry.candidate,
+    edge: Object.freeze({ ...entry.candidate.edge, salienceOrder: order }),
+    salience: Object.freeze({
+      order,
+      prevalenceOrder: entry.prevalenceOrder,
+      evidenceAdjustment: entry.evidenceAdjustment,
+    }),
+  }));
 }
 
 export function rankCrossSourceCandidates(candidates = []) {

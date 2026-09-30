@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 
 import { composeLineNeighborhood, chooseLineNeighborhood } from '../src/visible-graph.js';
 
-function edge(source, target, uci, share) {
-  return { source, target, uci, share, qualifies: true };
+function edge(source, target, uci, share, metadata = {}) {
+  return { source, target, uci, share, qualifies: true, ...metadata };
 }
 
 test('broad Line composition lets useful depth compete with immediate siblings', () => {
@@ -28,6 +28,21 @@ test('broad Line composition lets useful depth compete with immediate siblings',
   assert.ok(immediate.length < composition.nodes.length, 'visible space is not exhausted by immediate siblings');
   assert.ok(composition.nodes.some((node) => node.distance > 1), 'useful branch depth competes for space');
   assert.equal(composition.nodes.some((node) => node.key === 'e1'), false, 'not every eligible sibling must be visible');
+});
+
+test('Line composition follows Salience order while preserving the move Prevalence', () => {
+  const composition = chooseLineNeighborhood({
+    center: 'center',
+    outgoingBySource: new Map([['center', [
+      edge('center', 'popular', 'a', 0.7, { salienceOrder: 1 }),
+      edge('center', 'salient', 'b', 0.3, { salienceOrder: 0 }),
+    ]]]),
+    max: 1,
+  });
+
+  assert.deepEqual(composition.nodes.map((node) => node.key), ['salient']);
+  assert.equal(composition.relationships[0].edge.share, 0.3);
+  assert.equal(composition.families[0].lineShare, 0.3);
 });
 
 test('one structural agenda prefers a later family alternative over unrelated extra depth', () => {

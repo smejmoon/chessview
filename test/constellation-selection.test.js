@@ -24,7 +24,7 @@ function explorer(moves) {
   return { ...totals, moves };
 }
 
-test('frequency is evidence from the source Explorer snapshot, not an edge placeholder', () => {
+test('Prevalence is evidence from the source Explorer snapshot, not an edge placeholder', () => {
   const data = explorer([
     { uci: 'a1a2', white: 30, draws: 10, black: 10 },
     { uci: 'a1b1', white: 20, draws: 10, black: 20 },
@@ -52,27 +52,54 @@ test('root rarity requires meaningful source evidence', () => {
   assert.equal(rootRarityFromFrequency({ games: 4, sourceGames: 80, share: 0.05 }), null);
 });
 
-test('automatic selection requires evidenced local frequency while manual edges remain explicit', () => {
+test('automatic selection requires evidenced local Prevalence while manual edges remain explicit', () => {
   const edge = { source: SOURCE, target: 'a', uci: 'a1a2' };
   assert.equal(selectionCandidate({ edge }), null);
   assert.equal(selectionCandidate({ edge: { ...edge, manual: true } })?.automatic, false);
 });
 
-test('same-source ordering remains frequency-first even when the rarer move is rescued', () => {
-  const frequentBad = selectionCandidate({
-    edge: { source: SOURCE, target: 'a', uci: 'a1a2' },
-    frequency: { games: 600, sourceGames: 1000, share: 0.6 },
+test('same-source Salience starts from Prevalence and lets clear evidence move a sibling one local place', () => {
+  const commonNeutral = selectionCandidate({
+    edge: { source: SOURCE, target: 'common-neutral', uci: 'a1a2' },
+    frequency: { games: 500, sourceGames: 1000, share: 0.5 },
+  });
+  const commonBad = selectionCandidate({
+    edge: { source: SOURCE, target: 'common-bad', uci: 'a1b1' },
+    frequency: { games: 350, sourceGames: 1000, share: 0.35 },
     engineQuality: 'bad',
     humanResult: 'unfavorable',
   });
   const rareGood = selectionCandidate({
-    edge: { source: SOURCE, target: 'b', uci: 'a1b1' },
+    edge: { source: SOURCE, target: 'rare-good', uci: 'a1b2' },
     frequency: { games: 40, sourceGames: 1000, share: 0.04 },
     engineQuality: 'strong',
   });
-  assert.deepEqual(rankSameSourceCandidates([rareGood, frequentBad]).map((item) => item.edge.target), ['a', 'b']);
+
+  const ranked = rankSameSourceCandidates([rareGood, commonBad, commonNeutral]);
+  assert.deepEqual(ranked.map((item) => item.edge.target), ['common-neutral', 'rare-good', 'common-bad']);
+  assert.deepEqual(ranked.map((item) => item.frequency.share), [0.5, 0.04, 0.35]);
+  assert.deepEqual(ranked.map((item) => item.salience), [
+    { order: 0, prevalenceOrder: 0, evidenceAdjustment: 0 },
+    { order: 1, prevalenceOrder: 2, evidenceAdjustment: -1 },
+    { order: 2, prevalenceOrder: 1, evidenceAdjustment: 1 },
+  ]);
+  assert.equal(commonBad.automatic, true, 'a frequent bad move remains eligible');
   assert.equal(rareGood.rescued, true);
-  assert.equal(rareGood.omitFirst, false);
+});
+
+test('unknown same-source evidence leaves Salience in Prevalence order', () => {
+  const lessPrevalent = selectionCandidate({
+    edge: { source: SOURCE, target: 'less', uci: 'a1a2' },
+    frequency: { games: 300, sourceGames: 1000, share: 0.3 },
+  });
+  const morePrevalent = selectionCandidate({
+    edge: { source: SOURCE, target: 'more', uci: 'a1b1' },
+    frequency: { games: 600, sourceGames: 1000, share: 0.6 },
+  });
+
+  const ranked = rankSameSourceCandidates([lessPrevalent, morePrevalent]);
+  assert.deepEqual(ranked.map((item) => item.edge.target), ['more', 'less']);
+  assert.deepEqual(ranked.map((item) => item.edge.salienceOrder), [0, 1]);
 });
 
 test('cross-source allocation omits known rare-negative candidates before rescued candidates', () => {

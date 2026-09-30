@@ -22,8 +22,8 @@ A Constellation is a projection of Chessview's durable graph, not the durable gr
 - Root and Line direction remain relative to the Nodus. Broad positions retain meaningful alternatives instead of allowing one branch to consume the whole view.
 - Distinct immediate Root or first-level Line families remain structurally distinct until their selected paths genuinely converge on the same canonical position.
 - Canonical graph identity is preserved. When selected paths transpose into the same canonical position, the Constellation represents that position once while preserving every selected relationship and the branch/family membership that reaches the convergence.
-- Constellation may consume frequency, quality, human-result, rarity, or other evidence signals when deciding how to spend scarce visible space. [Evidence](evidence.md) owns the meaning and calculation of those signals; [Constellation selection](constellation-selection.md) owns automatic eligibility and local candidate ordering.
-- Frequency evidence from different source positions is not treated as a globally comparable score by itself. Constellation owns cross-branch allocation needed to preserve coherence.
+- Constellation may consume Prevalence, quality, human-result, rarity, or other evidence signals when deciding how to spend scarce visible space. [Evidence](evidence.md) owns the meaning and calculation of those signals; [Constellation selection](constellation-selection.md) owns automatic eligibility and local Salience.
+- Prevalence from different source positions is not treated as a globally comparable score by itself. Constellation owns cross-branch allocation needed to preserve coherence.
 - Constellation output refers to canonical positions and visible relationships. It does not redefine graph identity or persist a second graph.
 - Two-dimensional coordinates, board sizes, connector paths, colors, labels, and other visual treatment belong to presentation rather than Constellation composition.
 
@@ -45,4 +45,4 @@ Deterministic tests should cover:
 - canonical transpositions appearing once while retaining every selected relationship and branch/family membership into or out of the convergence;
 - Constellation requesting additional knowledge without itself performing transport or persistence side effects;
 - evidence signals influencing selection without changing canonical graph identity;
-- cross-branch allocation preserving coherence without comparing unrelated source-local percentages as one global rank.
+- cross-branch allocation preserving coherence without comparing unrelated source-local Prevalence as one global rank.

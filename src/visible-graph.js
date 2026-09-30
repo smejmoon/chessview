@@ -144,11 +144,21 @@ function createVisibleGraph({ center, direction, max = 19 }) {
   };
 }
 
+function compareLineSelection(a, b) {
+  const aOrder = a?.salienceOrder;
+  const bOrder = b?.salienceOrder;
+  const aHasSalience = Number.isFinite(aOrder);
+  const bHasSalience = Number.isFinite(bOrder);
+  if (aHasSalience !== bHasSalience) return aHasSalience ? -1 : 1;
+  if (aHasSalience && aOrder !== bOrder) return aOrder - bOrder;
+  return stableEdgeOrder(a, b);
+}
+
 function rankedLineEdges(outgoingBySource, key) {
   return (outgoingBySource.get(key) ?? [])
     .filter((edge) => edge.qualifies || edge.manual)
     .slice()
-    .sort(stableEdgeOrder);
+    .sort(compareLineSelection);
 }
 
 function compareLineStructure(a, b) {

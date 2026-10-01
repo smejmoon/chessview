@@ -33,6 +33,13 @@ function uciLine(path) {
   return path.map((edge) => edge.uci).join(' ');
 }
 
+function assertNoExplorerEvidence(edge) {
+  assert.equal('games' in edge, false);
+  assert.equal('share' in edge, false);
+  assert.equal('qualifies' in edge, false);
+  assert.equal('updatedAt' in edge, false);
+}
+
 test('enumerates legal move-order transpositions into the Panov position', () => {
   const reference = pathFromUci([
     'e2e4', 'c7c6',
@@ -53,10 +60,7 @@ test('enumerates legal move-order transpositions into the Panov position', () =>
   assert.ok(lines.has('d2d4 d7d5 e2e4 c7c6 e4d5 c6d5 c2c4'));
   assert.ok(result.paths.every((path) => path.at(-1).target === target));
   for (const edge of result.paths.flat()) {
-    assert.equal('games' in edge, false);
-    assert.equal('share' in edge, false);
-    assert.equal('qualifies' in edge, false);
-    assert.equal('updatedAt' in edge, false);
+    assertNoExplorerEvidence(edge);
     assert.equal('manual' in edge, false);
     assert.equal('derived' in edge, false);
   }
@@ -80,7 +84,7 @@ test('keeps transposition search bounded', () => {
   assert.equal(result.truncated, true);
 });
 
-test('persisting a transposition path does not add derived provenance or replace legacy evidence', async () => {
+test('persisting a transposition path scrubs legacy evidence without adding derived provenance', async () => {
   await clearGraph();
   const topology = pathFromUci(['e2e4'])[0];
   const known = {
@@ -98,9 +102,6 @@ test('persisting a transposition path does not add derived provenance or replace
   const stored = (await positionGraph.outgoing(known.source))[0];
 
   assert.equal(result.addedEdges, 0);
-  assert.equal(stored.games, 600);
-  assert.equal(stored.share, 0.6);
-  assert.equal(stored.qualifies, true);
-  assert.equal(stored.updatedAt, 1);
+  assertNoExplorerEvidence(stored);
   assert.equal(stored.derived, false);
 });

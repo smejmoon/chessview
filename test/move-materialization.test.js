@@ -23,6 +23,13 @@ const { positionRepository } = await import('../src/position-repository.js');
 
 const center = canonicalPosition(START_FEN);
 
+function assertNoExplorerEvidence(edge) {
+  assert.equal('games' in edge, false);
+  assert.equal('share' in edge, false);
+  assert.equal('qualifies' in edge, false);
+  assert.equal('updatedAt' in edge, false);
+}
+
 test('materializing a legal move creates its durable edge and target position without Explorer evidence', async () => {
   await clearGraph();
   const resolved = resolveMove(center, { uci: 'e2e4' });
@@ -37,15 +44,12 @@ test('materializing a legal move creates its durable edge and target position wi
   assert.equal(result.edge.target, resolved.target);
   assert.equal(result.edge.uci, 'e2e4');
   assert.equal(result.edge.manual, true);
-  assert.equal('games' in result.edge, false);
-  assert.equal('share' in result.edge, false);
-  assert.equal('qualifies' in result.edge, false);
-  assert.equal('updatedAt' in result.edge, false);
+  assertNoExplorerEvidence(result.edge);
   assert.ok((await getOutgoing(center)).some((edge) => edge.id === result.edge.id));
   assert.equal((await positionRepository.get(resolved.target))?.fen, resolved.fen);
 });
 
-test('materializing an existing edge preserves its Explorer evidence while marking explicit provenance', async () => {
+test('materializing an existing edge scrubs legacy Explorer evidence while marking explicit provenance', async () => {
   await clearGraph();
   const resolved = resolveMove(center, { uci: 'e2e4' });
   const existing = {
@@ -70,9 +74,7 @@ test('materializing an existing edge preserves its Explorer evidence while marki
 
   const stored = (await getOutgoing(center)).find((edge) => edge.id === existing.id);
   assert.equal(stored.manual, true);
-  assert.equal(stored.games, 600);
-  assert.equal(stored.share, 0.6);
-  assert.equal(stored.qualifies, true);
+  assertNoExplorerEvidence(stored);
 });
 
 test('target position exists before the durable move edge is written', async () => {

@@ -18,7 +18,7 @@ Application code that reads or writes position nodes goes through `PositionRepos
 
 Explorer, cloud evaluation, Masters, and future position-backed data are independently hydrated facets of a position record. There is no whole-node freshness flag: each endpoint client keeps its own TTL, request parameters, parsing, failure semantics, and persisted fields.
 
-Equivalent concurrent loads for one facet and canonical key share one producer. Each caller participates with its own `AbortSignal`. One caller becoming obsolete detaches only that caller. When the last caller detaches before the producer settles, the repository aborts the producer so queued work can be rejected before it reaches Lichess.
+Equivalent concurrent loads for one facet and canonical key share one producer. Each caller participates with its own `AbortSignal` and transport urgency. One caller becoming obsolete detaches only that caller. The shared producer exposes the highest effective urgency among its live callers, so a queued request can promote or demote as callers join or leave without creating another producer. When the last caller detaches before the producer settles, the repository aborts the producer so queued work can be rejected before it reaches Lichess.
 
 The shared producer receives an internal abort signal owned by the repository rather than any caller's signal. This keeps producer lifetime independent of first-caller lifetime while preserving cancellation when nobody still needs the work.
 
@@ -28,10 +28,10 @@ The shared producer receives an internal abort signal owned by the repository ra
 
 Lichess-backed endpoint clients own endpoint meaning and call `PositionRepository` to coordinate shared per-position work and persistence. They continue to call `LichessGateway` for application-issued HTTP requests.
 
-`LichessGateway` owns application-wide serialization, cooldown, and pre-send cancellation. It does not own canonical-position identity, endpoint caches, facet freshness, or shared parsed-result semantics.
+`LichessGateway` owns application-wide serialization, cooldown, pre-send cancellation, and generic queued transport precedence. It does not own canonical-position identity, endpoint caches, facet freshness, shared parsed-result semantics, or the domain reason a caller is foreground or background.
 
 `PositionGraph` separately owns durable edge access, legal edge normalization, and edge mutation coordination. Node-record hydration and edge mutation share canonical position identity but remain independent technical boundaries.
 
 ## Verification
 
-Deterministic tests should cover in-memory reuse before IndexedDB fallback, persisted updates remaining visible through the repository, independently cancellable callers sharing one facet load, last-caller cancellation aborting the shared producer, and replacement callers being able to start fresh work after a cancelled producer is detached.
+Deterministic tests should cover in-memory reuse before IndexedDB fallback, persisted updates remaining visible through the repository, independently cancellable callers sharing one facet load, effective shared urgency following the highest live caller demand, last-caller cancellation aborting the shared producer, and replacement callers being able to start fresh work after a cancelled producer is detached.

@@ -8,6 +8,11 @@ function throwIfAborted(signal) {
   if (signal?.aborted) throw abortError();
 }
 
+function priorityValue(priority) {
+  const value = typeof priority === 'function' ? priority() : priority;
+  return value === 'background' ? 'background' : 'foreground';
+}
+
 export function createRequestGate({
   fetchImpl = (...args) => fetch(...args),
   now = () => Date.now(),
@@ -15,7 +20,8 @@ export function createRequestGate({
   cooldownMs = 60_000,
   minIntervalMs = 250,
 } = {}) {
-  let tail = Promise.resolve();
+  const queue = [];
+  let draining = false;
   let cooldownUntil = 0;
   let lastRequestAt = 0;
 
@@ -27,20 +33,44 @@ export function createRequestGate({
     throwIfAborted(signal);
   }
 
-  function run(input, init = {}) {
-    const execute = async () => {
-      await waitForWindow(init.signal);
-      lastRequestAt = now();
-      const response = await fetchImpl(input, init);
-      if (response?.status === 429) {
-        cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
-      }
-      return response;
-    };
+  function nextIndex() {
+    const foreground = queue.findIndex((item) => priorityValue(item.priority) === 'foreground');
+    return foreground >= 0 ? foreground : 0;
+  }
 
-    const promise = tail.then(execute, execute);
-    tail = promise.then(() => undefined, () => undefined);
-    return promise;
+  async function execute(item) {
+    const { priority: _priority, ...requestInit } = item.init;
+    await waitForWindow(requestInit.signal);
+    lastRequestAt = now();
+    const response = await fetchImpl(item.input, requestInit);
+    if (response?.status === 429) {
+      cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
+    }
+    return response;
+  }
+
+  async function drain() {
+    if (draining) return;
+    draining = true;
+    try {
+      while (queue.length) {
+        const [item] = queue.splice(nextIndex(), 1);
+        try {
+          item.resolve(await execute(item));
+        } catch (error) {
+          item.reject(error);
+        }
+      }
+    } finally {
+      draining = false;
+    }
+  }
+
+  function run(input, init = {}) {
+    return new Promise((resolve, reject) => {
+      queue.push({ input, init, priority: init.priority, resolve, reject });
+      void drain();
+    });
   }
 
   return {

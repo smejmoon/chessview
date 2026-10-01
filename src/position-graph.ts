@@ -70,8 +70,8 @@ function asGraphEdges(edges: readonly StoredEdge[]): GraphEdge[] {
  * Canonicalize and validate one graph edge before persistence.
  *
  * The edge id and SAN/UCI are always recomputed from canonical source + move +
- * canonical target. A supplied target that does not match the legal move result
- * is rejected rather than persisted as graph state.
+ * canonical target. Only durable graph fields are copied into the normalized
+ * value, so caller evidence/view annotations cannot leak into persistence.
  */
 function normalizeEdge(edge: GraphEdgeInput): GraphEdge {
   const source = canonicalPosition(edge.source);
@@ -82,12 +82,11 @@ function normalizeEdge(edge: GraphEdgeInput): GraphEdge {
   }
 
   const normalized: StoredEdge = {
-    ...edge,
+    id: '',
     source,
     target,
     uci: resolved.uci,
     san: resolved.san,
-    id: '',
   };
   normalized.id = edgeId(normalized);
   return asGraphEdge(normalized, 'normalization');
@@ -118,21 +117,11 @@ export function createPositionGraph({
     { manual = false, derived = false }: EdgeProvenance = {},
   ): Promise<GraphEdge> {
     const normalized = normalizeEdge(edge);
-    const stored = await mutateStoredEdge(normalized.id, (existing) => {
-      if (existing) {
-        return {
-          ...existing,
-          manual: Boolean(existing.manual || edge.manual || manual),
-          derived: Boolean(existing.derived || edge.derived || derived),
-        };
-      }
-
-      return {
-        ...normalized,
-        manual: Boolean(edge.manual || manual),
-        derived: Boolean(edge.derived || derived),
-      };
-    });
+    const stored = await mutateStoredEdge(normalized.id, (existing) => ({
+      ...normalized,
+      manual: Boolean(existing?.manual || edge.manual || manual),
+      derived: Boolean(existing?.derived || edge.derived || derived),
+    }));
     return asGraphEdge(stored, 'ensureEdge');
   }
 

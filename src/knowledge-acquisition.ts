@@ -1,7 +1,6 @@
 import {
   AUTO_SAMPLE_FLOOR,
   canonicalPosition,
-  decorateExplorerMoves,
   resolveMove,
   totalGames,
 } from './graph.js';
@@ -38,12 +37,6 @@ export type ExplorerLoadOptions = Readonly<{
   priority?: AcquisitionPriorityInput;
 }>;
 
-type DecoratedExplorerMove = Readonly<{
-  uci: string;
-  games: number;
-  share: number;
-}>;
-
 type ResolvedMove = Readonly<{
   target: string;
   uci: string;
@@ -63,15 +56,13 @@ type KnowledgeRepository = Readonly<{
 }>;
 
 type TimeoutSignalFactory = (ms: number) => AbortSignal;
-type Clock = () => number;
 type DebugLevel = 'info' | 'warn' | 'error';
 
 export type KnowledgeAcquisitionOptions = Readonly<{
   loadExplorer?: LoadExplorer;
   readCachedExplorer?: ReadCachedExplorer;
-  graph?: Pick<PositionGraph, 'updateEdge'>;
+  graph?: Pick<PositionGraph, 'outgoing' | 'ensureEdge'>;
   repository?: KnowledgeRepository;
-  now?: Clock;
   warmTimeoutMs?: number;
   createTimeoutSignal?: TimeoutSignalFactory;
 }>;
@@ -91,6 +82,10 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
+function relationshipKey(uci: string, target: string): string {
+  return `${uci}\u0000${target}`;
+}
+
 function log(event: string, detail: unknown = null, level: DebugLevel = 'info'): void {
   Reflect.apply(debugLog, undefined, [event, detail, level]);
 }
@@ -100,7 +95,6 @@ export function createKnowledgeAcquisition({
   readCachedExplorer = readCachedExplorerReading as ReadCachedExplorer,
   graph = positionGraph,
   repository = positionRepository,
-  now = () => Date.now(),
   warmTimeoutMs = SUPPLEMENTARY_WARM_TIMEOUT_MS,
   createTimeoutSignal = (ms: number) => AbortSignal.timeout(ms),
 }: KnowledgeAcquisitionOptions = {}) {
@@ -110,9 +104,11 @@ export function createKnowledgeAcquisition({
   ): Promise<GraphEdge[]> {
     const edges: GraphEdge[] = [];
     const admitUnknown = totalGames(explorer) >= AUTO_SAMPLE_FLOOR;
-    const moves = decorateExplorerMoves(explorer) as readonly DecoratedExplorerMove[];
+    const knownByRelationship = new Map(
+      (await graph.outgoing(canonical)).map((edge) => [relationshipKey(edge.uci, edge.target), edge]),
+    );
 
-    for (const move of moves) {
+    for (const move of explorer.moves) {
       let resolved: ResolvedMove;
       try {
         resolved = resolveMove(canonical, { uci: move.uci }) as ResolvedMove;
@@ -125,20 +121,20 @@ export function createKnowledgeAcquisition({
         continue;
       }
 
-      const edge: GraphEdgeInput = {
-        source: canonical,
-        target: resolved.target,
-        uci: resolved.uci,
-        san: resolved.san,
-        games: move.games,
-        share: move.share,
-        manual: false,
-        derived: false,
-        updatedAt: now(),
-      };
+      const key = relationshipKey(resolved.uci, resolved.target);
+      let stored = knownByRelationship.get(key) ?? null;
+      if (!stored) {
+        if (!admitUnknown) continue;
+        const edge: GraphEdgeInput = {
+          source: canonical,
+          target: resolved.target,
+          uci: resolved.uci,
+          san: resolved.san,
+        };
+        stored = await graph.ensureEdge(edge);
+        knownByRelationship.set(key, stored);
+      }
 
-      const stored = await graph.updateEdge(edge, { create: admitUnknown });
-      if (!stored) continue;
       await repository.merge(resolved.target, { fen: resolved.fen });
       edges.push(stored);
     }

@@ -44,7 +44,7 @@ function immutable(value) {
   return value;
 }
 
-function createCandidateSource(signal, { hydrateExplorer = true } = {}) {
+function createCandidateSource(signal, { hydrateExplorer = true, priority = 'foreground' } = {}) {
   const explorerLoads = new Map();
 
   function explorerFor(source) {
@@ -52,7 +52,7 @@ function createCandidateSource(signal, { hydrateExplorer = true } = {}) {
     const pending = (async () => {
       throwIfAborted(signal);
       const explorer = hydrateExplorer
-        ? await acquireExplorerReading(source, { signal })
+        ? await acquireExplorerReading(source, { signal, priority })
         : await reconcileCachedExplorerReading(source);
       throwIfAborted(signal);
       return explorer;
@@ -222,19 +222,20 @@ async function rootRows(composition, signal) {
  * @property {NodusMode} mode
  * @property {number} max
  * @property {AbortSignal} [signal]
+ * @property {'foreground' | 'background' | (() => 'foreground' | 'background')} [priority]
  */
 
 /**
  * @param {ComposeNodusStructureOptions} options
  */
-export async function composeNodusStructure({ center, mode, max, signal }) {
+export async function composeNodusStructure({ center, mode, max, signal, priority = 'foreground' }) {
   throwIfAborted(signal);
   const capacity = Math.max(1, Number.isFinite(max) ? Math.floor(max) : 1);
   if (mode === 'roots') await rootTranspositionEnricher.ensure(center, { signal });
-  else await acquireExplorerReading(center, { signal });
+  else await acquireExplorerReading(center, { signal, priority });
   throwIfAborted(signal);
 
-  const candidateSource = createCandidateSource(signal, { hydrateExplorer: mode === 'roots' });
+  const candidateSource = createCandidateSource(signal, { hydrateExplorer: mode === 'roots', priority });
   let selected;
   let readingFrontier = [];
   if (mode === 'roots') {

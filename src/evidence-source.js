@@ -10,6 +10,8 @@ import { lichessEval } from './lichess-eval.js';
 import { loadMasters } from './masters.js';
 import { positionRepository } from './position-repository.js';
 
+/** @typedef {'foreground' | 'background' | (() => 'foreground' | 'background')} RequestPriority */
+
 function abortError() {
   const error = new Error('Evidence view became obsolete');
   error.name = 'AbortError';
@@ -75,6 +77,15 @@ async function visibleRelationshipEvidence(composition, mode, signal, priority) 
   return immutable(result);
 }
 
+/**
+ * @param {{
+ *   center?: string,
+ *   mode?: 'roots' | 'lines',
+ *   structure?: *,
+ *   signal?: AbortSignal,
+ *   priority?: RequestPriority,
+ * }} [input]
+ */
 export async function loadNodusEvidence({ center, mode, structure, signal, priority = 'foreground' } = {}) {
   throwIfAborted(signal);
   const composition = structure?.composition;

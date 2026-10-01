@@ -63,9 +63,13 @@ test('supplementary Explorer warming uses background urgency without reconciling
       return sourceReading;
     },
     graph: {
-      updateEdge: async () => {
+      outgoing: async () => {
         reconciliations += 1;
-        return null;
+        return [];
+      },
+      ensureEdge: async (edge) => {
+        reconciliations += 1;
+        return edge;
       },
     },
     repository: { merge: async () => {} },
@@ -204,7 +208,8 @@ test('a warmed Explorer Reading can later reconcile from cache without another s
     },
     readCachedExplorer: async () => sourceReading,
     graph: {
-      updateEdge: async (edge) => {
+      outgoing: async () => [],
+      ensureEdge: async (edge) => {
         updates += 1;
         return edge;
       },

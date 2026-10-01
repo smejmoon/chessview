@@ -73,10 +73,6 @@ export async function materializeMove(input: MaterializeMoveInput): Promise<Mate
     target: resolved.target,
     uci: resolved.uci,
     san: resolved.san,
-    games: 0,
-    share: 0,
-    qualifies: false,
-    updatedAt: Date.now(),
   };
 
   await positionRepository.ensure(resolved.target);

@@ -92,6 +92,13 @@ async function putFreshExplorer(position, moves, total = 100) {
   });
 }
 
+function assertNoExplorerEvidence(edge) {
+  assert.equal('games' in edge, false);
+  assert.equal('share' in edge, false);
+  assert.equal('qualifies' in edge, false);
+  assert.equal('updatedAt' in edge, false);
+}
+
 test('401 clears the stored Lichess access token', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'expired-token');
@@ -161,31 +168,29 @@ test('selected Line acquisition stops when recomposition clears the structural R
   assert.equal(progressCalls, 1);
 });
 
-test('fresh cached Explorer Reading repairs a corrupted manual edge without network', async () => {
+test('fresh cached Explorer Reading leaves known manual topology unchanged without network', async () => {
   await clearGraph();
   await putFreshStartExplorer();
   const resolved = resolveMove(center, { uci: 'e2e4' });
-  const corrupted = {
+  const known = {
     id: '', source: center, target: resolved.target, uci: resolved.uci, san: resolved.san,
-    games: 0, share: 0, qualifies: false, manual: true, updatedAt: 1,
+    manual: true, derived: false,
   };
-  corrupted.id = edgeId(corrupted);
-  await putEdges([corrupted]);
+  known.id = edgeId(known);
+  await putEdges([known]);
 
   let networkCalls = 0;
   globalThis.fetch = async () => { networkCalls += 1; throw new Error('fresh cache should avoid network'); };
   await loadExplorer(center);
 
-  const repaired = (await getOutgoing(center)).find((edge) => edge.uci === 'e2e4');
+  const stored = (await getOutgoing(center)).find((edge) => edge.uci === 'e2e4');
   assert.equal(networkCalls, 0);
-  assert.ok(repaired);
-  assert.equal(repaired.manual, true);
-  assert.equal(repaired.games, 600);
-  assert.equal(repaired.share, 0.6);
-  assert.equal(Object.hasOwn(repaired, 'qualifies'), false);
+  assert.ok(stored);
+  assert.equal(stored.manual, true);
+  assertNoExplorerEvidence(stored);
 });
 
-test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal move', async () => {
+test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal move without persisting its evidence', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
   const rare = resolveMove(center, { uci: 'a2a3' });
@@ -202,18 +207,17 @@ test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal mo
   const stored = (await getOutgoing(center)).find((edge) => edge.uci === 'a2a3');
   assert.ok(stored);
   assert.equal(stored.target, rare.target);
-  assert.equal(stored.games, 1);
-  assert.equal(stored.share, 0.001);
+  assertNoExplorerEvidence(stored);
 });
 
-test('insufficient Explorer Reading refreshes a known edge but does not Edge Admit an unknown one', async () => {
+test('insufficient Explorer Reading leaves known topology unchanged and does not Edge Admit an unknown one', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
   const e4 = resolveMove(center, { uci: 'e2e4' });
   const c4 = resolveMove(center, { uci: 'c2c4' });
   const known = {
     id: '', source: center, target: e4.target, uci: e4.uci, san: e4.san,
-    games: 400, share: 0.4, manual: true, derived: false, updatedAt: 1,
+    manual: true, derived: false,
   };
   known.id = edgeId(known);
   await putEdges([known]);
@@ -230,10 +234,9 @@ test('insufficient Explorer Reading refreshes a known edge but does not Edge Adm
   await loadExplorer(center, { force: true });
 
   const edges = await getOutgoing(center);
-  const refreshed = edges.find((edge) => edge.uci === 'e2e4');
-  assert.equal(refreshed.games, 20);
-  assert.equal(refreshed.share, 0.4);
-  assert.equal(refreshed.manual, true);
+  const stored = edges.find((edge) => edge.uci === 'e2e4');
+  assert.equal(stored.manual, true);
+  assertNoExplorerEvidence(stored);
   assert.equal(edges.some((edge) => edge.target === c4.target), false);
 });
 
@@ -312,7 +315,7 @@ test('composition propagates structural Explorer failure when no cached Reading 
   await assert.rejects(composeNodusStructure({ center, mode: 'lines', max: 1 }), /offline without cache/);
 });
 
-test('Explorer Reading refresh grows admitted topology, updates returned statistics, and never retracts known edges', async () => {
+test('Explorer Reading refresh grows admitted topology without rewriting or retracting known edges', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
 
@@ -320,8 +323,8 @@ test('Explorer Reading refresh grows admitted topology, updates returned statist
   const d4 = resolveMove(center, { uci: 'd2d4' });
   const c4 = resolveMove(center, { uci: 'c2c4' });
   const existing = [
-    { id: '', source: center, target: e4.target, uci: e4.uci, san: e4.san, games: 600, share: 0.6, manual: true, derived: false, updatedAt: 1 },
-    { id: '', source: center, target: d4.target, uci: d4.uci, san: d4.san, games: 250, share: 0.25, manual: false, derived: false, updatedAt: 1 },
+    { id: '', source: center, target: e4.target, uci: e4.uci, san: e4.san, manual: true, derived: false },
+    { id: '', source: center, target: d4.target, uci: d4.uci, san: d4.san, manual: false, derived: false },
   ];
   existing.forEach((edge) => { edge.id = edgeId(edge); });
   await putEdges(existing);
@@ -339,12 +342,8 @@ test('Explorer Reading refresh grows admitted topology, updates returned statist
   const edges = await getOutgoing(center);
   const byUci = new Map(edges.map((edge) => [edge.uci, edge]));
   assert.equal(edges.length, 3);
-  assert.equal(byUci.get('e2e4').games, 40);
-  assert.equal(byUci.get('e2e4').share, 0.04);
   assert.equal(byUci.get('e2e4').manual, true);
-  assert.equal(byUci.get('d2d4').games, 250);
-  assert.equal(byUci.get('d2d4').share, 0.25);
-  assert.equal(byUci.get('c2c4').games, 200);
-  assert.equal(byUci.get('c2c4').share, 0.2);
+  assert.ok(byUci.has('d2d4'));
   assert.equal(byUci.get('c2c4').target, c4.target);
+  edges.forEach(assertNoExplorerEvidence);
 });

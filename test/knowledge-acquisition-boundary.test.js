@@ -17,7 +17,7 @@ globalThis.window = { location: { href: 'https://example.test/chessview/', searc
 globalThis.history = { state: null, replaceState() {} };
 
 const { clearGraph, getNode, putNode } = await import('../src/db.js');
-const { EXPLORER_TTL_MS, START_FEN, canonicalPosition } = await import('../src/graph.js');
+const { EXPLORER_TTL_MS, START_FEN, canonicalPosition, resolveMove } = await import('../src/graph.js');
 const { loadExplorerReading } = await import('../src/explorer.js');
 const { createKnowledgeAcquisition } = await import('../src/knowledge-acquisition.js');
 
@@ -66,8 +66,8 @@ test('Explorer does not treat malformed cached data as a fresh Reading', async (
   assert.deepEqual((await getNode(center)).explorer, fresh);
 });
 
-test('Knowledge Acquisition skips an uninterpretable move but reconciles other legal moves', async () => {
-  const updates = [];
+test('Knowledge Acquisition skips an uninterpretable move but admits other legal topology', async () => {
+  const ensured = [];
   const merged = [];
   const acquisition = createKnowledgeAcquisition({
     loadExplorer: async () => reading([
@@ -75,32 +75,35 @@ test('Knowledge Acquisition skips an uninterpretable move but reconciles other l
       { uci: 'e2e4', white: 60, draws: 0, black: 0 },
     ]),
     graph: {
-      updateEdge: async (edge) => {
-        updates.push(edge);
+      outgoing: async () => [],
+      ensureEdge: async (edge) => {
+        ensured.push(edge);
         return edge;
       },
     },
     repository: {
       merge: async (key, fields) => { merged.push([key, fields]); },
     },
-    now: () => 123,
   });
 
   await acquisition.acquireExplorerReading(center);
 
-  assert.deepEqual(updates.map((edge) => edge.uci), ['e2e4']);
-  assert.equal(updates[0].updatedAt, 123);
+  assert.deepEqual(ensured.map((edge) => edge.uci), ['e2e4']);
+  assert.equal('games' in ensured[0], false);
+  assert.equal('share' in ensured[0], false);
+  assert.equal('updatedAt' in ensured[0], false);
   assert.equal(merged.length, 1);
 });
 
-test('Knowledge Acquisition propagates persistence failure after an edge update succeeds', async () => {
-  let edgeUpdates = 0;
+test('Knowledge Acquisition propagates target persistence failure after admitting an edge', async () => {
+  let edgeEnsures = 0;
   let targetWrites = 0;
   const acquisition = createKnowledgeAcquisition({
     loadExplorer: async () => reading(),
     graph: {
-      updateEdge: async (edge) => {
-        edgeUpdates += 1;
+      outgoing: async () => [],
+      ensureEdge: async (edge) => {
+        edgeEnsures += 1;
         return edge;
       },
     },
@@ -116,8 +119,39 @@ test('Knowledge Acquisition propagates persistence failure after an edge update 
     acquisition.acquireExplorerReading(center),
     /target persistence failed/,
   );
-  assert.equal(edgeUpdates, 1);
+  assert.equal(edgeEnsures, 1);
   assert.equal(targetWrites, 1);
+});
+
+test('known Explorer relationships repair target records without rewriting graph topology', async () => {
+  const resolved = resolveMove(center, { uci: 'e2e4' });
+  const existing = {
+    id: 'known-e4',
+    source: center,
+    target: resolved.target,
+    uci: resolved.uci,
+    san: resolved.san,
+  };
+  let edgeEnsures = 0;
+  const merged = [];
+  const acquisition = createKnowledgeAcquisition({
+    loadExplorer: async () => reading(),
+    graph: {
+      outgoing: async () => [existing],
+      ensureEdge: async (edge) => {
+        edgeEnsures += 1;
+        return edge;
+      },
+    },
+    repository: {
+      merge: async (key, fields) => { merged.push([key, fields]); },
+    },
+  });
+
+  await acquisition.acquireExplorerReading(center);
+
+  assert.equal(edgeEnsures, 0);
+  assert.deepEqual(merged, [[resolved.target, { fen: resolved.fen }]]);
 });
 
 test('Explorer rejects move counts outside the source sample', async () => {

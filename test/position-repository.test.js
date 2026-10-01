@@ -91,6 +91,36 @@ test('one obsolete caller detaches without cancelling shared position work', asy
   assert.equal(await secondResult, 'shared');
 });
 
+test('shared load priority follows the highest live subscriber demand', async () => {
+  const repository = createPositionRepository({ read: async () => null, write: async (value) => value, version: () => 0 });
+  const foreground = new AbortController();
+  let observedPriority;
+  let resolveProducer;
+  let markStarted;
+  const started = new Promise((resolve) => { markStarted = resolve; });
+  const producer = ({ priority }) => new Promise((resolve) => {
+    observedPriority = priority;
+    resolveProducer = resolve;
+    markStarted();
+  });
+
+  const backgroundResult = repository.load(key, 'explorer', producer, { priority: 'background' });
+  const foregroundResult = repository.load(key, 'explorer', producer, {
+    signal: foreground.signal,
+    priority: 'foreground',
+  });
+  await started;
+  assert.equal(observedPriority(), 'foreground');
+
+  const foregroundRejected = assert.rejects(foregroundResult, (error) => error?.name === 'AbortError');
+  foreground.abort();
+  await foregroundRejected;
+  assert.equal(observedPriority(), 'background');
+
+  resolveProducer('shared');
+  assert.equal(await backgroundResult, 'shared');
+});
+
 test('last obsolete caller aborts the producer and a replacement starts fresh work', async () => {
   const repository = createPositionRepository({ read: async () => null, write: async (value) => value, version: () => 0 });
   const first = new AbortController();

@@ -37,3 +37,61 @@ test('request gate waits a full cooldown after 429', async () => {
   assert.equal((await gate.run('second')).status, 200);
   assert.deepEqual(waits, [60_000]);
 });
+
+test('foreground work passes queued background work after the in-flight request', async () => {
+  let releaseFirst;
+  let firstStarted;
+  const firstStartedPromise = new Promise((resolve) => { firstStarted = resolve; });
+  const firstHold = new Promise((resolve) => { releaseFirst = resolve; });
+  const seen = [];
+  const gate = createRequestGate({
+    minIntervalMs: 0,
+    fetchImpl: async (input) => {
+      seen.push(input);
+      if (input === 'in-flight') {
+        firstStarted();
+        await firstHold;
+      }
+      return { status: 200, input };
+    },
+  });
+
+  const inFlight = gate.run('in-flight');
+  await firstStartedPromise;
+  const background = gate.run('background', { priority: 'background' });
+  const foreground = gate.run('foreground', { priority: 'foreground' });
+  releaseFirst();
+  await Promise.all([inFlight, background, foreground]);
+
+  assert.deepEqual(seen, ['in-flight', 'foreground', 'background']);
+});
+
+test('queued work observes live priority changes without reinsertion', async () => {
+  let releaseFirst;
+  let firstStarted;
+  let promoted = false;
+  const firstStartedPromise = new Promise((resolve) => { firstStarted = resolve; });
+  const firstHold = new Promise((resolve) => { releaseFirst = resolve; });
+  const seen = [];
+  const gate = createRequestGate({
+    minIntervalMs: 0,
+    fetchImpl: async (input) => {
+      seen.push(input);
+      if (input === 'in-flight') {
+        firstStarted();
+        await firstHold;
+      }
+      return { status: 200, input };
+    },
+  });
+
+  const inFlight = gate.run('in-flight');
+  await firstStartedPromise;
+  const live = gate.run('live', { priority: () => promoted ? 'foreground' : 'background' });
+  const background = gate.run('background', { priority: 'background' });
+  promoted = true;
+  releaseFirst();
+  await Promise.all([inFlight, live, background]);
+
+  assert.deepEqual(seen, ['in-flight', 'live', 'background']);
+});

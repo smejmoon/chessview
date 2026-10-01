@@ -7,6 +7,11 @@ function abortError() {
   return error;
 }
 
+function priorityValue(priority) {
+  const value = typeof priority === 'function' ? priority() : priority;
+  return value === 'background' ? 'background' : 'foreground';
+}
+
 export function createPositionRepository({
   read = getNode,
   write = putNode,
@@ -103,9 +108,16 @@ export function createPositionRepository({
     });
   }
 
-  function subscribe(load, signal, releaseLast) {
+  function effectivePriority(load) {
+    for (const subscriber of load.subscribers) {
+      if (priorityValue(subscriber.priority) === 'foreground') return 'foreground';
+    }
+    return 'background';
+  }
+
+  function subscribe(load, signal, releaseLast, priority) {
     if (signal?.aborted) return Promise.reject(abortError());
-    const subscriber = {};
+    const subscriber = { priority };
     load.subscribers.add(subscriber);
 
     return new Promise((resolve, reject) => {
@@ -135,7 +147,7 @@ export function createPositionRepository({
     });
   }
 
-  function load(position, facet, producer, { signal } = {}) {
+  function load(position, facet, producer, { signal, priority = 'foreground' } = {}) {
     syncVersion();
     const key = canonicalPosition(position);
     const id = `${facet}\u0000${key}`;
@@ -152,6 +164,7 @@ export function createPositionRepository({
       const work = Promise.resolve().then(() => producer(Object.freeze({
         key,
         signal: controller.signal,
+        priority: () => effectivePriority(shared),
       })));
       shared.promise = work.finally(() => {
         shared.settled = true;
@@ -165,7 +178,7 @@ export function createPositionRepository({
       if (loads.get(id) !== shared) return;
       loads.delete(id);
       shared.controller.abort();
-    });
+    }, priority);
   }
 
   return Object.freeze({ get, put, merge, ensure, load });

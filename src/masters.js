@@ -30,9 +30,9 @@ function staleOrFailure(error, cachedValue) {
   return requestFailure(error);
 }
 
-export function loadMasters(positionKey, { signal } = {}) {
+export function loadMasters(positionKey, { signal, priority = 'foreground' } = {}) {
   const key = canonicalPosition(positionKey);
-  return positionRepository.load(key, 'masters', async ({ signal: requestSignal }) => {
+  return positionRepository.load(key, 'masters', async ({ signal: requestSignal, priority: requestPriority }) => {
     const cached = await positionRepository.get(key);
     if (cached?.mastersFetchedAt && Date.now() - cached.mastersFetchedAt < MASTERS_TTL_MS) {
       return cached.mastersExplorer ?? null;
@@ -46,6 +46,7 @@ export function loadMasters(positionKey, { signal } = {}) {
     try {
       const response = await lichessGateway.request(url, {
         signal: requestSignal,
+        priority: requestPriority,
         headers: { Accept: 'application/json' },
       });
       if (!response.ok) throw httpError(response.status, `Lichess masters explorer returned ${response.status}`);
@@ -55,5 +56,5 @@ export function loadMasters(positionKey, { signal } = {}) {
     } catch (error) {
       return staleOrFailure(error, cached?.mastersExplorer);
     }
-  }, { signal });
+  }, { signal, priority });
 }

@@ -92,9 +92,9 @@ export function createLichessEval({
     return isUsableLichessEval(record?.cloudEval) ? record.cloudEval : null;
   }
 
-  function get(position, { signal } = {}) {
+  function get(position, { signal, priority = 'foreground' } = {}) {
     const key = canonicalPosition(position);
-    return repository.load(key, 'cloud-eval', async ({ signal: requestSignal }) => {
+    return repository.load(key, 'cloud-eval', async ({ signal: requestSignal, priority: requestPriority }) => {
       const cached = await repository.get(key);
       const cachedValue = isUsableLichessEval(cached?.cloudEval) ? cached.cloudEval : null;
       const fresh = cached?.cloudEvalFetchedAt
@@ -112,6 +112,7 @@ export function createLichessEval({
       try {
         response = await gateway.request(url, {
           signal: requestSignal,
+          priority: requestPriority,
           headers: { Accept: 'application/json' },
         });
       } catch (error) {
@@ -166,7 +167,7 @@ export function createLichessEval({
       const storageIssue = await persist(key, { cloudEval: value, cloudEvalFetchedAt: now() });
       finishRequest(storageIssue);
       return value;
-    }, { signal });
+    }, { signal, priority });
   }
 
   function subscribe(listener) {

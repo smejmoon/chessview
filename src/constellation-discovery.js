@@ -1,7 +1,15 @@
 import { debugLog } from './debug.js';
 import { acquireExplorerReading } from './knowledge-acquisition.js';
 
-export async function discoverSelectedLines(center, structure, onProgress, { signal } = {}) {
+/** @typedef {'foreground' | 'background' | (() => 'foreground' | 'background')} RequestPriority */
+
+/**
+ * @param {string} center
+ * @param {*} structure
+ * @param {(() => Promise<*> | *) | undefined} onProgress
+ * @param {{ signal?: AbortSignal, priority?: RequestPriority }} [options]
+ */
+export async function discoverSelectedLines(center, structure, onProgress, { signal, priority = 'foreground' } = {}) {
   const inspected = new Set();
   let current = structure;
 
@@ -17,7 +25,7 @@ export async function discoverSelectedLines(center, structure, onProgress, { sig
       frontier: frontier.length,
     });
 
-    await acquireExplorerReading(next, { signal });
+    await acquireExplorerReading(next, { signal, priority });
     if (signal?.aborted) break;
     const recomposed = await onProgress?.();
     if (recomposed) current = recomposed;

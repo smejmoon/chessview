@@ -44,9 +44,18 @@ const presenter = createNodusPresenter({
   log: (message, detail) => { debugLog(message, detail, 'error'); },
 });
 
-async function discover({ center, structure, signal, onProgress }) {
+let controller: NodusController;
+
+function projectionPriority(mode: 'roots' | 'lines') {
+  return () => controller.snapshot.mode === mode ? 'foreground' : 'background';
+}
+
+async function discover({ center, mode, structure, signal, onProgress }) {
   try {
-    await discoverSelectedLines(center, structure, onProgress, { signal });
+    await discoverSelectedLines(center, structure, onProgress, {
+      signal,
+      priority: projectionPriority(mode),
+    });
     return null;
   } catch (error) {
     if (signal.aborted) return null;
@@ -55,7 +64,7 @@ async function discover({ center, structure, signal, onProgress }) {
   }
 }
 
-const controller = new NodusController({
+controller = new NodusController({
   initial: { ...initialRoute, orientation: preferenceStore.getOrientation() },
   canonicalize: canonicalPosition,
   routeLedger,
@@ -65,8 +74,15 @@ const controller = new NodusController({
     mode,
     max: boardBudget(),
     signal,
+    priority: projectionPriority(mode),
   }),
-  evidence: loadNodusEvidence,
+  evidence: ({ center, mode, structure, signal }) => loadNodusEvidence({
+    center,
+    mode,
+    structure,
+    signal,
+    priority: projectionPriority(mode),
+  }),
   rail: loadNodusRail,
   discover,
   materializeMove,

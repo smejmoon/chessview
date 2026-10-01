@@ -22,9 +22,9 @@ A request already in flight does not need to be preempted merely because higher-
 
 Proactive enrichment is supplementary/background to the current view. It must not keep Weather unsettled, invalidate a trustworthy Constellation, or make missing engine evidence a structural selection dependency.
 
-Durable graph topology remains monotonic even if refreshable source evidence later needs memory or persistence limits. Evidence eviction/refresh policy must not silently remove established graph identity.
+Established graph topology remains durable even if refreshable source evidence later needs memory or persistence limits. Evidence eviction/refresh policy must not silently remove established graph identity.
 
-`backlog/2026-09-30-knowledge-acquisition-boundary.md` owns separating Explorer source access from graph reconciliation/Edge Admission. Proactive enrichment may use that boundary but does not need to redesign PositionGraph identity or Constellation selection.
+`docs/components/knowledge-acquisition.md` §Boundary owns the separation between source observations and graph reconciliation/Edge Admission, while `docs/components/opening-explorer-databases.md` §Client boundary owns source-client responsibilities. `backlog/2026-09-30-explorer-reading-projection.md` separately tracks avoiding repeated projection of the same cached Explorer Reading while preserving retry after incomplete reconciliation. Proactive enrichment may use those boundaries but does not need to redesign `PositionGraph` identity or Constellation selection.
 
 # Unsettled:
 

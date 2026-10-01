@@ -4,13 +4,13 @@
 
 ## Identity
 
-One repository record is keyed by `canonicalPosition`: piece placement, side to move, castling rights, and only en-passant state that can affect legal play. Halfmove and fullmove counters are not part of repository identity. A stored `fen` remains a playable six-field representation attached to that identity.
+One repository record is keyed by the [canonical position](../glossary.md#canonical-position) defined by [`ChartedGraph`](../components/charted-graph.md#nodes). `PositionRepository` consumes that identity; it does not maintain a second position-identity rule. A stored `fen` remains a playable six-field representation attached to that identity.
 
 ## Record lifetime
 
 The repository keeps one in-memory record per canonical key when it has been read or written during the current page lifetime. On a cache miss it reads the persisted node from IndexedDB. Writes update IndexedDB and the in-memory record together.
 
-Application code that reads or writes position nodes goes through `PositionRepository`; `db.js` remains the low-level IndexedDB adapter. Graph edges remain independently persisted through the graph database because edge identity and reconciliation are not position-record hydration.
+Application code that reads or writes position nodes goes through `PositionRepository`; `db.js` remains the low-level IndexedDB adapter. Graph edges remain independently persisted through [`PositionGraph`](position-graph.md), which owns edge identity and edge mutation rather than position-record hydration.
 
 ## Facet hydration
 
@@ -27,6 +27,8 @@ The shared producer receives an internal abort signal owned by the repository ra
 Lichess-backed endpoint clients own endpoint meaning and call `PositionRepository` to coordinate shared per-position work and persistence. They continue to call `LichessGateway` for application-issued HTTP requests.
 
 `LichessGateway` owns application-wide serialization, cooldown, and pre-send cancellation. It does not own canonical-position identity, endpoint caches, facet freshness, or shared parsed-result semantics.
+
+`PositionGraph` separately owns durable edge access, legal edge normalization, and edge mutation coordination. Node-record hydration and edge mutation share canonical position identity but remain independent technical boundaries.
 
 ## Verification
 

@@ -2,6 +2,10 @@
 
 This glossary is the canonical index of Chessview terminology. It defines what a term means; it does **not** become a second specification. Product, component, and architecture documents own behavior, constraints, ownership, and verification and should link here rather than restating competing definitions.
 
+## Canonical position
+
+Chessview's stable identity for a playable chess state, independent of the route used to reach it. [ChartedGraph](components/charted-graph.md#nodes) owns the exact node-identity rule.
+
 ## Nodus
 
 The canonical position currently organizing the map.
@@ -34,17 +38,21 @@ Application-level selection of another canonical position as the Nodus. A Recent
 
 A legal chess move connecting two adjacent canonical positions. A distance-1 Recenter may be associated with this Move whether the user traverses the relationship in the Move's forward direction or navigates backward across it.
 
+## ChartedGraph
+
+Chessview's durable subset of the fixed legal chess graph: the canonical positions and legal Move relationships Chessview has established so far. [ChartedGraph](components/charted-graph.md) owns the exact graph semantics and retention rules.
+
 ## Resolve Move
 
-Given a source position and a Move, determine the canonical target and move notation. Resolution is a pure Position Graph operation: it establishes the directed chess fact from source to target, including target FEN plus SAN and UCI notation, without persisting graph state or deciding whether the target becomes the Nodus.
+The pure operation that interprets a legal Move from a canonical source position and determines the corresponding target relationship. [ChartedGraph](components/charted-graph.md#resolve-move) owns the exact result and non-effects of resolution.
 
 ## Graph edge
 
-The durable directed graph fact representing exactly one legal Move from a source canonical position to a target canonical position.
+The durable directed `ChartedGraph` fact representing exactly one legal Move from a source canonical position to a target canonical position.
 
 ## Materialize a move
 
-Resolve a played legal Move from a source position, then ensure the corresponding graph edge and target position are durably represented. Materialization establishes graph knowledge; it does not itself decide whether the target becomes the current Nodus.
+Resolve a played legal Move from a source position, then ensure the corresponding `ChartedGraph` edge and target position are durably represented. Materialization establishes graph knowledge; it does not itself decide whether the target becomes the current Nodus.
 
 ## Visible relationship
 

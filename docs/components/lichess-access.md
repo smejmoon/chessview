@@ -4,13 +4,28 @@
 
 Own authentication, endpoint access, shared request policy, endpoint caches, and transport/failure semantics for Chessview's Lichess-backed data.
 
-The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). Canonical position record and shared facet lifetime are defined in [`docs/architecture/position-repository.md`](../architecture/position-repository.md). Cloud-evaluation source usability is defined in [`docs/architecture/lichess-eval.md`](../architecture/lichess-eval.md). This component owns the observable request-policy requirements those boundaries must enforce.
+The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). Canonical position record and shared facet lifetime are defined in [`docs/architecture/position-repository.md`](../architecture/position-repository.md). Cloud-evaluation source usability is defined in [`docs/architecture/lichess-eval.md`](../architecture/lichess-eval.md). Opening Explorer source populations and their source-data peculiarities are cataloged in [Opening Explorer databases](opening-explorer-databases.md). This component owns the observable request-policy requirements those boundaries must enforce.
 
 ## Data sources
 
-- Rated standard Lichess Opening Explorer is the primary human-statistical source.
-- Masters Opening Explorer is a separate comparison population.
+- `LichessGamesDB` is the aggregated rated-Lichess Opening Explorer population and the current primary human-statistical source.
+- `MastersGamesDB` is the Masters Opening Explorer population and the current comparison population.
+- `PlayerGamesDB` is the per-player Opening Explorer population; Chessview recognizes the source but does not currently consume it.
 - Lichess cloud evaluation supplies engine source data when `LichessEval` judges that data usable.
+
+## Exact Lichess endpoints used today
+
+Chessview currently uses these Lichess endpoints:
+
+| Purpose | Request | Current Chessview parameters / behavior | Official docs |
+| --- | --- | --- | --- |
+| OAuth authorization handoff | browser navigation to `https://lichess.org/oauth` | Authorization Code + PKCE; `response_type=code`, Chessview `client_id`, `redirect_uri`, `code_challenge_method=S256`, `code_challenge`, and `state`. This browser navigation is outside `LichessGateway`. | <https://lichess.org/api#tag/OAuth> |
+| OAuth token exchange | `POST https://lichess.org/api/token` | `grant_type=authorization_code`, returned `code`, PKCE `code_verifier`, `redirect_uri`, and Chessview `client_id`; sent through `LichessGateway`. | <https://lichess.org/api#tag/OAuth> |
+| `LichessGamesDB` | `GET https://explorer.lichess.org/lichess` | `variant=standard`, current `fen`, `moves=30`, `topGames=0`, `recentGames=0`; authenticated with the visitor's Bearer token. | <https://lichess.org/api#tag/Opening-Explorer/operation/openingExplorerLichess> |
+| `MastersGamesDB` | `GET https://explorer.lichess.org/masters` | current `fen`, `moves=30`, `topGames=0`. | <https://lichess.org/api#tag/Opening-Explorer/operation/openingExplorerMaster> |
+| Cloud evaluation | `GET https://lichess.org/api/cloud-eval` | current `fen`, `variant=standard`, `multiPv=5`. A `404` means the position is absent from the cloud-eval database. | <https://lichess.org/api#tag/Analysis/operation/apiCloudEval> |
+
+`PlayerGamesDB` maps to `GET https://explorer.lichess.org/player`, but Chessview does **not** currently issue that request. Its contract is documented in [Opening Explorer databases](opening-explorer-databases.md) for future use rather than listed as current traffic.
 
 ## Authentication
 

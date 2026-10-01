@@ -8,7 +8,7 @@ Make position-centered navigation and playable-board behavior satisfy `docs/comp
 
 # Edges:
 
-`docs/components/position-graph.md` §Requirements continues to own Move resolution/materialization and canonical graph identity. `docs/components/interface.md` §Requirements owns two-dimensional board rendering. `docs/components/constellation.md` §Requirements owns which surrounding positions are represented. `docs/components/rail.md` §Requirements allows Rail rows to request Recenter but does not own what Recenter means.
+`docs/components/charted-graph.md` §Nodes, §Edges / Resolve Move, and §Growth and retention continue to own canonical graph identity and Move resolution/materialization. `docs/components/interface.md` §Requirements owns two-dimensional board rendering. `docs/components/constellation.md` §Requirements owns which surrounding positions are represented. `docs/components/rail.md` §Requirements allows Rail rows to request Recenter but does not own what Recenter means.
 
 # Unsettled:
 
@@ -18,8 +18,8 @@ Decide final ownership of the global board-orientation/flip preference: it may r
 
 # Complete:
 
-Deterministic/browser tests cover `docs/components/nodus.md` §Verification and the relevant stale-result rule in `docs/architecture/current-view.md` §Publication boundary: known-target Recenter, legal Move Recenter including a move outside automatic Constellation selection, promotion choices and cancellation, stale materialization rejection, URL round-trip, and browser-history restoration all behave through one testable owner of Recenter semantics while graph identity remains owned by Position Graph.
+Deterministic/browser tests cover `docs/components/nodus.md` §Verification and the relevant stale-result rule in `docs/architecture/current-view.md` §Publication boundary: known-target Recenter, legal Move Recenter including a move outside automatic Constellation selection, promotion choices and cancellation, stale materialization rejection, URL round-trip, and browser-history restoration all behave through one testable owner of Recenter semantics while graph identity remains owned by `ChartedGraph`.
 
 # Sync:
 
-After any implementation or verification step that changes what remains, and before ending an implementation pass, rewrite this entry around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.
+After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.

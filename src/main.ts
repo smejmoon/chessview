@@ -6,10 +6,10 @@ import './lichess-eval-presentation.css';
 import './debug.css';
 
 import { canonicalPosition } from './graph.js';
-import { nominateConstellationLookahead } from './constellation-lookahead.js';
+import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { discoverSelectedLines } from './constellation-discovery.js';
 import { debugLog } from './debug.js';
-import { warmExplorerReading } from './knowledge-acquisition.js';
+import { warmExplorerReading } from './knowledge-acquisition.ts';
 import { materializeMove } from './move-materialization.ts';
 import { NodusController } from './nodus-controller.ts';
 import { composeNodusStructure } from './nodus-structure.js';

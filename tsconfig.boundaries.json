@@ -9,7 +9,9 @@
     "src/route-ledger.ts",
     "src/position-graph.ts",
     "src/move-materialization.ts",
-    "src/nodus-controller.ts"
+    "src/nodus-controller.ts",
+    "src/constellation-lookahead.ts",
+    "src/knowledge-acquisition.ts"
   ],
   "include": []
 }

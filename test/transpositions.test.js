@@ -52,6 +52,14 @@ test('enumerates legal move-order transpositions into the Panov position', () =>
   assert.ok(lines.has('e2e4 c7c6 d2d4 d7d5 e4d5 c6d5 c2c4'));
   assert.ok(lines.has('d2d4 d7d5 e2e4 c7c6 e4d5 c6d5 c2c4'));
   assert.ok(result.paths.every((path) => path.at(-1).target === target));
+  for (const edge of result.paths.flat()) {
+    assert.equal('games' in edge, false);
+    assert.equal('share' in edge, false);
+    assert.equal('qualifies' in edge, false);
+    assert.equal('updatedAt' in edge, false);
+    assert.equal('manual' in edge, false);
+    assert.equal('derived' in edge, false);
+  }
 });
 
 test('keeps transposition search bounded', () => {
@@ -72,10 +80,11 @@ test('keeps transposition search bounded', () => {
   assert.equal(result.truncated, true);
 });
 
-test('persisting a derived path adds provenance without replacing known statistics', async () => {
+test('persisting a transposition path does not add derived provenance or replace legacy evidence', async () => {
   await clearGraph();
+  const topology = pathFromUci(['e2e4'])[0];
   const known = {
-    ...pathFromUci(['e2e4'])[0],
+    ...topology,
     games: 600,
     share: 0.6,
     qualifies: true,
@@ -85,15 +94,7 @@ test('persisting a derived path adds provenance without replacing known statisti
   known.id = edgeId(known);
   await putEdges([known]);
 
-  const derived = {
-    ...known,
-    games: 0,
-    share: 0,
-    qualifies: false,
-    derived: true,
-    updatedAt: 2,
-  };
-  const result = await persistTranspositionPaths([[derived]]);
+  const result = await persistTranspositionPaths([[{ ...topology, id: known.id }]]);
   const stored = (await positionGraph.outgoing(known.source))[0];
 
   assert.equal(result.addedEdges, 0);
@@ -101,5 +102,5 @@ test('persisting a derived path adds provenance without replacing known statisti
   assert.equal(stored.share, 0.6);
   assert.equal(stored.qualifies, true);
   assert.equal(stored.updatedAt, 1);
-  assert.equal(stored.derived, true);
+  assert.equal(stored.derived, false);
 });

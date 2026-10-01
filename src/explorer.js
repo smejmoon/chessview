@@ -80,10 +80,10 @@ async function staleExplorerOrThrow(error, canonical, cachedExplorer) {
   return cachedExplorer;
 }
 
-export function loadExplorerReading(key, { force = false, signal } = {}) {
+export function loadExplorerReading(key, { force = false, signal, priority = 'foreground' } = {}) {
   const canonical = canonicalPosition(key);
   const facet = force ? 'explorer:force' : 'explorer';
-  return positionRepository.load(canonical, facet, async ({ signal: requestSignal }) => {
+  return positionRepository.load(canonical, facet, async ({ signal: requestSignal, priority: requestPriority }) => {
     const cached = await positionRepository.get(canonical);
     const cachedExplorer = cachedExplorerReading(cached);
     const fresh = cachedExplorer && Date.now() - (cached.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS;
@@ -102,6 +102,7 @@ export function loadExplorerReading(key, { force = false, signal } = {}) {
 
       const response = await lichessGateway.request(url, {
         signal: requestSignal,
+        priority: requestPriority,
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
@@ -140,5 +141,5 @@ export function loadExplorerReading(key, { force = false, signal } = {}) {
       debugLog('explorer refresh failed', { position: canonical, error: error?.message ?? String(error) }, 'error');
       return staleExplorerOrThrow(error, canonical, cachedExplorer);
     }
-  }, { signal });
+  }, { signal, priority });
 }

@@ -8,6 +8,11 @@ function throwIfAborted(signal) {
   if (signal?.aborted) throw abortError();
 }
 
+function priorityValue(priority) {
+  const value = typeof priority === 'function' ? priority() : priority;
+  return value === 'background' ? 'background' : 'foreground';
+}
+
 export function createRequestGate({
   fetchImpl = (...args) => fetch(...args),
   now = () => Date.now(),
@@ -15,32 +20,76 @@ export function createRequestGate({
   cooldownMs = 60_000,
   minIntervalMs = 250,
 } = {}) {
-  let tail = Promise.resolve();
+  const queue = [];
+  let draining = false;
   let cooldownUntil = 0;
   let lastRequestAt = 0;
 
-  async function waitForWindow(signal) {
-    throwIfAborted(signal);
+  async function waitForWindow() {
     const current = now();
     const nextAllowedAt = Math.max(cooldownUntil, lastRequestAt + minIntervalMs);
     if (nextAllowedAt > current) await sleep(nextAllowedAt - current);
-    throwIfAborted(signal);
+  }
+
+  function pruneAborted() {
+    let index = 0;
+    while (index < queue.length) {
+      const item = queue[index];
+      if (!item.init.signal?.aborted) {
+        index += 1;
+        continue;
+      }
+      queue.splice(index, 1);
+      item.reject(abortError());
+    }
+  }
+
+  function selectForDispatch() {
+    const foreground = queue.findIndex((item) => priorityValue(item.priority) === 'foreground');
+    return foreground >= 0 ? foreground : 0;
+  }
+
+  async function execute(item) {
+    const { priority: _priority, ...requestInit } = item.init;
+    throwIfAborted(requestInit.signal);
+    lastRequestAt = now();
+    const response = await fetchImpl(item.input, requestInit);
+    if (response?.status === 429) {
+      cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
+    }
+    return response;
+  }
+
+  async function drain() {
+    if (draining) return;
+    draining = true;
+    try {
+      while (queue.length) {
+        pruneAborted();
+        if (!queue.length) break;
+
+        await waitForWindow();
+
+        pruneAborted();
+        if (!queue.length) continue;
+
+        const [item] = queue.splice(selectForDispatch(), 1);
+        try {
+          item.resolve(await execute(item));
+        } catch (error) {
+          item.reject(error);
+        }
+      }
+    } finally {
+      draining = false;
+    }
   }
 
   function run(input, init = {}) {
-    const execute = async () => {
-      await waitForWindow(init.signal);
-      lastRequestAt = now();
-      const response = await fetchImpl(input, init);
-      if (response?.status === 429) {
-        cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
-      }
-      return response;
-    };
-
-    const promise = tail.then(execute, execute);
-    tail = promise.then(() => undefined, () => undefined);
-    return promise;
+    return new Promise((resolve, reject) => {
+      queue.push({ input, init, priority: init.priority, resolve, reject });
+      void drain();
+    });
   }
 
   return {

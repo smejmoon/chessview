@@ -25,22 +25,33 @@ export function createRequestGate({
   let cooldownUntil = 0;
   let lastRequestAt = 0;
 
-  async function waitForWindow(signal) {
-    throwIfAborted(signal);
+  async function waitForWindow() {
     const current = now();
     const nextAllowedAt = Math.max(cooldownUntil, lastRequestAt + minIntervalMs);
     if (nextAllowedAt > current) await sleep(nextAllowedAt - current);
-    throwIfAborted(signal);
   }
 
-  function nextIndex() {
+  function pruneAborted() {
+    let index = 0;
+    while (index < queue.length) {
+      const item = queue[index];
+      if (!item.init.signal?.aborted) {
+        index += 1;
+        continue;
+      }
+      queue.splice(index, 1);
+      item.reject(abortError());
+    }
+  }
+
+  function selectForDispatch() {
     const foreground = queue.findIndex((item) => priorityValue(item.priority) === 'foreground');
     return foreground >= 0 ? foreground : 0;
   }
 
   async function execute(item) {
     const { priority: _priority, ...requestInit } = item.init;
-    await waitForWindow(requestInit.signal);
+    throwIfAborted(requestInit.signal);
     lastRequestAt = now();
     const response = await fetchImpl(item.input, requestInit);
     if (response?.status === 429) {
@@ -54,7 +65,15 @@ export function createRequestGate({
     draining = true;
     try {
       while (queue.length) {
-        const [item] = queue.splice(nextIndex(), 1);
+        pruneAborted();
+        if (!queue.length) break;
+
+        await waitForWindow();
+
+        pruneAborted();
+        if (!queue.length) continue;
+
+        const [item] = queue.splice(selectForDispatch(), 1);
         try {
           item.resolve(await execute(item));
         } catch (error) {

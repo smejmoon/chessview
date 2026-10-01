@@ -119,22 +119,23 @@ function railRowHtml(row) {
   const quality = row.moveEval?.quality ?? 'unknown';
   const share = evidencedShareLabel(row.frequency);
   const mismatch = `${humanMarkerHtml(row.mastersMismatch, 'masters')}${humanMarkerHtml(row.lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
-  return `<button class="eval-rail-row eval-${quality}" type="button" data-eval-nav="${escapeHtml(row.edge.target)}">
+  const notable = row.notable ? ' is-notable' : '';
+  return `<button class="eval-rail-row eval-${quality}${notable}" type="button" data-eval-nav="${escapeHtml(row.edge.target)}">
     <span class="eval-rail-move">${escapeHtml(row.edge.san ?? row.edge.uci)}${share ? ` · ${share}` : ''}</span>
     <span class="eval-badge">${row.moveEval ? lossLabel(row.moveEval) : '—'}</span>
     <span class="eval-human-cell">${mismatch}</span><span class="eval-play">›</span></button>`;
 }
 
-function decorateLineRail(root, view, actions, evidence) {
+function decorateLineRail(root, view, actions) {
   if (view.mode !== 'lines') return;
   const list = root.querySelector('.analysis-rail .rail-explorer .explorer-list');
   if (!list) return;
-  const rows = evidence?.rail?.rows ?? [];
-  const mastersFailed = isMastersRequestFailure(evidence?.rail?.masters);
+  const rows = view.rail?.value?.lines ?? [];
+  const mastersFailed = isMastersRequestFailure(view.rail?.value?.masters);
   list.classList.add('eval-rail-list');
   list.innerHTML = rows.length
     ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span title="${mastersFailed ? 'Masters evidence request failed' : ''}">Human${mastersFailed ? ' !' : ''}</span><span></span></div>${rows.map(railRowHtml).join('')}`
-    : '<div class="rail-empty">No Rail-worthy Lines yet.</div>';
+    : '<div class="rail-empty">No Lichess Lines yet.</div>';
   list.querySelectorAll('[data-eval-nav]').forEach((button) => {
     bindRecenterTarget(button, actions, () => button.dataset.evalNav);
   });
@@ -161,7 +162,7 @@ export function decorateEvidencePresentation(root, view, actions, { showGuide = 
   const evidence = view.evidence.value;
   const evidenceById = new Map((evidence.relationships ?? []).map((item) => [item.id, item]));
   decorateCenter(root, evidence);
-  decorateLineRail(root, view, actions, evidence);
+  decorateLineRail(root, view, actions);
   decorateSatellites(root, view, evidenceById);
   decorateConnectors(root, evidenceById);
 }

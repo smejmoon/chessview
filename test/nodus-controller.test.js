@@ -162,6 +162,7 @@ test('contributors return immutable values and receive no controller publication
   assert.ok(Object.isFrozen(controller.snapshot.structure.value));
   assert.ok(Object.isFrozen(controller.snapshot.structure.value.composition));
   assert.ok(Object.isFrozen(controller.snapshot.evidence.value));
+  assert.ok(Object.isFrozen(controller.snapshot.rail));
   assert.ok(Object.isFrozen(publications[0].actions));
   assert.equal(typeof publications[0].actions.recenter, 'function');
   assert.equal(Object.hasOwn(publications[0].actions, 'transition'), false);
@@ -194,11 +195,11 @@ test('critical structure failure is terminal for that view and refresh can recov
   assert.equal(controller.snapshot.structure.status, 'ready');
 });
 
-test('redraw presents without recomputing while refresh recomputes without changing history', async () => {
-  let structureCalls = 0;
+test('redraw presents without recomputing while refresh recomputes both sibling projections without changing history', async () => {
+  const structureCalls = { roots: 0, lines: 0 };
   const { controller, calls, publications } = fixture({
     structure: async ({ center, mode }) => {
-      structureCalls += 1;
+      structureCalls[mode] += 1;
       return { composition: { center, direction: mode } };
     },
   });
@@ -206,12 +207,14 @@ test('redraw presents without recomputing while refresh recomputes without chang
   await flush();
   calls.length = 0;
   const presented = publications.length;
-  const composed = structureCalls;
+  const composed = { ...structureCalls };
   await controller.redraw();
-  assert.equal(structureCalls, composed);
+  assert.deepEqual(structureCalls, composed);
   assert.equal(publications.length, presented + 1);
   await controller.refresh();
-  assert.equal(structureCalls, composed + 1);
+  await flush();
+  assert.deepEqual(structureCalls, { roots: composed.roots + 1, lines: composed.lines + 1 });
+  assert.equal(calls.some(([name]) => name === 'push'), false);
 });
 
 test('Lines remain structurally loading until selected-Line acquisition reaches a terminal result', async () => {
@@ -234,12 +237,15 @@ test('Lines remain structurally loading until selected-Line acquisition reaches 
   assert.equal(controller.snapshot.structure.status, 'ready');
 });
 
-test('discovery progress recomposes and returns the new structure to the discovery contributor', async () => {
-  let compositions = 0;
+test('discovery progress recomposes only Lines and returns the new Lines structure to the discovery contributor', async () => {
+  const compositions = { roots: 0, lines: 0 };
   let observed;
   const { controller } = fixture({
     initial: { center: 'A', view: 'lines', orientation: 'white', navDepth: 0 },
-    structure: async ({ center, mode }) => ({ composition: { center, direction: mode }, marker: `${center}:${++compositions}` }),
+    structure: async ({ center, mode }) => ({
+      composition: { center, direction: mode },
+      marker: `${center}:${mode}:${++compositions[mode]}`,
+    }),
     discover: async ({ onProgress }) => {
       observed = await onProgress();
       return null;
@@ -248,6 +254,8 @@ test('discovery progress recomposes and returns the new structure to the discove
 
   await controller.start();
   await flush(16);
-  assert.equal(observed.marker, 'A:2');
+  assert.equal(observed.marker, 'A:lines:2');
+  assert.equal(compositions.lines, 3);
+  assert.equal(compositions.roots, 1);
   assert.equal(controller.snapshot.structure.status, 'ready');
 });

@@ -18,6 +18,10 @@ Visible upstream context showing positions from which play can reach the Nodus.
 
 Visible downstream continuation showing positions reachable from the Nodus.
 
+## Notable Line
+
+An immediate Line from the current Nodus that the Rail currently classifies as worth calling out independently of whether that Line fits in the current Constellation. [Rail](components/rail.md) owns the classification rule and its tunables.
+
 ## Constellation
 
 The coherent current-view subgraph selected around the Nodus. A Constellation is a projection of durable graph knowledge: positions may be known without belonging to the current Constellation.

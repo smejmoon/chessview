@@ -3,7 +3,6 @@ import './chessground-overrides.css';
 import {
   legalDestinations,
   omittedShare,
-  stableEdgeOrder,
   toPlayableFen,
 } from './graph.js';
 import {
@@ -77,8 +76,6 @@ function emptyStructure(center) {
     composition: { nodes: [], relationships: [], families: [] },
     centerNode: { key: center },
     positions: [],
-    incomingCount: 0,
-    lineEdges: [],
     rootRows: [],
   };
 }
@@ -89,11 +86,16 @@ function rootRowMap(structure) {
 
 function railExplorerHtml(view, structure) {
   if (view.mode === 'lines') {
-    const edges = (structure.lineEdges ?? []).slice().sort(stableEdgeOrder);
-    if (!edges.length) {
-      return `<div class="rail-empty">${view.structure.status === 'loading' ? 'Mapping continuations…' : 'No known Lines yet.'}</div>`;
+    const rows = view.rail?.value?.lines ?? [];
+    if (!rows.length) {
+      return `<div class="rail-empty">${view.rail?.status === 'loading' ? 'Loading Lichess Lines…' : 'No Lichess Lines yet.'}</div>`;
     }
-    return `<div class="explorer-list">${edges.slice(0, 14).map((edge) => `<button class="explorer-row" type="button" data-nav-key="${escapeHtml(edge.target)}"><span class="explorer-move">${escapeHtml(edge.san ?? edge.uci)}</span><span class="explorer-track"><span style="width:${Math.max(2, Math.round((edge.share ?? 0) * 100))}%"></span></span><span class="explorer-share">${percent(edge.share)}</span><span class="explorer-games">${compactGames(edge.games ?? 0)}</span></button>`).join('')}</div>`;
+    return `<div class="explorer-list">${rows.map((row) => {
+      const edge = row.edge ?? {};
+      const share = row.frequency?.share ?? edge.share ?? 0;
+      const games = row.frequency?.games ?? edge.games ?? 0;
+      return `<button class="explorer-row" type="button" data-nav-key="${escapeHtml(edge.target)}"><span class="explorer-move">${escapeHtml(edge.san ?? edge.uci)}</span><span class="explorer-track"><span style="width:${Math.max(2, Math.round(share * 100))}%"></span></span><span class="explorer-share">${share > 0 ? percent(share) : ''}</span><span class="explorer-games">${games > 0 ? compactGames(games) : ''}</span></button>`;
+    }).join('')}</div>`;
   }
   if (!(structure.positions ?? []).length) {
     return '<div class="rail-empty">No known Roots yet. Roots grow as Chessview discovers positions through Lines.</div>';
@@ -213,8 +215,8 @@ export function createNodusRenderer({
     const explorer = centerNode.explorer;
     const status = viewStatusSpec(presentation);
     const turn = view.center.split(' ')[1] === 'b' ? 'black' : 'white';
-    const rootCount = structure.incomingCount ?? 0;
-    const lineCount = structure.lineEdges?.length ?? 0;
+    const rootCount = view.rail?.value?.rootsCount ?? 0;
+    const lineCount = view.rail?.value?.notableLinesCount ?? 0;
     const structuralError = view.structure.error;
     const debug = isDebugEnabled();
     const guide = preferences.getGuide?.() === true;

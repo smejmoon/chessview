@@ -1,6 +1,7 @@
 const normalizeMode = (mode) => mode === 'roots' ? 'roots' : 'lines';
 const normalizeOrientation = (orientation) => orientation === 'black' ? 'black' : 'white';
 const normalizeDepth = (depth) => Number.isFinite(depth) && depth >= 0 ? depth : 0;
+const MODES = Object.freeze(['roots', 'lines']);
 
 function errorMessage(error) {
   if (!error) return null;
@@ -21,19 +22,18 @@ function lifecycle(status, value = null, error = null) {
   return Object.freeze({ status, value: immutable(value), error: errorMessage(error) });
 }
 
-function retainedRailStructure(value, center) {
-  if (!value || value.centerNode?.key !== center) return null;
-  const retained = { centerNode: value.centerNode };
-  if (Number.isFinite(value.incomingCount)) retained.incomingCount = value.incomingCount;
-  if (Array.isArray(value.lineEdges)) retained.lineEdges = value.lineEdges;
-  return retained;
+function projection() {
+  return {
+    structure: lifecycle('idle'),
+    evidence: lifecycle('idle'),
+  };
 }
 
-function carryInactiveLineSummary(value, previous, mode, center) {
-  if (mode !== 'roots' || previous?.centerNode?.key !== center || !Array.isArray(previous.lineEdges)) {
-    return value;
-  }
-  return { ...value, lineEdges: previous.lineEdges };
+function projections() {
+  return {
+    roots: projection(),
+    lines: projection(),
+  };
 }
 
 export class NodusController {
@@ -46,6 +46,7 @@ export class NodusController {
   #materializeMove;
   #preferences;
   #presenter;
+  #rail;
   #revision = 0;
   #routeLedger;
   #run = null;
@@ -59,6 +60,7 @@ export class NodusController {
     preferences,
     structure,
     evidence = null,
+    rail = null,
     discover = null,
     materializeMove = null,
     presenter,
@@ -74,6 +76,7 @@ export class NodusController {
     this.#preferences = preferences ?? {};
     this.#structure = structure;
     this.#evidence = evidence;
+    this.#rail = rail;
     this.#discover = discover;
     this.#materializeMove = materializeMove;
     this.#presenter = presenter;
@@ -83,8 +86,8 @@ export class NodusController {
       mode: normalizeMode(initial?.mode ?? initial?.view),
       orientation: normalizeOrientation(initial?.orientation),
       navDepth: normalizeDepth(initial?.navDepth),
-      structure: lifecycle('idle'),
-      evidence: lifecycle('idle'),
+      projections: projections(),
+      rail: lifecycle('idle'),
     };
     this.#actions = Object.freeze({
       recenter: (request) => this.recenter(request),
@@ -97,13 +100,15 @@ export class NodusController {
   }
 
   get snapshot() {
+    const active = this.#state.projections[this.#state.mode];
     return Object.freeze({
       center: this.#state.center,
       mode: this.#state.mode,
       orientation: this.#state.orientation,
       navigation: Object.freeze({ canGoBack: this.#state.navDepth > 0 }),
-      structure: this.#state.structure,
-      evidence: this.#state.evidence,
+      structure: active.structure,
+      evidence: active.evidence,
+      rail: this.#state.rail,
     });
   }
 
@@ -167,7 +172,7 @@ export class NodusController {
     this.#preferences.setView?.(next);
     this.#routeLedger.replace?.(this.#route());
     this.#log('view mode changed', { mode: next, center: this.#state.center });
-    await this.#startView('mode');
+    await this.#presentCurrent('update');
     return true;
   }
 
@@ -211,6 +216,10 @@ export class NodusController {
     return Boolean(run && !this.#disposed && this.#run === run && run.revision === this.#revision && !run.abortController.signal.aborted);
   }
 
+  #isActiveMode(mode) {
+    return this.#state.mode === mode;
+  }
+
   async #commitRecenter(position) {
     const next = this.#canonicalize(position);
     if (next === this.#state.center) return false;
@@ -230,67 +239,91 @@ export class NodusController {
   }
 
   async #startView(reason) {
-    const retained = retainedRailStructure(this.#state.structure.value, this.#state.center);
     this.#run?.abortController.abort();
     this.#revision += 1;
-    const run = { revision: this.#revision, abortController: new AbortController(), composeTail: Promise.resolve() };
+    const run = {
+      revision: this.#revision,
+      abortController: new AbortController(),
+      composeTails: { roots: Promise.resolve(), lines: Promise.resolve() },
+      railTail: Promise.resolve(),
+    };
     this.#run = run;
-    this.#state.structure = lifecycle('loading', retained);
-    this.#state.evidence = lifecycle('idle');
+    this.#state.projections = {
+      roots: { structure: lifecycle('loading'), evidence: lifecycle('idle') },
+      lines: { structure: lifecycle('loading'), evidence: lifecycle('idle') },
+    };
+    this.#state.rail = typeof this.#rail === 'function' ? lifecycle('loading') : lifecycle('idle');
     this.#log('Nodus view started', { revision: run.revision, center: this.#state.center, mode: this.#state.mode, reason });
     await this.#presentCurrent('start');
 
-    const hasDiscovery = this.#state.mode === 'lines' && typeof this.#discover === 'function';
-    const composed = await this.#queueComposition(run, { status: hasDiscovery ? 'loading' : 'ready' });
-    if (!composed || !this.#isCurrent(run)) return;
-    if (hasDiscovery) void this.#runDiscovery(run);
-    else void this.#hydrateEvidence(run);
-  }
-
-  #queueComposition(run, options = {}) {
-    run.composeTail = run.composeTail.catch(() => false).then(() => this.#composeCurrent(run, options));
-    return run.composeTail;
-  }
-
-  async #composeCurrent(run, { status = 'ready', error = null } = {}) {
-    if (!this.#isCurrent(run)) return false;
-    let value;
-    try {
-      value = await this.#structure(Object.freeze({ center: this.#state.center, mode: this.#state.mode, signal: run.abortController.signal }));
-    } catch (structureError) {
-      if (!this.#isCurrent(run) || structureError?.name === 'AbortError') return false;
-      const retained = retainedRailStructure(this.#state.structure.value, this.#state.center);
-      this.#state.structure = lifecycle('failed', retained, structureError);
-      this.#state.evidence = lifecycle('idle');
-      this.#log('Nodus structure failed', structureError);
-      await this.#presentCurrent('update');
-      return false;
+    if (typeof this.#rail === 'function') void this.#queueRail(run);
+    const activeMode = this.#state.mode;
+    for (const mode of MODES) {
+      if (mode !== activeMode) void this.#runProjection(run, mode);
     }
+    await this.#runProjection(run, activeMode);
+  }
+
+  async #runProjection(run, mode) {
     if (!this.#isCurrent(run)) return false;
-    value = carryInactiveLineSummary(
-      value,
-      this.#state.structure.value,
-      this.#state.mode,
-      this.#state.center,
-    );
-    this.#state.structure = lifecycle(status, value, error);
-    await this.#presentCurrent('update');
+    const hasDiscovery = mode === 'lines' && typeof this.#discover === 'function';
+    const composed = await this.#queueComposition(run, mode, { status: hasDiscovery ? 'loading' : 'ready' });
+    if (!composed || !this.#isCurrent(run)) return false;
+    if (mode === 'roots' && typeof this.#rail === 'function') void this.#queueRail(run);
+    if (hasDiscovery) void this.#runDiscovery(run, mode);
+    else void this.#hydrateEvidence(run, mode);
     return true;
   }
 
-  async #runDiscovery(run) {
+  #queueComposition(run, mode, options = {}) {
+    run.composeTails[mode] = run.composeTails[mode]
+      .catch(() => false)
+      .then(() => this.#composeMode(run, mode, options));
+    return run.composeTails[mode];
+  }
+
+  #queueRail(run) {
+    run.railTail = run.railTail
+      .catch(() => false)
+      .then(() => this.#hydrateRail(run));
+    return run.railTail;
+  }
+
+  async #composeMode(run, mode, { status = 'ready', error = null } = {}) {
+    if (!this.#isCurrent(run)) return false;
+    let value;
+    try {
+      value = await this.#structure(Object.freeze({ center: this.#state.center, mode, signal: run.abortController.signal }));
+    } catch (structureError) {
+      if (!this.#isCurrent(run) || structureError?.name === 'AbortError') return false;
+      const projectionState = this.#state.projections[mode];
+      projectionState.structure = lifecycle('failed', null, structureError);
+      projectionState.evidence = lifecycle('idle');
+      this.#log('Nodus structure failed', { mode, error: errorMessage(structureError) });
+      if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
+      return false;
+    }
+    if (!this.#isCurrent(run)) return false;
+    this.#state.projections[mode].structure = lifecycle(status, value, error);
+    if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
+    return true;
+  }
+
+  async #runDiscovery(run, mode) {
     if (!this.#isCurrent(run) || typeof this.#discover !== 'function') return;
     let result = null;
     try {
       result = await this.#discover(Object.freeze({
         center: this.#state.center,
-        mode: this.#state.mode,
-        structure: this.#state.structure.value,
+        mode,
+        structure: this.#state.projections[mode].structure.value,
         signal: run.abortController.signal,
         onProgress: async () => {
           if (!this.#isCurrent(run)) return null;
-          const composed = await this.#queueComposition(run, { status: 'loading' });
-          return composed && this.#isCurrent(run) ? this.#state.structure.value : null;
+          const composed = await this.#queueComposition(run, mode, { status: 'loading' });
+          return composed && this.#isCurrent(run)
+            ? this.#state.projections[mode].structure.value
+            : null;
         },
       }));
     } catch (error) {
@@ -300,27 +333,54 @@ export class NodusController {
     if (!this.#isCurrent(run)) return;
 
     const status = result?.criticalFailure ? 'failed' : 'ready';
-    const composed = await this.#queueComposition(run, { status, error: result?.error ?? null });
+    const composed = await this.#queueComposition(run, mode, { status, error: result?.error ?? null });
     if (!composed || !this.#isCurrent(run)) return;
-    if (status === 'ready') void this.#hydrateEvidence(run);
+    if (status === 'ready') void this.#hydrateEvidence(run, mode);
   }
 
-  async #hydrateEvidence(run) {
+  async #hydrateEvidence(run, mode) {
     if (!this.#isCurrent(run) || typeof this.#evidence !== 'function') return;
-    this.#state.evidence = lifecycle('loading');
-    await this.#presentCurrent('update');
+    const projectionState = this.#state.projections[mode];
+    projectionState.evidence = lifecycle('loading');
+    if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
     let value;
     try {
-      value = await this.#evidence(Object.freeze({ center: this.#state.center, mode: this.#state.mode, structure: this.#state.structure.value, signal: run.abortController.signal }));
+      value = await this.#evidence(Object.freeze({
+        center: this.#state.center,
+        mode,
+        structure: projectionState.structure.value,
+        signal: run.abortController.signal,
+      }));
     } catch (error) {
       if (!this.#isCurrent(run) || error?.name === 'AbortError') return;
-      this.#state.evidence = lifecycle('failed', null, error);
-      this.#log('Nodus evidence failed', error);
-      await this.#presentCurrent('update');
+      projectionState.evidence = lifecycle('failed', null, error);
+      this.#log('Nodus evidence failed', { mode, error: errorMessage(error) });
+      if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
       return;
     }
     if (!this.#isCurrent(run)) return;
-    this.#state.evidence = lifecycle('ready', value);
+    projectionState.evidence = lifecycle('ready', value);
+    if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
+  }
+
+  async #hydrateRail(run) {
+    if (!this.#isCurrent(run) || typeof this.#rail !== 'function') return false;
+    let value;
+    try {
+      value = await this.#rail(Object.freeze({
+        center: this.#state.center,
+        signal: run.abortController.signal,
+      }));
+    } catch (error) {
+      if (!this.#isCurrent(run) || error?.name === 'AbortError') return false;
+      this.#state.rail = lifecycle('failed', null, error);
+      this.#log('Nodus Rail failed', error);
+      await this.#presentCurrent('update');
+      return false;
+    }
+    if (!this.#isCurrent(run)) return false;
+    this.#state.rail = lifecycle('ready', value);
     await this.#presentCurrent('update');
+    return true;
   }
 }

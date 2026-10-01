@@ -19,6 +19,7 @@ A Constellation is a projection of Chessview's durable graph, not the durable gr
 - As trustworthy structural information arrives, recomposition may add, remove, or rearrange visible positions and relationships. Progressive refinement does not redefine canonical graph identity and does not require the previously trustworthy composition to disappear while the replacement is being determined.
 - Constellation optimizes for a coherent, understandable structure rather than maximum coverage.
 - The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count. Presentation may provide the constraints needed to compose an appropriate view.
+- Rail inventory and Rail badge counts are not Constellation capacity rules. The Lines Rail may list every immediate Line from the current usable `LichessGamesDB` Reading, and its Lines badge may count [Notable Lines](../glossary.md#notable-line), while Constellation independently chooses which eligible/salient relationships and descendants best fit the available presentation space and coherent view. A Notable Line is not guaranteed a visible board, and presentation-space changes may make boards appear or disappear without changing settled Rail values.
 - Visible depth has no arbitrary fixed opening-depth cap. Useful depth emerges from available presentation space, available knowledge, branch significance, and coherence; a narrow Line may deepen when doing so remains the best use of the view.
 - Root and Line direction remain relative to the Nodus. Broad positions retain meaningful alternatives instead of allowing one branch to consume the whole view.
 - Distinct immediate Root or first-level Line families remain structurally distinct until their selected paths genuinely converge on the same canonical position.
@@ -34,6 +35,7 @@ Deterministic tests should cover:
 
 - durable known graph state being larger than the selected Constellation;
 - the same durable graph composing differently under different presentation-space constraints without changing graph knowledge;
+- Rail inventory and Notable Line count remaining unchanged when only presentation-space constraints change Constellation membership;
 - a trustworthy provisional Constellation being available while its Reading frontier is still non-empty;
 - coherent representation of multiple significant branches when space allows;
 - a narrow useful Line deepening without an independent fixed opening-depth cap;

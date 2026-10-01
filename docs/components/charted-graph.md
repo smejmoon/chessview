@@ -59,7 +59,7 @@ A position or relationship may become established through explicitly [materializ
 
 Graph existence is durable chess knowledge; games, share, timestamps, and similar statistical fields are mutable evidence attached to that identity rather than part of topology.
 
-Concurrent graph mutations must not lose an already-established retention reason or replace a later committed statistical update with an earlier one. The current coordination mechanism that enforces this invariant belongs to the [PositionGraph architecture](../architecture/position-graph.md).
+Concurrent graph mutation must not lose an already-established retention reason; [PositionGraph](../architecture/position-graph.md) owns the atomic per-edge mutation mechanism that protects that coordination. Separately, statistics accepted from a later source observation must not be replaced by an earlier observation that completes afterward; [Knowledge acquisition](knowledge-acquisition.md) owns source-observation identity/order and projection policy. `ChartedGraph` owns these invariants, not one shared mechanism for enforcing both.
 
 Materializing a played Move delegates chess interpretation to Resolve Move, then ensures the corresponding durable graph edge and target position record exist with explicit/manual retention provenance. Move materialization establishes graph knowledge only; it does not decide whether the target becomes the current Nodus or belongs in the current Constellation.
 
@@ -67,7 +67,7 @@ Established graph knowledge survives reloads. Ordinary application behavior has 
 
 ## Architecture boundary
 
-[`PositionGraph`](../architecture/position-graph.md) is the current application-level edge access and mutation boundary beneath this model. It owns edge normalization, legal source/Move/target validation, exact mutation API semantics, concurrency coordination, and persistence mechanics.
+[`PositionGraph`](../architecture/position-graph.md) is the current application-level edge access and mutation boundary beneath this model. It owns edge normalization, legal source/Move/target validation, exact mutation API semantics, concurrency coordination for graph mutation, and persistence mechanics. It does not decide freshness/order between competing source observations.
 
 [`PositionRepository`](../architecture/position-repository.md) separately owns canonical position records and their hydrated data facets. Higher-level acquisition, materialization, and transposition workflows may establish or refresh graph knowledge through those technical boundaries without redefining `ChartedGraph` identity.
 
@@ -87,7 +87,7 @@ Deterministic tests should cover:
 - materialization of a played legal Move establishing its canonical target and durable relationship without deciding the current Nodus or Constellation;
 - established graph knowledge surviving reloads.
 
-Exact API, normalization, concurrency, and persistence verification belongs to the [PositionGraph architecture](../architecture/position-graph.md). Position-record cache and IndexedDB fallback verification belongs to [`PositionRepository`](../architecture/position-repository.md).
+Exact API, normalization, graph-mutation concurrency, and persistence verification belongs to the [PositionGraph architecture](../architecture/position-graph.md). Source-observation ordering verification belongs to [Knowledge acquisition](knowledge-acquisition.md). Position-record cache and IndexedDB fallback verification belongs to [`PositionRepository`](../architecture/position-repository.md).
 
 ## Related components
 

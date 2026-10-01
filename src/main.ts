@@ -16,6 +16,7 @@ import { lichessEval } from './lichess-eval.js';
 import { createLichessEvalStatusPresenter } from './lichess-eval-presentation.js';
 import { createNodusRenderer } from './nodus-renderer.js';
 import { createNodusPresenter } from './nodus-presenter.js';
+import { loadNodusRail } from './rail-source.js';
 import { createRouteLedger } from './route-ledger.js';
 import { preferenceStore } from './preference-store.js';
 
@@ -66,6 +67,7 @@ const controller = new NodusController({
     signal,
   }),
   evidence: loadNodusEvidence,
+  rail: loadNodusRail,
   discover,
   materializeMove,
   presenter,

@@ -155,7 +155,7 @@ async function composeKnownLineGraph(center, capacity, candidateSource, signal) 
     max: capacity,
   });
 
-  return { ...plan, outgoingBySource };
+  return plan;
 }
 
 async function collectIncomingGraph(center, capacity, candidateSource, signal) {
@@ -235,12 +235,8 @@ export async function composeNodusStructure({ center, mode, max, signal }) {
   throwIfAborted(signal);
 
   const candidateSource = createCandidateSource(signal, { hydrateExplorer: mode === 'roots' });
-  const incomingEdges = await positionGraph.incoming(center);
-  throwIfAborted(signal);
-
   let selected;
   let readingFrontier = [];
-  let lineEdges = [];
   if (mode === 'roots') {
     const incomingByTarget = await collectIncomingGraph(center, capacity, candidateSource, signal);
     selected = chooseRootNeighborhood({ center, incomingByTarget, max: capacity });
@@ -248,7 +244,6 @@ export async function composeNodusStructure({ center, mode, max, signal }) {
     const line = await composeKnownLineGraph(center, capacity, candidateSource, signal);
     selected = line.composition;
     readingFrontier = line.readingFrontier;
-    lineEdges = (line.outgoingBySource.get(center) ?? []).map((edge) => immutable({ ...edge }));
   }
   throwIfAborted(signal);
 
@@ -270,8 +265,6 @@ export async function composeNodusStructure({ center, mode, max, signal }) {
     centerNode: records.get(center) ?? { key: center, fen: toPlayableFen(center) },
     positions,
     readingFrontier,
-    incomingCount: incomingEdges.length,
-    lineEdges,
     rootRows: mode === 'roots' ? await rootRows(composition, signal) : [],
   });
 }

@@ -18,9 +18,13 @@ Narrow-screen screenshots exposed the mismatch as board collisions, clipping, an
 
 Constellation continues to own which canonical positions and relationships belong in the coherent view. Interface continues to own two-dimensional coordinates, board sizes, and connector paths. This outcome is about making the constraint passed between those owners truthful and making presentation geometry internally coherent.
 
+Rail inventory and tab counts are Nodus/source-level Rail facts under `docs/components/rail.md`, not presentation-capacity outputs. Changing map geometry may add, remove, or rearrange Constellation boards without changing settled Rail rows or counts.
+
 Do not make mobile support a completion dependency. A later mobile-specific interaction/layout outcome may choose a different presentation regime after this boundary is sound.
 
-This outcome does not change ChartedGraph identity, Knowledge Acquisition, Explorer behavior, Rail evidence semantics, or Weather semantics.
+Future user-controlled Constellation zoom is tracked separately; this outcome establishes the truthful presentation-space/geometry boundary that zoom can later vary.
+
+This outcome does not change ChartedGraph identity, Knowledge Acquisition, Explorer behavior, Rail evidence meaning, or Weather semantics.
 
 # Unsettled:
 
@@ -32,7 +36,7 @@ Decide how a presentation-space change triggers recomposition versus presentatio
 
 # Complete:
 
-The current view composes against constraints derived from the actual usable map presentation area rather than browser area alone, and deterministic/browser coverage proves that changing those constraints can change Constellation membership without changing durable graph knowledge.
+The current view composes against constraints derived from the actual usable map presentation area rather than browser area alone, and deterministic/browser coverage proves that changing those constraints can change Constellation membership without changing durable graph knowledge or settled Rail inventory/counts.
 
 Root and Line presentation consume one authoritative geometry source for center and surrounding-board placement; mode-specific layout semantics remain possible without conflicting independent placement rules.
 

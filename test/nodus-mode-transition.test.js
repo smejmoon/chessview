@@ -13,75 +13,89 @@ async function flush(turns = 8) {
   for (let index = 0; index < turns; index += 1) await Promise.resolve();
 }
 
-function structure(center, { incomingCount, lineEdges }) {
+function structure(center, mode) {
   return {
     composition: { nodes: [], relationships: [], families: [] },
     centerNode: { key: center },
-    incomingCount,
-    lineEdges,
     positions: [],
     readingFrontier: [],
     rootRows: [],
+    marker: `${center}:${mode}`,
   };
 }
 
-test('same-Nodus mode switch keeps established tab counts while Roots composes', async () => {
+test('same-Nodus mode switch selects the sibling projection without recomputing or changing Rail', async () => {
   const roots = deferred();
-  const publications = [];
-  const lines = [{ id: '1' }, { id: '2' }, { id: '3' }];
+  const structureCalls = [];
+  const railValue = {
+    rootsCount: 4,
+    notableLinesCount: 3,
+    lines: [{ edge: { uci: 'a1a2', target: 'B' }, notable: true }],
+  };
   const controller = new NodusController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value).toUpperCase(),
     structure: async ({ center, mode }) => {
+      structureCalls.push([center, mode]);
       if (mode === 'roots') return roots.promise;
-      return structure(center, { incomingCount: 2, lineEdges: lines });
+      return structure(center, mode);
     },
-    presenter: {
-      start(view) { publications.push(view); },
-      update(view) { publications.push(view); },
-    },
+    rail: async () => railValue,
+    presenter: { start() {}, update() {} },
   });
 
   await controller.start();
-  assert.equal(controller.snapshot.structure.value.incomingCount, 2);
-  assert.equal(controller.snapshot.structure.value.lineEdges.length, 3);
-
-  const switching = controller.setMode('roots');
   await flush();
+  assert.equal(controller.snapshot.mode, 'lines');
+  assert.equal(controller.snapshot.structure.value.marker, 'A:lines');
+  assert.equal(controller.snapshot.rail.value.rootsCount, 4);
+  assert.equal(controller.snapshot.rail.value.notableLinesCount, 3);
+  assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
+
+  await controller.setMode('roots');
   assert.equal(controller.snapshot.mode, 'roots');
   assert.equal(controller.snapshot.structure.status, 'loading');
-  assert.equal(controller.snapshot.structure.value.incomingCount, 2);
-  assert.equal(controller.snapshot.structure.value.lineEdges.length, 3);
-  assert.equal(publications.at(-1).structure.value.lineEdges.length, 3);
+  assert.equal(controller.snapshot.rail.value.rootsCount, 4);
+  assert.equal(controller.snapshot.rail.value.notableLinesCount, 3);
+  assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
 
-  roots.resolve(structure('A', { incomingCount: 4, lineEdges: [] }));
-  await switching;
+  roots.resolve(structure('A', 'roots'));
+  await flush();
   assert.equal(controller.snapshot.structure.status, 'ready');
-  assert.equal(controller.snapshot.structure.value.incomingCount, 4);
-  assert.equal(controller.snapshot.structure.value.lineEdges.length, 3);
+  assert.equal(controller.snapshot.structure.value.marker, 'A:roots');
+  assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
+
+  await controller.setMode('lines');
+  assert.equal(controller.snapshot.structure.value.marker, 'A:lines');
+  assert.deepEqual(controller.snapshot.rail.value, railValue);
+  assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
 });
 
-test('recenter never carries tab counts from the previous Nodus', async () => {
-  const next = deferred();
+test('recenter starts fresh Nodus-level Rail state instead of carrying values from the previous Nodus', async () => {
+  const nextRail = deferred();
   const controller = new NodusController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value).toUpperCase(),
-    structure: async ({ center }) => {
-      if (center === 'B') return next.promise;
-      return structure(center, { incomingCount: 2, lineEdges: [{ id: '1' }] });
+    structure: async ({ center, mode }) => structure(center, mode),
+    rail: async ({ center }) => {
+      if (center === 'B') return nextRail.promise;
+      return { rootsCount: 2, notableLinesCount: 1, lines: [] };
     },
     presenter: { start() {}, update() {} },
   });
 
   await controller.start();
-  const recentering = controller.recenter({ target: 'B' });
   await flush();
-  assert.equal(controller.snapshot.center, 'B');
-  assert.equal(controller.snapshot.structure.status, 'loading');
-  assert.equal(controller.snapshot.structure.value, null);
+  assert.equal(controller.snapshot.rail.value.rootsCount, 2);
 
-  next.resolve(structure('B', { incomingCount: 1, lineEdges: [] }));
-  await recentering;
-  assert.equal(controller.snapshot.structure.value.incomingCount, 1);
-  assert.equal(controller.snapshot.structure.value.lineEdges.length, 0);
+  await controller.recenter({ target: 'B' });
+  assert.equal(controller.snapshot.center, 'B');
+  assert.equal(controller.snapshot.rail.status, 'loading');
+  assert.equal(controller.snapshot.rail.value, null);
+
+  nextRail.resolve({ rootsCount: 1, notableLinesCount: 5, lines: [] });
+  await flush();
+  assert.equal(controller.snapshot.rail.status, 'ready');
+  assert.equal(controller.snapshot.rail.value.rootsCount, 1);
+  assert.equal(controller.snapshot.rail.value.notableLinesCount, 5);
 });

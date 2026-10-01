@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test",
-    "typecheck": "npx --yes --package=typescript@6.0.3 tsc --project tsconfig.json"
+    "typecheck": "npx --yes --package=typescript@6.0.3 tsc --project tsconfig.json && npx --yes --package=typescript@6.0.3 tsc --project tsconfig.boundaries.json"
   },
   "dependencies": {
     "@lichess-org/chessground": "10.2.0",

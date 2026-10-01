@@ -6,13 +6,13 @@ Prefer the smallest scheduling rule that preserves instant reuse when an inactiv
 
 # Because:
 
-`docs/architecture/current-view.md` now defines Root and Line as sibling projections of one Nodus-centered generation and makes mode selection presentation-only. The current controller eagerly starts both projections at generation start. Each projection can trigger nontrivial acquisition: Line composition may acquire Explorer Readings and selected-Line discovery, while Root composition may run transposition enrichment and source hydration.
+`docs/architecture/current-view.md` defines Root and Line as sibling projections of one Nodus-centered generation and makes mode selection presentation-only. `NodusController` now owns the complete navigation/current-view lifecycle, including RouteLedger restoration subscription and cleanup; `src/main.ts` no longer contains a separate browser-history-to-controller navigation seam. The current controller still eagerly starts both projections at generation start. Each projection can trigger nontrivial acquisition: Line composition may acquire Explorer Readings and selected-Line discovery, while Root composition may run transposition enrichment and source hydration.
 
-Because Lichess traffic is serialized through the shared gateway, eager inactive-mode work can consume request capacity before information needed by the mode the user is actually viewing. The ownership correction that removed mode-switch recomposition should not introduce a new responsiveness cost by treating both sibling projections as equally urgent.
+Because Lichess traffic is serialized through the shared gateway, eager inactive-mode work can consume request capacity before information needed by the mode the user is actually viewing. The ownership correction that removed mode-switch recomposition and startup-level history wiring should not introduce a new responsiveness cost by treating both sibling projections as equally urgent.
 
 # Edges:
 
-`docs/architecture/current-view.md` owns generation/currentness and the fact that mode switching does not replace the Nodus generation. This outcome changes scheduling/laziness only; it must not reintroduce mode-specific current-view identity or duplicate Rail truth.
+`docs/architecture/current-view.md` owns generation/currentness and the fact that mode switching does not replace the Nodus generation. `NodusController` owns RouteLedger restoration as part of that same lifecycle. This outcome changes scheduling/laziness only; it must not move navigation semantics back into `src/main.ts`, reintroduce mode-specific current-view identity, or duplicate Rail truth.
 
 `backlog/2026-09-30-knowledge-enrichment-priority.md` separately owns generic LichessGateway foreground/background transport priority and proactive Knowledge Acquisition warming. Sibling-projection scheduling may later use that capability, but it can complete independently through lazy or demand-driven sibling startup and therefore remains a separate outcome.
 
@@ -30,7 +30,7 @@ Decide what should happen when the user switches mode while the newly active sib
 
 Deterministic coverage proves that starting a Nodus does not let inactive-sibling acquisition delay the active Root/Line projection; mode switching does not create a new Nodus generation or recompute an already-ready sibling solely because it became active; a not-yet-ready sibling can start or continue when selected; and Recenter still invalidates both siblings together.
 
-The result preserves current-view stale-result rejection, Nodus-level Rail stability, selected-Line discovery semantics, and shared Lichess transport constraints without inventing a second source-freshness or projection-completion protocol.
+The result preserves current-view stale-result rejection, Nodus-level Rail stability, RouteLedger restoration ownership, selected-Line discovery semantics, and shared Lichess transport constraints without inventing a second source-freshness or projection-completion protocol or restoring navigation glue in `src/main.ts`.
 
 # Sync:
 

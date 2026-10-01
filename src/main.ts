@@ -8,8 +8,8 @@ import './debug.css';
 import { canonicalPosition } from './graph.js';
 import { discoverSelectedLines } from './constellation-discovery.js';
 import { debugLog } from './debug.js';
-import { materializeMove } from './move-materialization.js';
-import { NodusController } from './nodus-controller.js';
+import { materializeMove } from './move-materialization.ts';
+import { NodusController } from './nodus-controller.ts';
 import { composeNodusStructure } from './nodus-structure.js';
 import { loadNodusEvidence } from './evidence-source.js';
 import { lichessEval } from './lichess-eval.js';
@@ -17,7 +17,7 @@ import { createLichessEvalStatusPresenter } from './lichess-eval-presentation.js
 import { createNodusRenderer } from './nodus-renderer.js';
 import { createNodusPresenter } from './nodus-presenter.js';
 import { loadNodusRail } from './rail-source.js';
-import { createRouteLedger } from './route-ledger.js';
+import { createRouteLedger } from './route-ledger.ts';
 import { preferenceStore } from './preference-store.js';
 
 function boardBudget() {

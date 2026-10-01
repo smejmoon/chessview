@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "useUnknownInCatchVariables": true
+  },
+  "files": [
+    "src/route-ledger.ts",
+    "src/move-materialization.ts",
+    "src/nodus-controller.ts"
+  ],
+  "include": []
+}

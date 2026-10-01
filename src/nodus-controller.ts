@@ -64,8 +64,16 @@ export type DiscoveryResult = Readonly<{
   criticalFailure?: boolean;
 }> | null;
 
+export type LookaheadInput = Readonly<{
+  center: string;
+  mode: ViewMode;
+  structure: unknown;
+  signal: AbortSignal;
+}>;
+
 type Contributor<Input> = (input: Input) => unknown | Promise<unknown>;
 type DiscoveryContributor = (input: DiscoveryInput) => DiscoveryResult | Promise<DiscoveryResult>;
+type LookaheadContributor = (input: LookaheadInput) => unknown | Promise<unknown>;
 type MaterializeMove = (input: MaterializeMoveInput) => Promise<MaterializeMoveResult | null>;
 type Log = (message: string, detail?: unknown) => void;
 
@@ -94,6 +102,7 @@ export type NodusControllerOptions = {
   evidence?: Contributor<EvidenceInput> | null;
   rail?: Contributor<RailInput> | null;
   discover?: DiscoveryContributor | null;
+  lookahead?: LookaheadContributor | null;
   materializeMove?: MaterializeMove | null;
   presenter: Presenter;
   log?: Log;
@@ -118,6 +127,7 @@ type Run = {
   abortController: AbortController;
   composeTails: Record<ViewMode, Promise<unknown>>;
   railTail: Promise<unknown>;
+  lookaheadController: AbortController | null;
 };
 
 type RestoreRoute = {
@@ -199,6 +209,7 @@ export class NodusController {
   #disposed = false;
   #evidence: Contributor<EvidenceInput> | null;
   #log: Log;
+  #lookahead: LookaheadContributor | null;
   #materializeMove: MaterializeMove | null;
   #preferences: Preferences;
   #presenter: Presenter;
@@ -219,6 +230,7 @@ export class NodusController {
     evidence = null,
     rail = null,
     discover = null,
+    lookahead = null,
     materializeMove = null,
     presenter,
     log = () => {},
@@ -235,6 +247,7 @@ export class NodusController {
     this.#evidence = evidence;
     this.#rail = rail;
     this.#discover = discover;
+    this.#lookahead = lookahead;
     this.#materializeMove = materializeMove;
     this.#presenter = presenter;
     this.#log = log;
@@ -335,6 +348,8 @@ export class NodusController {
     this.#routeLedger.replace?.(this.#route());
     this.#log('view mode changed', { mode: next, center: this.#state.center });
     await this.#presentCurrent('update');
+    const run = this.#run;
+    if (this.#isCurrent(run)) this.#refreshLookahead(run, next);
     return true;
   }
 
@@ -368,6 +383,7 @@ export class NodusController {
     this.#disposed = true;
     this.#stopRouteRestore?.();
     this.#stopRouteRestore = null;
+    this.#run?.lookaheadController?.abort();
     this.#run?.abortController.abort();
     this.#run = null;
   }
@@ -409,6 +425,7 @@ export class NodusController {
   }
 
   async #startView(reason: 'start' | 'restore' | 'recenter' | 'refresh'): Promise<void> {
+    this.#run?.lookaheadController?.abort();
     this.#run?.abortController.abort();
     this.#revision += 1;
     const run: Run = {
@@ -416,6 +433,7 @@ export class NodusController {
       abortController: new AbortController(),
       composeTails: { roots: Promise.resolve(), lines: Promise.resolve() },
       railTail: Promise.resolve(),
+      lookaheadController: null,
     };
     this.#run = run;
     this.#state.projections = {
@@ -465,6 +483,27 @@ export class NodusController {
     return tail;
   }
 
+  #refreshLookahead(run: Run, mode: ViewMode): void {
+    run.lookaheadController?.abort();
+    run.lookaheadController = null;
+    const lookahead = this.#lookahead;
+    if (!this.#isCurrent(run) || !this.#isActiveMode(mode) || typeof lookahead !== 'function') return;
+    const structure = this.#state.projections[mode].structure;
+    if (structure.status !== 'ready') return;
+
+    const controller = new AbortController();
+    run.lookaheadController = controller;
+    void Promise.resolve(lookahead(Object.freeze({
+      center: this.#state.center,
+      mode,
+      structure: structure.value,
+      signal: controller.signal,
+    }))).catch((error: unknown) => {
+      if (controller.signal.aborted || isAbortError(error) || !this.#isCurrent(run)) return;
+      this.#log('supplementary lookahead failed', { mode, error: errorMessage(error) });
+    });
+  }
+
   async #composeMode(
     run: Run,
     mode: ViewMode,
@@ -480,12 +519,18 @@ export class NodusController {
       projectionState.structure = lifecycle('failed', null, structureError);
       projectionState.evidence = lifecycle('idle');
       this.#log('Nodus structure failed', { mode, error: errorMessage(structureError) });
-      if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
+      if (this.#isActiveMode(mode)) {
+        this.#refreshLookahead(run, mode);
+        await this.#presentCurrent('update');
+      }
       return false;
     }
     if (!this.#isCurrent(run)) return false;
     this.#state.projections[mode].structure = lifecycle(status, value, error);
-    if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
+    if (this.#isActiveMode(mode)) {
+      if (status === 'ready' || status === 'failed') this.#refreshLookahead(run, mode);
+      await this.#presentCurrent('update');
+    }
     return true;
   }
 

@@ -6,8 +6,10 @@ import './lichess-eval-presentation.css';
 import './debug.css';
 
 import { canonicalPosition } from './graph.js';
+import { nominateConstellationLookahead } from './constellation-lookahead.js';
 import { discoverSelectedLines } from './constellation-discovery.js';
 import { debugLog } from './debug.js';
+import { warmExplorerReading } from './knowledge-acquisition.js';
 import { materializeMove } from './move-materialization.ts';
 import { NodusController } from './nodus-controller.ts';
 import { composeNodusStructure } from './nodus-structure.js';
@@ -64,6 +66,11 @@ async function discover({ center, mode, structure, signal, onProgress }) {
   }
 }
 
+async function warmLookahead({ center, structure, signal }) {
+  const nominations = nominateConstellationLookahead({ center, structure });
+  await Promise.all(nominations.map((position) => warmExplorerReading(position, { signal })));
+}
+
 controller = new NodusController({
   initial: { ...initialRoute, orientation: preferenceStore.getOrientation() },
   canonicalize: canonicalPosition,
@@ -85,6 +92,7 @@ controller = new NodusController({
   }),
   rail: loadNodusRail,
   discover,
+  lookahead: warmLookahead,
   materializeMove,
   presenter,
   log: (message, detail) => { debugLog(message, detail); },

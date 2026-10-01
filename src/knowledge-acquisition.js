@@ -81,10 +81,22 @@ export function createKnowledgeAcquisition({
     return explorer;
   }
 
-  return Object.freeze({ acquireExplorerReading, reconcileCachedExplorerReading });
+  async function warmExplorerReading(key, { signal } = {}) {
+    const canonical = canonicalPosition(key);
+    const explorer = await loadExplorer(canonical, { signal, priority: 'background' });
+    if (!explorer) return null;
+    debugLog('Explorer Reading warmed', {
+      position: canonical,
+      games: totalGames(explorer),
+    });
+    return explorer;
+  }
+
+  return Object.freeze({ acquireExplorerReading, reconcileCachedExplorerReading, warmExplorerReading });
 }
 
 export const {
   acquireExplorerReading,
   reconcileCachedExplorerReading,
+  warmExplorerReading,
 } = createKnowledgeAcquisition();

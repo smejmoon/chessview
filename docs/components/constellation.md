@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Own the coherent current-view subgraph around the Nodus: which known canonical positions and relationships belong in the view.
+Own the coherent current-view subgraph around the Nodus: which known canonical positions and relationships belong in the view, and which nearby canonical positions are sufficiently relevant to that accepted composition to nominate as bounded supplementary lookahead.
 
-A Constellation is a projection of Chessview's durable graph, not the durable graph itself and not its two-dimensional rendering.
+A Constellation is a projection of Chessview's durable graph, not the durable graph itself and not its two-dimensional rendering. Lookahead nomination expresses ephemeral current-view relevance; it does not create graph identity, source-cache policy, or structural settlement obligations.
 
 ## Requirements
 
@@ -15,6 +15,9 @@ A Constellation is a projection of Chessview's durable graph, not the durable gr
 - Line composition begins from acquired outgoing knowledge at the Nodus. When outgoing knowledge for a currently selected Line position is unresolved and another [Explorer Reading](knowledge-acquisition.md#terms) can still improve the constrained composition, Constellation may request that Reading and recompose from the enriched durable graph. A full visible-space budget does not by itself make the composition settled, and Constellation does not expand through an unselected candidate merely to spend an acquisition/request budget.
 - Selection membership and unresolved structural acquisition are separate facts. Line composition exposes a Reading frontier containing only selected positions for which another Explorer Reading can still affect the constrained composition; discovery consumes that frontier rather than treating every selected unread position as unresolved.
 - Once additional outgoing knowledge cannot change the current constrained composition, Constellation stops requesting deeper Explorer Readings for that composition. This is a caller decision about information still needed, not an acquisition retention or Edge Admission rule.
+- After an accepted composition exists, Constellation may also nominate a bounded lookahead of canonical positions that are locally relevant to that composition and plausible near-term navigation targets. These nominations are supplementary: they do not make those positions visible, unresolved, or required for settlement.
+- Lookahead relevance belongs to Constellation because it already owns coherent local allocation around the Nodus. Nomination should derive from that accepted structural context rather than from a second independent global relevance ranking in Knowledge Acquisition. Exact breadth and tie-breaking may remain implementation policy while preserving boundedness and coherent locality.
+- A lookahead nomination identifies reusable source work that may be useful if the user navigates nearby. It does not instruct Knowledge Acquisition to reconcile graph-bearing observations immediately or recursively expand through warmed results.
 - Optional engine evidence is not a structural acquisition frontier for Constellation selection. Selection may use usable engine evidence already available to the composition, but missing engine evidence does not cause cloud-evaluation acquisition or keep the Constellation unsettled merely because a future evaluation could change Salience.
 - As trustworthy structural information arrives, recomposition may add, remove, or rearrange visible positions and relationships. Progressive refinement does not redefine canonical graph identity and does not require the previously trustworthy composition to disappear while the replacement is being determined.
 - Constellation optimizes for a coherent, understandable structure rather than maximum coverage.
@@ -42,11 +45,12 @@ Deterministic tests should cover:
 - selected Line positions requesting additional acquisition only while another Explorer Reading can still change constrained composition;
 - a full constrained composition still exposing a Reading frontier when another selected-position Reading can improve which structure occupies the available space;
 - a selected position with unresolved Explorer data disappearing from the Reading frontier once constrained composition is already structurally settled;
-- unselected automatic candidates not causing deeper acquisition merely because they are known;
+- unselected automatic candidates not causing deeper structural acquisition merely because they are known;
+- accepted compositions producing only bounded locally relevant lookahead nominations, with those nominations remaining separate from visibility and structural settlement;
 - missing optional engine evidence not causing structural acquisition or delaying settlement;
 - accepted new structural information recomposing the Constellation without invalidating canonical graph identity;
 - distinct immediate Root/Line families remaining distinct before genuine convergence;
 - canonical transpositions appearing once while retaining every selected relationship and branch/family membership into or out of the convergence;
-- Constellation requesting additional graph knowledge without itself performing transport or persistence side effects;
+- Constellation requesting additional graph knowledge and nominating supplementary lookahead without itself performing transport, persistence, or Edge Admission side effects;
 - evidence signals influencing selection without changing canonical graph identity;
 - cross-branch allocation preserving coherence without comparing unrelated source-local Prevalence as one global rank.

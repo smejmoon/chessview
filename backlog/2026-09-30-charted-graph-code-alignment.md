@@ -1,20 +1,22 @@
 # Do:
 
-Align the remaining implementation with the settled `ChartedGraph` model: Graph Edges are durable topology, not containers for mutable Explorer evidence or current-view selection state. Remove `PositionGraph.updateEdge()`-driven Explorer refresh, constrain Graph Edge persistence to canonical relationship state plus any justified durable behavioral property, and stop using Graph Edge objects as containers for Candidate/Salience annotations where the owning Constellation layer can carry that state separately.
+Finish the durable Graph Edge compatibility cleanup now that Explorer reconciliation is topology-only. Replace the legacy `manual` name with the settled explicit-materialization property while preserving its current navigation/Rail behavior, remove `derived` from the Graph Edge API and stored representation, and migrate existing IndexedDB edge records to canonical relationship fields plus explicit materialization only.
 
-Review the remaining `manual` / `derived` representation against the settled contract. Preserve the explicit-materialization behavior currently carried by `manual` under a clearer durable name if needed; remove `derived` if no product behavior depends on that distinction.
+Keep current Explorer evidence and Candidate/Salience state outside persistence. `backlog/2026-10-01-constellation-selection-code-alignment.md` owns the remaining Line-composition protocol that still carries selection annotations on edge-shaped values; coordinate with that outcome rather than reintroducing a graph-level eligibility field here.
 
 # Because:
 
-`docs/components/charted-graph.md` defines a Graph Edge as one durable legal `source + Move + target` relationship. Mutable Explorer statistics, source-observation versions, eligibility, Salience, family/depth membership, and other current-view state are outside Graph Edge persistence.
+`docs/components/charted-graph.md` defines a Graph Edge as one durable legal `source + Move + target` relationship plus only a durable behavioral property that changes product behavior. Explorer statistics, timestamps, eligibility, Salience, family/depth membership, and other current-view state are outside Graph Edge persistence.
 
-Explicit Move materialization now supplies only topology fields to `PositionGraph.ensureEdge()` instead of manufacturing zero-valued Explorer games/share/eligibility/timestamps, and its regression verifies newly materialized edges do not gain those fields. Existing graph and acquisition paths can still persist or carry mutable evidence, so the broader boundary is not yet aligned.
+`PositionGraph` now constructs a whitelisted durable relationship value instead of spreading caller objects into storage. New or subsequently mutated edges therefore cannot persist `games`, `share`, `qualifies`, `updatedAt`, or other arbitrary caller fields; mutation also scrubs those legacy fields from an edge it rewrites.
 
-`docs/components/knowledge-acquisition.md` limits Explorer reconciliation to graph growth: resolve returned moves, admit unknown legal relationships under acquisition policy, and establish missing topology. Already-known relationships require no graph rewrite merely because another Reading contains the same Move. Current `knowledge-acquisition.ts` still constructs evidence-bearing edge objects and calls `PositionGraph.updateEdge()` for reconciliation.
+Knowledge Acquisition now reads existing outgoing topology, calls `ensureEdge()` only for admitted missing relationships, and leaves already-known Graph Edges unmodified while still ensuring their target position records. This makes repeated reconciliation converge against actual graph state and keeps partial target-record failure retryable without an Explorer projection revision/watermark protocol.
 
-`docs/components/constellation.md` and `docs/components/constellation-selection.md` define a Candidate as a known Graph Edge combined with current evidence and current-view selection state. The implementation still decorates edge-shaped objects with `games`, `share`, `qualifies`, and `salienceOrder`, so code has not yet caught up with the ownership split.
+Explicit Move materialization supplies topology-only edge input. Transposition discovery is now a typed topology-only implementation and no longer manufactures Explorer fields or establishes `derived: true`. Current production behavior still consumes the explicit/manual distinction in Constellation and Rail paths, while investigation and passing tests have identified no independent product behavior that consumes `derived`.
 
-`docs/architecture/position-graph.md` specifies a topology-oriented boundary. The current `PositionGraph.updateEdge()`, open-ended stored edge shape, and `manual` / `derived` surface remain compatibility implementation that must be aligned rather than treated as durable requirements.
+`src/transpositions.ts` and `src/constellation-selection.ts` now hold the implementations behind stable `.js` compatibility re-exports. The latter conversion is mechanical: it intentionally preserves the existing Candidate behavior until the separate Constellation-selection alignment outcome removes its legacy edge-shaped selection annotations.
+
+Current deterministic tests pass without relying on Graph Edge statistics being refreshed from Explorer Readings, confirming that current source evidence can remain on the Explorer/Evidence path while ChartedGraph retains topology.
 
 # Edges:
 
@@ -22,27 +24,17 @@ Explicit Move materialization now supplies only topology fields to `PositionGrap
 
 `docs/components/knowledge-acquisition.md` owns Edge Admission and reconciliation of graph-bearing observations into missing topology. Explorer/source clients continue to own source observations and cache freshness; `PositionRepository` supplies generic facet storage/load coordination.
 
-`docs/components/constellation.md`, `docs/components/constellation-selection.md`, and `docs/components/evidence.md` own current evidence, Candidate selection state, and visible relationships. `backlog/2026-10-01-constellation-selection-code-alignment.md` separately owns removing the legacy `edge.qualifies` gate from Line composition; this outcome should not create a competing eligibility protocol while moving current-view state off Graph Edges.
+`docs/components/constellation.md`, `docs/components/constellation-selection.md`, and `docs/components/evidence.md` own current evidence, Candidate selection state, and visible relationships. `backlog/2026-10-01-constellation-selection-code-alignment.md` separately owns removing the legacy `edge.qualifies`/edge-shaped selection protocol from Line composition.
 
 `docs/architecture/position-graph.md` owns the application-level Graph Edge boundary and persistence mechanics. `docs/architecture/position-repository.md` owns canonical position records and source-facet infrastructure separately.
 
-# Unsettled:
-
-Whether the existing `manual` flag should survive under a clearer explicit-materialization name. Current Constellation and Rail behavior uses that distinction, so deleting it outright would change product behavior.
-
-Whether any product behavior depends on `derived` as durable state rather than simply on the existence of the Graph Edge. Current investigation found transposition code writes it but no independent product consumer has yet justified retaining it.
-
-Whether any real consumer still depends on persisted `edge.games`, `edge.share`, `edge.updatedAt`, or `edge.qualifies` after current Explorer evidence is joined at the Evidence/Constellation boundary. Any such dependency must either move to the owning layer or be justified as a distinct durable graph requirement.
-
-How existing IndexedDB Graph Edge records containing legacy evidence/provenance fields should be normalized when the stored edge shape is tightened, including preservation of the explicit-materialization behavior represented today by `manual`.
-
 # Complete:
 
-Graph Edge persistence contains only canonical legal relationship state plus any explicitly justified durable behavioral property; mutable Explorer statistics and current-view Candidate/Salience annotations are no longer persisted as graph state.
+Graph Edge persistence contains only canonical legal relationship state plus the explicitly justified explicit-materialization property; existing legacy edge records are normalized without losing that behavior, and `derived`/Explorer/current-view fields are absent from the durable representation.
 
-Explorer reconciliation establishes missing admitted topology, is naturally idempotent for already-known relationships, and remains retryable for missing relationships after partial persistence failure without an observation revision/projection watermark protocol.
+Explorer reconciliation establishes missing admitted topology, performs no Graph Edge rewrite for already-known relationships, and remains retryable for missing relationships or target records after partial persistence failure without an observation revision/projection watermark protocol.
 
-Constellation selection carries current evidence and selection annotations outside Graph Edge state, and tests verify that source-evidence eviction or refresh can change current evidence without mutating established `ChartedGraph` topology.
+Constellation selection carries current evidence and selection annotations outside durable Graph Edge state, with its remaining edge-shaped selection compatibility removed under the dedicated Constellation-selection alignment outcome.
 
 # Sync:
 

@@ -4,11 +4,11 @@ Treat normal Explorer request cancellation as cancellation rather than as a refr
 
 # Because:
 
-`src/explorer.js::loadExplorerReading()` currently logs every caught error as `explorer refresh failed` before `staleExplorerOrThrow()` recognizes `AbortError` and rethrows it. Current-view obsolescence therefore produces misleading failure diagnostics even though cancellation is an expected lifecycle event rather than a source failure.
+`src/explorer.js::loadExplorerReading()` currently logs every caught error as `explorer refresh failed` before `staleExplorerOrThrow()` recognizes `AbortError` and rethrows it. Normal lifecycle cancellation can come from obsolete caller demand, ordinary shared-load last-subscriber cleanup, or expiry of the bounded lifetime for a started supplementary warm. Those cancellations are expected control flow rather than source failures, so logging them as refresh failures produces misleading diagnostics.
 
 # Edges:
 
-This outcome belongs to the Explorer source-client lifecycle. It does not change Explorer Reading data shape, source freshness, authentication semantics, graph admission, Weather, or `ChartedGraph` identity.
+This outcome belongs to the Explorer source-client lifecycle. It does not change Explorer Reading data shape, source freshness, authentication semantics, graph admission, Weather, `ChartedGraph` identity, or the bounded supplementary-warm lifetime owned by Knowledge Acquisition.
 
 It may be implemented in the same pass as nearby graph/Knowledge Acquisition repairs when convenient, but it does not block `backlog/2026-09-30-charted-graph-code-alignment.md` and that graph-alignment outcome does not need to absorb this source-client diagnostic concern.
 

@@ -4,7 +4,7 @@ Make successful reconciliation of one Explorer Reading idempotent across later r
 
 # Because:
 
-`src/knowledge-acquisition.js::reconcileCachedExplorerReading()` currently replays the full Reading whenever cached Explorer data exists. `src/nodus-structure.js` deduplicates Explorer work only inside one `createCandidateSource()` instance, so a later recomposition creates a fresh local map and can project the same cached Reading again. That repeats durable edge/target mutation and reconciliation logging even when no source observation changed.
+`src/knowledge-acquisition.ts::reconcileCachedExplorerReading()` currently replays the full Reading whenever cached Explorer data exists. `src/nodus-structure.js` deduplicates Explorer work only inside one `createCandidateSource()` instance, so a later recomposition creates a fresh local map and can project the same cached Reading again. That repeats durable edge/target mutation and reconciliation logging even when no source observation changed.
 
 Constellation-directed supplementary lookahead now intentionally allows an Explorer Reading to be warmed and cached before any later graph-acquisition request reconciles it. That makes source-cache state and graph-projection state observably independent rather than merely an implementation detail, so projection completion cannot be inferred from freshness or cache presence.
 

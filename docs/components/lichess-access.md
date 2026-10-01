@@ -45,9 +45,12 @@ The gateway must:
 - coordinate HTTP 429 cooldown across clients;
 - wait at least one full minute after a 429 before subsequent Lichess API traffic resumes;
 - prevent queued work from being sent after its `AbortSignal` becomes obsolete;
+- when the next transport slot becomes available, send queued foreground work before queued background work while preserving FIFO order within the same effective urgency;
 - preserve transport outcomes so domain clients can distinguish successful absence from failure to obtain data.
 
-Position-backed endpoint clients may coalesce equivalent work for one canonical position and endpoint facet. One caller becoming obsolete must stop only that caller's participation without cancelling equivalent work still needed by another live caller. When every caller to shared queued work becomes obsolete, the shared producer must be cancelled so the queued request does not reach Lichess.
+Priority is generic transport urgency only. The gateway does not decide which chess or current-view work is foreground. It observes the effective urgency supplied by callers when choosing the next queued request; an already in-flight request is not preempted.
+
+Position-backed endpoint clients may coalesce equivalent work for one canonical position and endpoint facet. One caller becoming obsolete must stop only that caller's participation without cancelling equivalent work still needed by another live caller. The shared producer's effective urgency is the highest urgency among its live subscribers, so joining or leaving shared work may promote or demote a still-queued request without creating another producer. When every caller to shared queued work becomes obsolete, the shared producer must be cancelled so the queued request does not reach Lichess.
 
 Endpoint clients retain responsibility for request parameters, parsing, source validation, persistence, cache policy, and deciding whether source data is fit to expose. Facets retain independent freshness; a position record is not globally fresh or stale. Downstream semantic meaning belongs to the component that owns that evidence or product decision rather than to transport by default.
 
@@ -75,6 +78,8 @@ Deterministic tests should cover:
 - malformed rated Explorer payloads not being cached or exposed as usable Explorer Readings;
 - malformed cached Explorer values being treated as unusable rather than fresh source data;
 - cross-client serialization between rated Explorer, Masters, cloud evaluation, and other gateway users;
+- queued foreground work receiving the next available transport slot ahead of queued background work without preempting an in-flight request;
+- live shared-producer demand promoting and demoting the effective urgency seen by queued transport;
 - a 429 from one client delaying later traffic from another client;
 - cancellation of queued obsolete work before it reaches the network;
 - one obsolete caller detaching from shared same-position work while another live caller still receives it;

@@ -5,7 +5,7 @@ import { canonicalPosition, edgeId, resolveMove, START_FEN } from '../src/graph.
 
 globalThis.indexedDB = fakeIndexedDB;
 
-const { clearGraph } = await import('../src/db.js');
+const { clearGraph, putEdges } = await import('../src/db.js');
 const { positionGraph } = await import('../src/position-graph.js');
 
 function explorerBackedE4() {
@@ -23,7 +23,14 @@ function explorerBackedE4() {
   };
 }
 
-test('PositionGraph canonicalizes queries and persists one canonical relationship', async () => {
+function assertNoExplorerEvidence(edge) {
+  assert.equal('games' in edge, false);
+  assert.equal('share' in edge, false);
+  assert.equal('qualifies' in edge, false);
+  assert.equal('updatedAt' in edge, false);
+}
+
+test('PositionGraph canonicalizes queries and persists only durable relationship state', async () => {
   await clearGraph();
   const edge = explorerBackedE4();
   const stored = await positionGraph.ensureEdge({ ...edge, id: 'ignored-id' });
@@ -33,39 +40,34 @@ test('PositionGraph canonicalizes queries and persists one canonical relationshi
   assert.equal(stored.source, source);
   assert.equal(stored.target, target);
   assert.equal(stored.id, edgeId(stored));
+  assertNoExplorerEvidence(stored);
 
   const outgoing = await positionGraph.outgoing(START_FEN);
   const incoming = await positionGraph.incoming(edge.target);
   assert.equal(outgoing.length, 1);
   assert.equal(incoming.length, 1);
   assert.equal(outgoing[0].id, incoming[0].id);
+  assertNoExplorerEvidence(outgoing[0]);
 });
 
-test('ensuring an existing edge preserves statistics while provenance accumulates', async () => {
+test('ensuring an existing edge scrubs legacy evidence while provenance accumulates', async () => {
   await clearGraph();
   const edge = explorerBackedE4();
-  await positionGraph.ensureEdge(edge);
+  const legacy = { ...edge, id: edgeId(edge), manual: false, derived: false };
+  await putEdges([legacy]);
 
-  const manual = await positionGraph.ensureEdge({
-    ...edge,
-    games: 0,
-    share: 0,
-    qualifies: false,
-    updatedAt: 2,
-  }, { manual: true });
-  assert.equal(manual.games, 600);
-  assert.equal(manual.share, 0.6);
-  assert.equal(manual.qualifies, true);
-  assert.equal(manual.updatedAt, 1);
+  const manual = await positionGraph.ensureEdge(edge, { manual: true });
+  assertNoExplorerEvidence(manual);
   assert.equal(manual.manual, true);
 
   const derived = await positionGraph.ensureEdge(edge, { derived: true });
   assert.equal(derived.manual, true);
   assert.equal(derived.derived, true);
+  assertNoExplorerEvidence(derived);
   assert.equal((await positionGraph.outgoing(edge.source)).length, 1);
 });
 
-test('updateEdge changes mutable statistics without changing identity or established provenance', async () => {
+test('updateEdge changes no source evidence and preserves identity/provenance', async () => {
   await clearGraph();
   const edge = explorerBackedE4();
 
@@ -88,14 +90,12 @@ test('updateEdge changes mutable statistics without changing identity or establi
   assert.equal(refreshed.target, created.target);
   assert.equal(refreshed.uci, created.uci);
   assert.equal(refreshed.manual, true);
-  assert.equal(refreshed.games, 40);
-  assert.equal(refreshed.share, 0.04);
-  assert.equal(refreshed.qualifies, false);
-  assert.equal(refreshed.updatedAt, 2);
+  assertNoExplorerEvidence(created);
+  assertNoExplorerEvidence(refreshed);
   assert.equal((await positionGraph.outgoing(edge.source)).length, 1);
 });
 
-test('updateEdge never establishes retention provenance', async () => {
+test('updateEdge never establishes retention provenance from its payload', async () => {
   await clearGraph();
   const edge = explorerBackedE4();
 
@@ -106,6 +106,7 @@ test('updateEdge never establishes retention provenance', async () => {
   }, { create: true });
   assert.equal(created.manual, false);
   assert.equal(created.derived, false);
+  assertNoExplorerEvidence(created);
 
   const refreshed = await positionGraph.updateEdge({
     ...edge,
@@ -117,7 +118,7 @@ test('updateEdge never establishes retention provenance', async () => {
   });
   assert.equal(refreshed.manual, false);
   assert.equal(refreshed.derived, false);
-  assert.equal(refreshed.games, 250);
+  assertNoExplorerEvidence(refreshed);
 });
 
 test('concurrent provenance additions accumulate on one edge', async () => {
@@ -133,10 +134,10 @@ test('concurrent provenance additions accumulate on one edge', async () => {
   const [stored] = await positionGraph.outgoing(edge.source);
   assert.equal(stored.manual, true);
   assert.equal(stored.derived, true);
-  assert.equal(stored.games, 600);
+  assertNoExplorerEvidence(stored);
 });
 
-test('concurrent statistical refresh and provenance addition retain both results', async () => {
+test('concurrent refresh-shaped input and provenance addition retain topology and provenance only', async () => {
   await clearGraph();
   const edge = explorerBackedE4();
   await positionGraph.updateEdge(edge, { create: true });
@@ -160,9 +161,7 @@ test('concurrent statistical refresh and provenance addition retain both results
 
   const [stored] = await positionGraph.outgoing(edge.source);
   assert.equal(stored.manual, true);
-  assert.equal(stored.games, 250);
-  assert.equal(stored.share, 0.25);
-  assert.equal(stored.updatedAt, 3);
+  assertNoExplorerEvidence(stored);
 });
 
 test('PositionGraph rejects an edge whose target does not match its legal move', async () => {

@@ -51,6 +51,7 @@ export class NodusController {
   #routeLedger;
   #run = null;
   #state;
+  #stopRouteRestore = null;
   #structure;
 
   constructor({
@@ -114,6 +115,9 @@ export class NodusController {
 
   async start() {
     if (this.#disposed) return false;
+    if (!this.#stopRouteRestore && typeof this.#routeLedger.onRestore === 'function') {
+      this.#stopRouteRestore = this.#routeLedger.onRestore((route) => { void this.restore(route); }) ?? null;
+    }
     this.#routeLedger.replace?.(this.#route());
     await this.#startView('start');
     return true;
@@ -204,6 +208,8 @@ export class NodusController {
 
   dispose() {
     this.#disposed = true;
+    this.#stopRouteRestore?.();
+    this.#stopRouteRestore = null;
     this.#run?.abortController.abort();
     this.#run = null;
   }

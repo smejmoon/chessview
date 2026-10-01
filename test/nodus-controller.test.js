@@ -16,10 +16,18 @@ async function flush(turns = 8) {
 function fixture(overrides = {}) {
   const calls = [];
   const publications = [];
+  let restoreHandler = null;
   const routeLedger = {
     push(route) { calls.push(['push', route]); },
     replace(route) { calls.push(['replace', route]); },
     back() { calls.push(['back']); },
+    onRestore(handler) {
+      restoreHandler = handler;
+      return () => {
+        restoreHandler = null;
+        calls.push(['stopRestore']);
+      };
+    },
   };
   const preferences = {
     setView(view) { calls.push(['setViewPreference', view]); },
@@ -51,7 +59,12 @@ function fixture(overrides = {}) {
     presenter,
     ...overrides,
   });
-  return { controller, calls, publications };
+  return {
+    controller,
+    calls,
+    publications,
+    restoreRoute(route) { return restoreHandler?.(route); },
+  };
 }
 
 test('commands update one immutable current view while RouteLedger and preferences receive effects', async () => {
@@ -98,16 +111,23 @@ test('new view lifecycles use presenter.start while redraw and accepted results 
   assert.ok(publications.slice(1).every(({ kind }) => kind === 'update'));
 });
 
-test('restore consumes RouteLedger history without writing a new entry', async () => {
-  const { controller, calls } = fixture();
+test('RouteLedger restoration is owned by the controller and does not write another history entry', async () => {
+  const { controller, calls, restoreRoute } = fixture();
   await controller.start();
   calls.length = 0;
-  await controller.restore({ center: 'c', view: 'lines', navDepth: 4 });
+  restoreRoute({ center: 'c', view: 'lines', navDepth: 4 });
+  await flush(16);
   assert.deepEqual(
     { center: controller.snapshot.center, mode: controller.snapshot.mode, canGoBack: controller.snapshot.navigation.canGoBack },
     { center: 'C', mode: 'lines', canGoBack: true },
   );
   assert.equal(calls.some(([name]) => name === 'push' || name === 'replace'), false);
+
+  controller.dispose();
+  assert.ok(calls.some(([name]) => name === 'stopRestore'));
+  restoreRoute({ center: 'd', view: 'roots', navDepth: 0 });
+  await flush();
+  assert.equal(controller.snapshot.center, 'C');
 });
 
 test('superseded structure results never become current or present after a newer view', async () => {

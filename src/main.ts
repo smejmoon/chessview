@@ -74,7 +74,6 @@ const controller = new NodusController({
   log: (message, detail) => { debugLog(message, detail); },
 });
 
-const stopRouteRestore = routeLedger.onRestore((route) => { void controller.restore(route); });
 debugLog('app start', controller.snapshot);
 
 let resizeTimer;
@@ -83,7 +82,6 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(() => { void controller.redraw(); }, 120);
 });
 window.addEventListener('beforeunload', () => {
-  stopRouteRestore();
   stopLichessEvalStatus();
   controller.dispose();
   presenter.dispose();

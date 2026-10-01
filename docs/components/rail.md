@@ -11,6 +11,7 @@ The Rail helps the user inspect and navigate the current Nodus and its surroundi
 - The Rail shows current-position context and the controls used to switch between Root and Line views.
 - The Lines tab count reports selected first-level Line relationships from the Nodus represented by the current Constellation. Deeper visible Line relationships and broader Rail evidence rows do not increase that count.
 - Root tab counts reflect the structural Root relationships supplied by the current Constellation rather than a broader evidence-row count.
+- When switching Root/Line mode without changing the Nodus, an already-established count for the inactive mode remains visible while the replacement Constellation composes. A mode change must not temporarily reinterpret an established count as zero. Counts are not carried across a Recenter to another Nodus.
 - The Rail may show additional selectable or evidenced moves that are not currently represented as Constellation boards.
 - A Rail row that represents a move keeps enough Prevalence context visible to distinguish common moves from rare ones when that distinction matters to interpretation.
 - Selecting a navigable Rail row requests a Recenter to the row's canonical target position.
@@ -36,6 +37,7 @@ Deterministic/browser contract tests should cover:
 - Root and Line controls selecting the intended view;
 - the Lines tab count following selected first-level Line relationships rather than deeper Constellation edges or supplementary evidence rows;
 - Root counts following structural Constellation input rather than supplementary evidence rows;
+- same-Nodus Root/Line transitions retaining an already-established inactive-mode count while the replacement Constellation loads, without carrying that count across Recenter;
 - a Rail-only move remaining selectable without requiring a visible board;
 - manual/explicit navigation remaining available outside automatic Constellation candidacy;
 - sufficiently sampled plausible unpopular moves remaining selectable;

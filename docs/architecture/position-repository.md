@@ -10,7 +10,9 @@ One repository record is keyed by the [canonical position](../glossary.md#canoni
 
 The repository keeps one in-memory record per canonical key when it has been read or written during the current page lifetime. On a cache miss it reads the persisted node from IndexedDB. Writes update IndexedDB and the in-memory record together.
 
-Application code that reads or writes position nodes goes through `PositionRepository`; `db.js` remains the low-level IndexedDB adapter. Graph edges remain independently persisted through [`PositionGraph`](position-graph.md), which owns edge identity and edge mutation rather than position-record hydration.
+Application code that reads or writes position nodes goes through `PositionRepository`. `src/position-store.ts` is the typed low-level node persistence adapter; shared IndexedDB opening, schema creation, and request/transaction mechanics live in `src/indexed-db.ts`. Graph edges remain independently persisted through [`PositionGraph`](position-graph.md), which owns edge identity and edge mutation rather than position-record hydration.
+
+`src/position-store.js` and `src/indexed-db.js` are compatibility re-export shims for JavaScript callers during incremental TypeScript migration. `src/db.js` is retained only as a compatibility and test/maintenance surface, including whole-store reset. Application position code does not use it as a mixed node/edge persistence API.
 
 ## Facet hydration
 

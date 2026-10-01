@@ -1,22 +1,28 @@
 # Do:
 
-Continue the current `ChartedGraph` requirements review and align implementation only where the settled domain model exposes a real code mismatch. Keep `ChartedGraph` as the durable domain model and `PositionGraph` as the distinct application/architecture boundary for validated edge access and mutation unless later requirements invalidate that separation.
+Continue the `ChartedGraph` requirements review and align implementation only where the settled domain model exposes a real code mismatch. Keep `ChartedGraph` as the durable domain model and `PositionGraph` as the distinct application/architecture boundary for validated edge access and mutation unless later requirements invalidate that separation.
 
 As the review surfaces additional code/document mismatches in Nodes, Edges, Growth and retention, or their technical realization, fold them into this outcome rather than creating competing graph-alignment work.
 
 # Because:
 
-`docs/components/charted-graph.md` now owns durable graph semantics, while `docs/architecture/position-graph.md` owns the current edge API, normalization, mutation coordination, and persistence mechanics. That separation gives the two names distinct responsibilities, so a mechanical `PositionGraph` -> `ChartedGraph` implementation rename is not currently justified.
+`docs/components/charted-graph.md` owns durable graph semantics, while `docs/architecture/position-graph.md` owns the edge API, normalization, mutation coordination, and persistence mechanics. `PositionGraph.updateEdge()` is constrained to mutable evidence updates and preservation of already-established retention provenance; `ensureEdge()` is the operation that may establish `manual` or `derived` provenance. That keeps graph-retention reasons distinct from statistical refresh while preserving the existing `ChartedGraph` / `PositionGraph` separation.
 
-The remaining risk is that further requirements review may reveal implementation behavior that does not match the settled `ChartedGraph` contract.
+The persistence boundary now follows that separation more directly: `PositionGraph` consumes `src/edge-store.js`, `PositionRepository` consumes `src/position-store.js`, and shared IndexedDB setup/transaction mechanics live in `src/indexed-db.js`. `src/db.js` remains only a compatibility and test/maintenance surface rather than the application-level mixed node/edge API.
+
+Atomic edge-store mutation preserves per-edge read/modify/write coordination and retention-provenance merging. It does not establish source-observation freshness. Explorer Reading identity/order and prevention of an older Reading overwriting a newer projected observation are owned by `backlog/2026-09-30-explorer-reading-projection.md` rather than by `PositionGraph`.
+
+The reviewed canonical-position identity, Move resolution, edge normalization, explicit Move materialization, transposition persistence, and Knowledge Acquisition callers currently follow the graph boundary. The remaining risk is that further requirements review may reveal another implementation behavior that does not match the settled `ChartedGraph` contract.
 
 # Edges:
 
 `docs/components/charted-graph.md` owns the durable graph requirements being reviewed.
 
-`docs/architecture/position-graph.md` owns the existing application-level edge boundary and its technical contract. Code changes to `src/position-graph.js`, related persistence mechanics, tests, or callers belong here when they are required by settled graph semantics.
+`docs/architecture/position-graph.md` owns the application-level edge boundary and its technical contract. Code changes to `src/position-graph.js`, `src/edge-store.js`, shared persistence mechanics, tests, or callers belong here when they are required by settled graph semantics.
 
-This outcome does not decide source-specific graph-admission policy, Constellation selection, or Lichess source semantics.
+`docs/architecture/position-repository.md` and `src/position-store.js` own position-record persistence separately from graph-edge persistence. Shared IndexedDB mechanics in `src/indexed-db.js` should remain domain-neutral.
+
+Source-specific graph-admission policy, Explorer Reading projection identity/order, Constellation selection, and Lichess source semantics remain outside this outcome even when their implementations also consume graph data.
 
 # Unsettled:
 

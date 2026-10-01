@@ -1,4 +1,4 @@
-import { getNode, nodeStoreVersion, putNode } from './db.js';
+import { getNode, nodeStoreVersion, putNode } from './position-store.js';
 import { canonicalPosition, toPlayableFen } from './graph.js';
 
 function abortError() {

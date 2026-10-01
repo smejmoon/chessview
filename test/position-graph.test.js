@@ -95,6 +95,31 @@ test('updateEdge changes mutable statistics without changing identity or establi
   assert.equal((await positionGraph.outgoing(edge.source)).length, 1);
 });
 
+test('updateEdge never establishes retention provenance', async () => {
+  await clearGraph();
+  const edge = explorerBackedE4();
+
+  const created = await positionGraph.updateEdge({
+    ...edge,
+    manual: true,
+    derived: true,
+  }, { create: true });
+  assert.equal(created.manual, false);
+  assert.equal(created.derived, false);
+
+  const refreshed = await positionGraph.updateEdge({
+    ...edge,
+    manual: true,
+    derived: true,
+    games: 250,
+    share: 0.25,
+    updatedAt: 3,
+  });
+  assert.equal(refreshed.manual, false);
+  assert.equal(refreshed.derived, false);
+  assert.equal(refreshed.games, 250);
+});
+
 test('concurrent provenance additions accumulate on one edge', async () => {
   await clearGraph();
   const edge = explorerBackedE4();

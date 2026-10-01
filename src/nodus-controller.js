@@ -21,6 +21,21 @@ function lifecycle(status, value = null, error = null) {
   return Object.freeze({ status, value: immutable(value), error: errorMessage(error) });
 }
 
+function retainedRailStructure(value, center) {
+  if (!value || value.centerNode?.key !== center) return null;
+  const retained = { centerNode: value.centerNode };
+  if (Number.isFinite(value.incomingCount)) retained.incomingCount = value.incomingCount;
+  if (Array.isArray(value.lineEdges)) retained.lineEdges = value.lineEdges;
+  return retained;
+}
+
+function carryInactiveLineSummary(value, previous, mode, center) {
+  if (mode !== 'roots' || previous?.centerNode?.key !== center || !Array.isArray(previous.lineEdges)) {
+    return value;
+  }
+  return { ...value, lineEdges: previous.lineEdges };
+}
+
 export class NodusController {
   #actions;
   #canonicalize;
@@ -215,11 +230,12 @@ export class NodusController {
   }
 
   async #startView(reason) {
+    const retained = retainedRailStructure(this.#state.structure.value, this.#state.center);
     this.#run?.abortController.abort();
     this.#revision += 1;
     const run = { revision: this.#revision, abortController: new AbortController(), composeTail: Promise.resolve() };
     this.#run = run;
-    this.#state.structure = lifecycle('loading');
+    this.#state.structure = lifecycle('loading', retained);
     this.#state.evidence = lifecycle('idle');
     this.#log('Nodus view started', { revision: run.revision, center: this.#state.center, mode: this.#state.mode, reason });
     await this.#presentCurrent('start');
@@ -243,13 +259,20 @@ export class NodusController {
       value = await this.#structure(Object.freeze({ center: this.#state.center, mode: this.#state.mode, signal: run.abortController.signal }));
     } catch (structureError) {
       if (!this.#isCurrent(run) || structureError?.name === 'AbortError') return false;
-      this.#state.structure = lifecycle('failed', null, structureError);
+      const retained = retainedRailStructure(this.#state.structure.value, this.#state.center);
+      this.#state.structure = lifecycle('failed', retained, structureError);
       this.#state.evidence = lifecycle('idle');
       this.#log('Nodus structure failed', structureError);
       await this.#presentCurrent('update');
       return false;
     }
     if (!this.#isCurrent(run)) return false;
+    value = carryInactiveLineSummary(
+      value,
+      this.#state.structure.value,
+      this.#state.mode,
+      this.#state.center,
+    );
     this.#state.structure = lifecycle(status, value, error);
     await this.#presentCurrent('update');
     return true;

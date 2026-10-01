@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 
 globalThis.indexedDB = fakeIndexedDB;
-const { clearGraph, getOutgoing, mutateEdge, putEdges } = await import('../src/db.js');
+const { clearGraph } = await import('../src/db.js');
+const { getOutgoing, mutateEdge, putEdges } = await import('../src/edge-store.js');
 
 test('atomic edge mutation serializes concurrent read/modify/write updates', async () => {
   await clearGraph();

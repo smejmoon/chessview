@@ -34,17 +34,19 @@ The durable edge ID, SAN, and UCI are recomputed from the validated canonical re
 
 The current persistence representation stores the two independent retention reasons as `manual` and `derived` booleans. `ensureEdge()` OR-adds those flags, so a later ensure cannot clear a reason that was already established.
 
-`updateEdge(edge, { create })` replaces mutable fields for one validated legal identity while preserving canonical graph identity and already-established `manual` / `derived` provenance. When `create` is false, an unknown identity remains unknown. When `create` is true, the caller may create the legal unknown edge; the caller owns that admission decision.
+`updateEdge(edge, { create })` replaces mutable fields for one validated legal identity while preserving canonical graph identity and already-established `manual` / `derived` provenance. It never establishes either retention reason from the update payload; provenance is added only through `ensureEdge()`. When `create` is false, an unknown identity remains unknown. When `create` is true, the caller may create the legal unknown edge; the caller owns that admission decision.
 
 Neither operation can retarget an existing edge or withdraw established topology.
 
 ## Concurrency and persistence
 
-Edge mutation is an atomic per-edge read/modify/write operation. `src/db.js::mutateEdge()` reads the current edge and applies one update inside the same IndexedDB `edges` transaction before committing the replacement value.
+Edge mutation is an atomic per-edge read/modify/write operation. `src/edge-store.ts::mutateEdge()` reads the current edge and applies one update inside the same IndexedDB `edges` transaction before committing the replacement value.
 
-That coordination is required so concurrent provenance and statistics updates do not lose an already-established retention reason or overwrite a later committed edge state with an earlier caller snapshot.
+That coordination prevents concurrent edge mutations from independently replacing the same stored snapshot and lets provenance updates merge against the currently stored edge. It does **not** establish which source observation is newer. Explorer Reading identity, projection completion, and rejection of an older observation after a newer one are Knowledge Acquisition concerns rather than `PositionGraph` inference.
 
-IndexedDB stores edges by durable edge ID and indexes them by canonical `source` and `target` for directional neighborhood reads. `db.js` is the low-level persistence adapter; it does not own graph identity, legality, admission policy, or provenance semantics.
+IndexedDB stores edges by durable edge ID and indexes them by canonical `source` and `target` for directional neighborhood reads. `src/edge-store.ts` is the typed low-level edge persistence adapter. Shared IndexedDB opening, schema creation, request wrapping, and transaction completion live in `src/indexed-db.ts`; they do not own graph identity, legality, admission policy, or provenance semantics.
+
+The matching `.js` files are compatibility re-export shims so existing JavaScript callers can keep stable import paths during incremental TypeScript migration. `src/db.js` remains only a compatibility and test/maintenance surface, including whole-store reset. Application graph code does not use it as a mixed persistence API.
 
 `PositionGraph` does not keep a second in-memory graph or graph-neighborhood cache. Durable edge reads are served by the persistence boundary.
 
@@ -52,7 +54,7 @@ IndexedDB stores edges by durable edge ID and indexes them by canonical `source`
 
 [`PositionRepository`](position-repository.md) owns canonical position records and their independently hydrated facets. It does not own edge identity or edge reconciliation.
 
-[`Knowledge acquisition`](../components/knowledge-acquisition.md) decides whether an observed unknown relationship receives Edge Admission and which mutable statistical evidence is applied to known edges. `PositionGraph` validates and persists that decision but does not decide usefulness thresholds.
+[`Knowledge acquisition`](../components/knowledge-acquisition.md) decides whether an observed unknown relationship receives Edge Admission and which mutable statistical evidence is applied to known edges. `PositionGraph` validates and persists that decision but does not decide usefulness thresholds or source-observation ordering.
 
 Move materialization owns the higher-level workflow that resolves an explicitly played Move, ensures the corresponding durable edge, and ensures the target position record exists. Transposition expansion owns which derived relationships should be materialized. Neither workflow redefines `PositionGraph` edge identity.
 
@@ -64,8 +66,10 @@ Constellation selection, Evidence, and current-view state consume graph knowledg
 - `src/graph.js::canonicalPosition()` provides canonical position identity.
 - `src/graph.js::resolveMove()` provides legal source-position + Move resolution used to validate edge target and notation.
 - `src/graph.js::edgeId()` computes durable edge identity from the normalized relationship.
-- `src/db.js::mutateEdge()` provides atomic per-edge read/modify/write persistence.
-- `src/db.js::getIncoming()` and `getOutgoing()` provide indexed directional edge reads.
+- `src/edge-store.ts::mutateEdge()` provides typed atomic per-edge read/modify/write persistence.
+- `src/edge-store.ts::getIncoming()` and `getOutgoing()` provide typed indexed directional edge reads.
+- `src/indexed-db.ts` owns typed shared IndexedDB setup and transaction/request mechanics.
+- `src/edge-store.js` and `src/indexed-db.js` are compatibility re-export shims for JavaScript callers.
 
 ## Verification
 
@@ -79,7 +83,9 @@ Deterministic tests should cover:
 - manual and derived provenance coexisting on one edge;
 - concurrent manual/derived ensures retaining both provenance flags;
 - updating mutable fields without changing edge identity;
-- an update preserving already-established provenance;
+- an update preserving already-established provenance without establishing provenance supplied by the update payload;
 - an update not creating an unknown edge unless the caller explicitly passes `create: true`;
 - concurrent statistics refresh and provenance addition retaining both the refreshed state and established provenance;
 - durable incoming/outgoing reads continuing to work from IndexedDB without a second graph cache.
+
+Ordering between distinct Explorer Readings is verified at the Knowledge Acquisition projection boundary rather than inferred from storage transaction order.

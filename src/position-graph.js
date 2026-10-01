@@ -1,4 +1,4 @@
-import { getIncoming, getOutgoing, mutateEdge } from './db.js';
+import { getIncoming, getOutgoing, mutateEdge } from './edge-store.js';
 import { canonicalPosition, edgeId, resolveMove } from './graph.js';
 
 /**
@@ -87,8 +87,8 @@ export function createPositionGraph({
    *
    * Existing mutable/statistical fields are preserved. Requested manual/derived
    * provenance is OR-added atomically so concurrent discovery paths cannot lose
-   * already-established provenance or overwrite newer statistics with an older
-   * caller snapshot.
+   * already-established provenance. Source-observation freshness and ordering are
+   * owned by the acquisition/projection layer, not inferred here.
    *
    * @param {Object} edge
    * @param {Object} [provenance]
@@ -122,6 +122,8 @@ export function createPositionGraph({
    * Unknown topology is left untouched unless the caller explicitly permits first
    * admission with `create: true`. PositionGraph validates that decision but does
    * not decide whether a newly observed relationship is useful enough to admit.
+   * Retention provenance is established only through `ensureEdge()`; mutable
+   * evidence updates cannot add it accidentally.
    *
    * @param {Object} edge
    * @param {Object} [options]
@@ -134,8 +136,8 @@ export function createPositionGraph({
       if (!existing && !create) return null;
       return {
         ...normalized,
-        manual: Boolean(existing?.manual || normalized.manual),
-        derived: Boolean(existing?.derived || normalized.derived),
+        manual: Boolean(existing?.manual),
+        derived: Boolean(existing?.derived),
       };
     });
   }

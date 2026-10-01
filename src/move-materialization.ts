@@ -1,7 +1,8 @@
 import { canonicalPosition, resolveMove } from './graph.js';
 import { debugLog } from './debug.js';
-import { positionGraph } from './position-graph.js';
+import { positionGraph } from './position-graph.ts';
 import { positionRepository } from './position-repository.js';
+import type { GraphEdge } from './position-graph.ts';
 
 export type Promotion = 'q' | 'r' | 'b' | 'n';
 
@@ -22,13 +23,7 @@ export interface MaterializeMoveInput {
   move: MoveCandidate;
 }
 
-export interface MaterializedEdge {
-  source: string;
-  target: string;
-  uci: string;
-  san: string;
-  [key: string]: unknown;
-}
+export type MaterializedEdge = GraphEdge;
 
 export interface MaterializeMoveResult {
   edge: MaterializedEdge;
@@ -45,15 +40,6 @@ type DebugLevel = 'info' | 'warn' | 'error';
 
 function log(event: string, detail: unknown = null, level: DebugLevel = 'info'): void {
   Reflect.apply(debugLog, undefined, [event, detail, level]);
-}
-
-function isMaterializedEdge(value: unknown): value is MaterializedEdge {
-  if (typeof value !== 'object' || value === null) return false;
-  const edge = value as Record<string, unknown>;
-  return typeof edge.source === 'string'
-    && typeof edge.target === 'string'
-    && typeof edge.uci === 'string'
-    && typeof edge.san === 'string';
 }
 
 export async function materializeMove(input: MaterializeMoveInput): Promise<MaterializeMoveResult | null> {
@@ -95,9 +81,6 @@ export async function materializeMove(input: MaterializeMoveInput): Promise<Mate
 
   await positionRepository.ensure(resolved.target);
   const stored = await positionGraph.ensureEdge(edge, { manual: true });
-  if (!isMaterializedEdge(stored)) {
-    throw new TypeError('PositionGraph returned an invalid materialized edge');
-  }
   log('move materialization stored', {
     san: resolved.san,
     uci: stored.uci,

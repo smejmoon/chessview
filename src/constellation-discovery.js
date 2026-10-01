@@ -1,6 +1,14 @@
 import { debugLog } from './debug.js';
 import { acquireExplorerReading } from './knowledge-acquisition.js';
 
+/** @typedef {'foreground' | 'background' | (() => 'foreground' | 'background')} RequestPriority */
+
+/**
+ * @param {string} center
+ * @param {*} structure
+ * @param {(() => Promise<*> | *) | undefined} onProgress
+ * @param {{ signal?: AbortSignal, priority?: RequestPriority }} [options]
+ */
 export async function discoverSelectedLines(center, structure, onProgress, { signal, priority = 'foreground' } = {}) {
   const inspected = new Set();
   let current = structure;

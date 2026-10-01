@@ -10,12 +10,22 @@ import { loadExplorerReading, readCachedExplorerReading } from './explorer.js';
 import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 
+const SUPPLEMENTARY_WARM_TIMEOUT_MS = 30_000;
+
+function abortError() {
+  const error = new Error('Supplementary lookahead became obsolete before warming started');
+  error.name = 'AbortError';
+  return error;
+}
+
 export function createKnowledgeAcquisition({
   loadExplorer = loadExplorerReading,
   readCachedExplorer = readCachedExplorerReading,
   graph = positionGraph,
   repository = positionRepository,
   now = () => Date.now(),
+  warmTimeoutMs = SUPPLEMENTARY_WARM_TIMEOUT_MS,
+  createTimeoutSignal = (ms) => AbortSignal.timeout(ms),
 } = {}) {
   async function reconcileExplorerReading(canonical, explorer) {
     const edges = [];
@@ -82,8 +92,10 @@ export function createKnowledgeAcquisition({
   }
 
   async function warmExplorerReading(key, { signal } = {}) {
+    if (signal?.aborted) throw abortError();
     const canonical = canonicalPosition(key);
-    const explorer = await loadExplorer(canonical, { signal, priority: 'background' });
+    const warmSignal = createTimeoutSignal(warmTimeoutMs);
+    const explorer = await loadExplorer(canonical, { signal: warmSignal, priority: 'background' });
     if (!explorer) return null;
     debugLog('Explorer Reading warmed', {
       position: canonical,

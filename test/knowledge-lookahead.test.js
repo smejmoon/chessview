@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { nominateConstellationLookahead } from '../src/constellation-lookahead.js';
 import { createKnowledgeAcquisition } from '../src/knowledge-acquisition.js';
 import { NodusController } from '../src/nodus-controller.js';
+import { createPositionRepository } from '../src/position-repository.js';
 import { START_FEN, canonicalPosition } from '../src/graph.js';
 
 const center = canonicalPosition(START_FEN);
@@ -12,6 +13,12 @@ function deferred() {
   let reject;
   const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
   return { promise, resolve, reject };
+}
+
+function abortError() {
+  const error = new Error('aborted');
+  error.name = 'AbortError';
+  return error;
 }
 
 async function flush(turns = 12) {
@@ -49,6 +56,7 @@ test('supplementary Explorer warming uses background urgency without reconciling
   };
   const calls = [];
   let reconciliations = 0;
+  const warmLifetime = new AbortController();
   const acquisition = createKnowledgeAcquisition({
     loadExplorer: async (key, options) => {
       calls.push([key, options]);
@@ -61,6 +69,10 @@ test('supplementary Explorer warming uses background urgency without reconciling
       },
     },
     repository: { merge: async () => {} },
+    createTimeoutSignal: (ms) => {
+      assert.equal(ms, 30_000);
+      return warmLifetime.signal;
+    },
   });
   const controller = new AbortController();
 
@@ -68,7 +80,112 @@ test('supplementary Explorer warming uses background urgency without reconciling
   assert.equal(reconciliations, 0);
   assert.equal(calls.length, 1);
   assert.equal(calls[0][1].priority, 'background');
-  assert.equal(calls[0][1].signal, controller.signal);
+  assert.equal(calls[0][1].signal, warmLifetime.signal);
+  assert.notEqual(calls[0][1].signal, controller.signal);
+});
+
+test('obsolete lookahead does not start a supplementary warm', async () => {
+  let loads = 0;
+  const acquisition = createKnowledgeAcquisition({
+    loadExplorer: async () => {
+      loads += 1;
+      return null;
+    },
+  });
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    acquisition.warmExplorerReading(center, { signal: controller.signal }),
+    { name: 'AbortError' },
+  );
+  assert.equal(loads, 0);
+});
+
+test('started lookahead warm survives view cancellation so foreground demand can share and promote it', async () => {
+  const sourceReading = { white: 1, draws: 0, black: 0, moves: [] };
+  const repository = createPositionRepository({
+    read: async () => null,
+    write: async () => {},
+    version: () => 0,
+  });
+  const completion = deferred();
+  const warmLifetime = new AbortController();
+  let producerCalls = 0;
+  let producerSignal = null;
+  let producerPriority = null;
+
+  const loadExplorer = (key, options = {}) => repository.load(
+    key,
+    'explorer',
+    ({ signal, priority }) => {
+      producerCalls += 1;
+      producerSignal = signal;
+      producerPriority = priority;
+      return completion.promise;
+    },
+    options,
+  );
+  const acquisition = createKnowledgeAcquisition({
+    loadExplorer,
+    createTimeoutSignal: () => warmLifetime.signal,
+  });
+  const view = new AbortController();
+
+  const warm = acquisition.warmExplorerReading(center, { signal: view.signal });
+  await flush();
+  assert.equal(producerCalls, 1);
+  assert.equal(producerPriority(), 'background');
+
+  view.abort();
+  await flush();
+  assert.equal(producerSignal.aborted, false);
+
+  const foreground = loadExplorer(center, { priority: 'foreground' });
+  await flush();
+  assert.equal(producerCalls, 1);
+  assert.equal(producerPriority(), 'foreground');
+
+  completion.resolve(sourceReading);
+  assert.equal(await warm, sourceReading);
+  assert.equal(await foreground, sourceReading);
+});
+
+test('detached lookahead warm is aborted when its bounded lifetime expires', async () => {
+  const repository = createPositionRepository({
+    read: async () => null,
+    write: async () => {},
+    version: () => 0,
+  });
+  const warmLifetime = new AbortController();
+  let producerSignal = null;
+
+  const loadExplorer = (key, options = {}) => repository.load(
+    key,
+    'explorer',
+    ({ signal }) => {
+      producerSignal = signal;
+      return new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(abortError()), { once: true });
+      });
+    },
+    options,
+  );
+  const acquisition = createKnowledgeAcquisition({
+    loadExplorer,
+    createTimeoutSignal: () => warmLifetime.signal,
+  });
+  const view = new AbortController();
+
+  const warm = acquisition.warmExplorerReading(center, { signal: view.signal });
+  await flush();
+  view.abort();
+  await flush();
+  assert.equal(producerSignal.aborted, false);
+
+  warmLifetime.abort();
+  await assert.rejects(warm, { name: 'AbortError' });
+  assert.equal(producerSignal.aborted, true);
 });
 
 test('a warmed Explorer Reading can later reconcile from cache without another source load', async () => {

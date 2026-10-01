@@ -20,7 +20,7 @@ An Explorer Reading is source evidence, not `ChartedGraph` identity. A later Rea
 
 Product callers own why information is needed. For example, Constellation owns whether another Explorer Reading can still change its constrained composition and may separately nominate bounded supplementary lookahead from positions it considers locally relevant to the current view. Knowledge Acquisition owns fulfilling requested or nominated acquisition and reconciling graph-bearing observations when reconciliation is requested; it does not absorb the caller's visibility, presentation-space, settlement, or relevance policy.
 
-The current-view boundary may replace or cancel its participation in obsolete lookahead as accepted composition changes, modes switch, or the Nodus changes. That ephemeral demand lifecycle does not make the current view owner of reusable source data or shared producer lifetime.
+The current-view boundary may replace or cancel obsolete lookahead relevance as accepted composition changes, modes switch, or the Nodus changes. A nomination that is already obsolete before warming starts does no work. Once Knowledge Acquisition has started a supplementary warm, however, fulfillment receives its own bounded background lifetime rather than being cancelled solely because the nominating view changed. That detached lifetime does not make the current view owner of reusable source data or shared producer state.
 
 Source clients own endpoint-specific access, authentication behavior, request parameters, parsing and source validation, facet cache/freshness policy, stale fallback, and successful source absence. A source client exposes a source-shape-valid usable observation or absence; it does not thereby own Chessview's graph-growth policy.
 
@@ -54,12 +54,14 @@ Source clients own endpoint-specific access, authentication behavior, request pa
 Supplementary lookahead is Constellation-directed. Constellation may nominate a bounded set of canonical positions that are locally relevant to an accepted composition and plausible near-term navigation targets. Those nominations express ephemeral usefulness, not durable graph identity and not structural work required to settle the current Constellation.
 
 - Constellation owns which positions it nominates and their relevance ordering. Exact lookahead breadth is a Constellation policy/implementation choice rather than a transport priority class.
-- The current-view boundary owns whether those nominations remain live for the current accepted projection. Recenter, mode changes, or accepted refinement may replace obsolete lookahead participation without deleting already reusable source data.
-- Knowledge Acquisition turns live nominations into supplementary source-client work with background urgency. It does not independently crawl outward from warmed results or invent a second relevance ranking.
+- The current-view boundary owns whether a nomination remains relevant to the current accepted projection. Recenter, mode changes, or accepted refinement may replace obsolete nomination relevance immediately.
+- Knowledge Acquisition turns a still-live nomination into supplementary source-client work with background urgency. If the nomination is already obsolete before warming starts, the warm is not started. Once warming starts, it receives a detached background lifetime of at most 30 seconds so useful source work can finish into cache instead of being cancelled solely because the view changed.
+- The bounded warm lifetime is fulfillment policy, not current-view lifetime. Later foreground demand for the same position/facet may join the same shared producer and promote its transport urgency; if no caller joins and the warm exceeds its ceiling, the warm subscription expires and ordinary `PositionRepository` last-subscriber cancellation may stop the producer.
+- Knowledge Acquisition does not independently crawl outward from warmed results or invent a second relevance ranking.
 - Warming a graph-bearing source facet does not by itself reconcile that observation into `ChartedGraph` or perform Edge Admission. A later normal graph-acquisition request may reconcile the already-usable cached observation through the ordinary Knowledge Acquisition path.
 - Source clients still own whether a nominated facet is already usable/fresh and whether obtaining it requires network access. Knowledge Acquisition does not duplicate endpoint cache policy.
 - Supplementary lookahead must yield to information needed for explicit user/current-view work and must not keep Weather unsettled or delay publication of a trustworthy Constellation.
-- Shared per-position/facet producers may be joined by later foreground demand. Their effective transport urgency follows the highest live subscriber, so a queued background warm can become foreground without duplicate acquisition.
+- Shared per-position/facet producers may be joined by later foreground demand. Their effective transport urgency follows the highest live subscriber, so a background warm can become foreground without duplicate acquisition.
 - `ChartedGraph` topology remains durable even if source-evidence storage later needs memory or persistence limits. Evicting refreshable evidence must not silently retract established graph identity.
 
 ## Verification
@@ -81,6 +83,8 @@ Deterministic tests should cover:
 - explicitly materialized moves remaining durable independently of automatic Constellation eligibility;
 - optional engine evidence remaining unnecessary for structural settlement merely because it could alter selection if it existed;
 - bounded Constellation-directed lookahead warming source data with background urgency without reconciling graph-bearing observations or recursively expanding the graph;
-- obsolete lookahead participation detaching while later foreground demand can share and promote equivalent queued work rather than duplicate it;
+- an already-obsolete nomination doing no source work;
+- a started supplementary warm surviving view replacement for its bounded lifetime so later foreground demand can share and promote the same producer rather than duplicate it;
+- expiry of that detached lifetime releasing an otherwise-unused producer through normal shared-load cancellation;
 - a later graph-acquisition request consuming an already-warmed usable source observation and reconciling it without avoidable network access;
 - supplementary lookahead remaining independent from Weather and current Constellation settlement.

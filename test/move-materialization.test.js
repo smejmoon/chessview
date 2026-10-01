@@ -23,7 +23,7 @@ const { positionRepository } = await import('../src/position-repository.js');
 
 const center = canonicalPosition(START_FEN);
 
-test('materializing a legal move creates its durable edge and target position', async () => {
+test('materializing a legal move creates its durable edge and target position without Explorer evidence', async () => {
   await clearGraph();
   const resolved = resolveMove(center, { uci: 'e2e4' });
 
@@ -37,6 +37,10 @@ test('materializing a legal move creates its durable edge and target position', 
   assert.equal(result.edge.target, resolved.target);
   assert.equal(result.edge.uci, 'e2e4');
   assert.equal(result.edge.manual, true);
+  assert.equal('games' in result.edge, false);
+  assert.equal('share' in result.edge, false);
+  assert.equal('qualifies' in result.edge, false);
+  assert.equal('updatedAt' in result.edge, false);
   assert.ok((await getOutgoing(center)).some((edge) => edge.id === result.edge.id));
   assert.equal((await positionRepository.get(resolved.target))?.fen, resolved.fen);
 });

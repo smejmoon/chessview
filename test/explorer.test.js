@@ -25,7 +25,8 @@ globalThis.window = { location: { href: 'https://example.test/chessview/', searc
 globalThis.history = { state: null, replaceState() {} };
 
 const { clearGraph, getOutgoing, putEdges, putNode } = await import('../src/db.js');
-const { loadExplorer } = await import('../src/explorer.js');
+const { loadExplorerReading } = await import('../src/explorer.js');
+const { acquireExplorerReading: loadExplorer } = await import('../src/knowledge-acquisition.js');
 const { discoverSelectedLines } = await import('../src/constellation-discovery.js');
 const { composeNodusStructure } = await import('../src/nodus-structure.js');
 
@@ -95,8 +96,29 @@ test('401 clears the stored Lichess access token', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'expired-token');
   globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => 'unauthorized' });
-  await assert.rejects(loadExplorer(center, { force: true }), (error) => error?.status === 401);
+  await assert.rejects(loadExplorerReading(center, { force: true }), (error) => error?.status === 401);
   assert.equal(localStorage.getItem('chessview.lichess.accessToken'), null);
+});
+
+test('Explorer source delivery caches a usable Reading without owning Edge Admission', async () => {
+  await clearGraph();
+  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
+  const explorer = {
+    white: 1000,
+    draws: 0,
+    black: 0,
+    moves: [{ uci: 'e2e4', white: 600, draws: 0, black: 0 }],
+  };
+  let networkCalls = 0;
+  globalThis.fetch = async () => {
+    networkCalls += 1;
+    return { ok: true, status: 200, json: async () => explorer, text: async () => '' };
+  };
+
+  assert.deepEqual(await loadExplorerReading(center, { force: true }), explorer);
+  assert.deepEqual(await loadExplorerReading(center), explorer);
+  assert.equal(networkCalls, 1);
+  assert.deepEqual(await getOutgoing(center), []);
 });
 
 test('selected Line acquisition reads only positions exposed by the structural Reading frontier', async () => {

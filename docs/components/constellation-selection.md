@@ -11,24 +11,30 @@ This specification decides which candidates remain in contention and how candida
 Selection may use:
 
 - rated Lichess Explorer Prevalence at the candidate move's immediate source position;
-- engine-quality evidence;
-- human-result evidence;
+- engine-quality evidence already available to the current composition;
+- human-result evidence supplied by rated Explorer Readings;
 - canonical graph identity needed to recognize transpositions.
 
 [Evidence](evidence.md) owns the meaning, calculation, and unknown/unavailable state of quality, human-result, and Prevalence signals. Selection consumes those signals without redefining them.
+
+## Acquisition boundary
+
+Selection is not an engine-acquisition frontier. It may consume usable engine evidence already available through `LichessEval.available()`, but it does not start cloud-evaluation acquisition solely because an unknown engine result could change eligibility, Salience, or constrained membership. Missing engine evidence remains unknown and does not keep the Constellation structurally unsettled.
+
+Rated Explorer acquisition is different because an Explorer Reading is also graph-bearing knowledge: Constellation may request another Reading when additional outgoing graph knowledge can still change constrained composition. Human-result and Prevalence evidence that arrive with such a Reading may affect selection, but that does not turn optional cloud evaluation into a structural dependency.
 
 ## Eligibility
 
 - Automatic candidates are bounded by usable rated Lichess Explorer data. A move with no usable Prevalence data there is outside automatic Constellation selection for now.
 - Prevalence and quality are independent. A frequent move remains eligible even when engine or human evidence is poor because users encounter it in practice.
-- Rarity alone does not disqualify a move. A rare move remains eligible when either engine quality or favorable human results make it significant.
+- Rarity alone does not disqualify a move. A rare move remains significant when available engine quality or favorable human results provide a positive rescue signal.
 - Rare candidates whose available selection evidence establishes them as bad or unsuccessful, with no positive engine-quality or human-result rescue signal, are the first omission class when the Constellation must reduce what it shows.
 - Missing, failed, insufficient, or otherwise unknown rescue evidence is not bad/unfavorable evidence and cannot establish that omission class on its own.
 - Explicit/manual graph knowledge may remain navigable even when it is outside automatic Constellation candidacy.
 
 ## Salience
 
-Salience is the selection importance of an eligible candidate: how strongly ChessView should prefer representing it relative to sibling alternatives. Salience may depend on Prevalence and other selection evidence, but it is not itself a population statistic.
+Salience is the selection importance of an eligible candidate: how strongly ChessView should prefer representing it relative to sibling alternatives. Salience may depend on Prevalence and other available selection evidence, but it is not itself a population statistic.
 
 ## Ranking
 
@@ -48,9 +54,11 @@ A fixed `5%` eligibility cutoff and a fixed `19`-board visibility limit are not 
 Deterministic tests should cover:
 
 - a frequent bad move remaining eligible;
-- a rare move remaining eligible when engine evidence rescues it;
-- a rare move remaining eligible when favorable human results rescue it without engine rescue;
+- a rare move remaining significant when already-available engine evidence rescues it;
+- a rare move remaining significant when favorable human results rescue it without engine rescue;
 - unknown, failed, or insufficient rescue evidence not being treated as bad/unfavorable evidence;
+- selection not starting cloud-evaluation acquisition merely because unknown engine evidence could alter ranking or constrained membership;
+- missing engine evidence not creating a structural settlement dependency;
 - a rare move with known bad/unsuccessful evidence and no positive rescue being omitted before otherwise comparable candidates;
 - same-source Salience starting from Prevalence while positive/negative evidence can move a candidate one local sibling place;
 - unknown or conflicting evidence leaving same-source Salience in Prevalence order;

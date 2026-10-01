@@ -1,5 +1,5 @@
 import { debugLog } from './debug.js';
-import { loadExplorer } from './explorer.js';
+import { acquireExplorerReading } from './knowledge-acquisition.js';
 
 export async function discoverSelectedLines(center, structure, onProgress, { signal } = {}) {
   const inspected = new Set();
@@ -17,7 +17,7 @@ export async function discoverSelectedLines(center, structure, onProgress, { sig
       frontier: frontier.length,
     });
 
-    await loadExplorer(next, { signal });
+    await acquireExplorerReading(next, { signal });
     if (signal?.aborted) break;
     const recomposed = await onProgress?.();
     if (recomposed) current = recomposed;

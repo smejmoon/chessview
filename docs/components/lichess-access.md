@@ -57,6 +57,8 @@ Deterministic tests should cover:
 
 - OAuth callback success and terminal-failure cleanup;
 - expired-token / HTTP 401 handling;
+- malformed rated Explorer payloads not being cached or exposed as usable Explorer Readings;
+- malformed cached Explorer values being treated as unusable rather than fresh source data;
 - cross-client serialization between rated Explorer, Masters, cloud evaluation, and other gateway users;
 - a 429 from one client delaying later traffic from another client;
 - cancellation of queued obsolete work before it reaches the network;

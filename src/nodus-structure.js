@@ -10,7 +10,10 @@ import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 import { rootTranspositionEnricher } from './root-enrichment.js';
-import { loadExplorer, reconcileCachedExplorerReading } from './explorer.js';
+import {
+  acquireExplorerReading,
+  reconcileCachedExplorerReading,
+} from './knowledge-acquisition.js';
 import { humanResultQuality, moveEvaluation, moveFrequency } from './evidence.js';
 import { lichessEval } from './lichess-eval.js';
 import {
@@ -48,11 +51,11 @@ function createCandidateSource(signal, { hydrateExplorer = true } = {}) {
     if (explorerLoads.has(source)) return explorerLoads.get(source);
     const pending = (async () => {
       throwIfAborted(signal);
-      const loaded = hydrateExplorer
-        ? await loadExplorer(source, { signal })
+      const explorer = hydrateExplorer
+        ? await acquireExplorerReading(source, { signal })
         : await reconcileCachedExplorerReading(source);
       throwIfAborted(signal);
-      return loaded?.explorer ?? null;
+      return explorer;
     })();
     explorerLoads.set(source, pending);
     return pending;
@@ -228,7 +231,7 @@ export async function composeNodusStructure({ center, mode, max, signal }) {
   throwIfAborted(signal);
   const capacity = Math.max(1, Number.isFinite(max) ? Math.floor(max) : 1);
   if (mode === 'roots') await rootTranspositionEnricher.ensure(center, { signal });
-  else await loadExplorer(center, { signal });
+  else await acquireExplorerReading(center, { signal });
   throwIfAborted(signal);
 
   const candidateSource = createCandidateSource(signal, { hydrateExplorer: mode === 'roots' });

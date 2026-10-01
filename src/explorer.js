@@ -1,19 +1,16 @@
 import {
-  AUTO_SAMPLE_FLOOR,
   EXPLORER_TTL_MS,
   canonicalPosition,
-  decorateExplorerMoves,
-  resolveMove,
   toPlayableFen,
   totalGames,
 } from './graph.js';
 import { debugLog } from './debug.js';
 import { lichessSession } from './lichess-session.js';
 import { lichessGateway } from './lichess-gateway.js';
-import { positionGraph } from './position-graph.js';
 import { positionRepository } from './position-repository.js';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
+const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 
 function explorerUrl(key) {
   const url = new URL(ENDPOINT);
@@ -31,75 +28,71 @@ function httpError(status, message) {
   return error;
 }
 
-async function reconcileExplorerReading(canonical, explorer) {
-  const edges = [];
-  const admitUnknown = totalGames(explorer) >= AUTO_SAMPLE_FLOOR;
+function invalidDataError() {
+  const error = new Error('Lichess explorer returned invalid data');
+  error.kind = 'invalid-data';
+  return error;
+}
 
-  for (const move of decorateExplorerMoves(explorer)) {
-    try {
-      const resolved = resolveMove(canonical, { uci: move.uci });
-      const edge = {
-        source: canonical,
-        target: resolved.target,
-        uci: resolved.uci,
-        san: resolved.san,
-        games: move.games,
-        share: move.share,
-        manual: false,
-        derived: false,
-        updatedAt: Date.now(),
-      };
+function validCount(value) {
+  return Number.isInteger(value) && value >= 0;
+}
 
-      const stored = await positionGraph.updateEdge(edge, { create: admitUnknown });
-      if (!stored) continue;
-      await positionRepository.merge(resolved.target, { fen: resolved.fen });
-      edges.push(stored);
-    } catch (error) {
-      debugLog('ignored Explorer Reading move', {
-        position: canonical,
-        uci: move.uci,
-        error: error?.message ?? String(error),
-      }, 'warn');
-    }
+function validExplorerMove(move, sourceGames) {
+  if (!move || typeof move !== 'object' || Array.isArray(move)) return false;
+  if (typeof move.uci !== 'string' || !UCI_MOVE.test(move.uci)) return false;
+  if (![move.white, move.draws, move.black].every(validCount)) return false;
+  return (move.white + move.draws + move.black) <= sourceGames;
+}
+
+function parseExplorerReading(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalidDataError();
+  if (![value.white, value.draws, value.black].every(validCount)) throw invalidDataError();
+  if (!Array.isArray(value.moves)) throw invalidDataError();
+
+  const sourceGames = totalGames(value);
+  if (!value.moves.every((move) => validExplorerMove(move, sourceGames))) throw invalidDataError();
+  return value;
+}
+
+function cachedExplorerReading(record) {
+  if (!record?.explorer) return null;
+  try {
+    return parseExplorerReading(record.explorer);
+  } catch {
+    return null;
   }
-
-  return edges;
 }
 
-export async function reconcileCachedExplorerReading(key) {
-  const canonical = canonicalPosition(key);
-  const cached = await positionRepository.get(canonical);
-  if (!cached?.explorer) return null;
-  await reconcileExplorerReading(canonical, cached.explorer);
-  return cached;
+export async function readCachedExplorerReading(key) {
+  const cached = await positionRepository.get(canonicalPosition(key));
+  return cachedExplorerReading(cached);
 }
 
-async function staleExplorerOrThrow(error, canonical, cached) {
+async function staleExplorerOrThrow(error, canonical, cachedExplorer) {
   if (error?.name === 'AbortError') throw error;
-  if (!cached?.explorer) throw error;
-  const edges = await reconcileExplorerReading(canonical, cached.explorer);
+  if (!cachedExplorer) throw error;
   debugLog('Explorer refresh failed; using stale Reading', {
     position: canonical,
     error: error?.message ?? String(error),
-    edges: edges.length,
+    games: totalGames(cachedExplorer),
   }, 'warn');
-  return cached;
+  return cachedExplorer;
 }
 
-export function loadExplorer(key, { force = false, signal } = {}) {
+export function loadExplorerReading(key, { force = false, signal } = {}) {
   const canonical = canonicalPosition(key);
   const facet = force ? 'explorer:force' : 'explorer';
   return positionRepository.load(canonical, facet, async ({ signal: requestSignal }) => {
     const cached = await positionRepository.get(canonical);
-    const fresh = cached?.explorer && Date.now() - (cached.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS;
+    const cachedExplorer = cachedExplorerReading(cached);
+    const fresh = cachedExplorer && Date.now() - (cached.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS;
     if (!force && fresh) {
-      const edges = await reconcileExplorerReading(canonical, cached.explorer);
       debugLog('Explorer Reading cache hit', {
         position: canonical,
-        games: cached.games ?? 0,
-        edges: edges.length,
+        games: totalGames(cachedExplorer),
       });
-      return cached;
+      return cachedExplorer;
     }
 
     try {
@@ -132,8 +125,8 @@ export function loadExplorer(key, { force = false, signal } = {}) {
         throw httpError(response.status, `Lichess explorer returned ${response.status}`);
       }
 
-      const explorer = await response.json();
-      const node = await positionRepository.merge(canonical, {
+      const explorer = parseExplorerReading(await response.json());
+      await positionRepository.merge(canonical, {
         fen: cached?.fen ?? toPlayableFen(canonical),
         opening: explorer.opening ?? cached?.opening ?? null,
         explorer,
@@ -141,12 +134,11 @@ export function loadExplorer(key, { force = false, signal } = {}) {
         games: totalGames(explorer),
       });
 
-      const edges = await reconcileExplorerReading(canonical, explorer);
-      debugLog('Explorer Reading stored', { position: canonical, games: node.games, edges: edges.length });
-      return node;
+      debugLog('Explorer Reading stored', { position: canonical, games: totalGames(explorer) });
+      return explorer;
     } catch (error) {
       debugLog('explorer refresh failed', { position: canonical, error: error?.message ?? String(error) }, 'error');
-      return staleExplorerOrThrow(error, canonical, cached);
+      return staleExplorerOrThrow(error, canonical, cachedExplorer);
     }
   }, { signal });
 }

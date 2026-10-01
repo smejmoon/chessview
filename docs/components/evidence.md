@@ -12,13 +12,11 @@ Source clients own whether their source data is fit to expose. In particular, [`
 
 Evidence is not structural or supplementary solely because of its source. Criticality follows how the current view uses it.
 
-Evidence explicitly required to decide whether the current Constellation can still change is part of structural settlement for that decision. It may remain unresolved while a trustworthy current Constellation is already published; in that case it keeps [Weather](weather.md) unsettled rather than acting as a publication gate. Evidence used only to annotate an already established Constellation or enrich the Rail is supplementary and may continue hydrating without blocking normal Weather.
+For the current automatic Constellation flow, rated Explorer acquisition is structural when another Explorer Reading can still change the constrained graph composition. Prevalence and human-result evidence arrive as part of that graph-bearing Reading and may influence selection once available.
 
-Rated Lichess Explorer Prevalence used by Constellation selection is structural input. Engine and human-result evidence may also become structural input when Constellation selection requests them to decide whether a rare candidate remains eligible. The same engine or human evidence remains supplementary when it is used only for labels, colors, mismatch markers, rarity treatment, or Rail enrichment.
+Cloud evaluation is not proactively acquired merely to settle Constellation selection. Selection may consume engine evidence already available through `LichessEval.available()`. If no usable engine value is already available, the engine signal remains unknown; that absence does not create a pending structural dependency and does not keep Weather unsettled. Cloud evaluation acquired for annotations, Rail enrichment, diagnostics, or opportunistic background warming remains supplementary to the current view.
 
-Unavailable structural evidence remains unknown rather than negative chess evidence. If a trustworthy Constellation was already published without that refinement, terminal unavailability may settle the dependency without invalidating the trustworthy structure already established.
-
-Failure of supplementary acquisition reduces richness rather than structural usability. Source-specific operational failure remains available through the owning source client's operational channel; it must not be encoded as negative chess evidence or by itself reopen Weather.
+Unavailable evidence remains unknown rather than negative chess evidence. Failure of supplementary or background acquisition reduces richness rather than structural usability. Source-specific operational failure remains available through the owning source client's operational channel; it must not be encoded as negative chess evidence or by itself reopen Weather.
 
 ## Engine evidence
 
@@ -32,7 +30,7 @@ Failure of supplementary acquisition reduces richness rather than structural usa
   - `1.0+`: bad.
 - Missing engine source data remains unavailable/unknown rather than being interpreted as strong, dubious, or bad.
 
-Constellation selection may consume engine quality as an independent rescue signal for rare candidates. That consumer owns the consequence for eligibility and ranking.
+Constellation selection may consume already-available engine quality as an independent rescue signal for rare candidates. That consumer owns the consequence for eligibility and ranking; Evidence does not request engine acquisition on its behalf.
 
 ## Human evidence
 
@@ -73,13 +71,13 @@ Deterministic tests should cover:
 - move loss from source MultiPV and target-position fallback;
 - the 0.5 / 1.0 pawn quality thresholds;
 - unavailable engine source data remaining distinct from strong, dubious, or bad quality;
-- structural evidence remaining able to refine an already published trustworthy Constellation without being required for its initial publication;
-- terminal unavailable structural evidence settling as unknown without invalidating already trustworthy structure;
+- already-available engine evidence remaining usable by selection without Evidence owning its acquisition;
+- missing optional engine evidence remaining unknown without creating a structural Weather dependency;
 - human-result quality preserving favorable, unfavorable, and unknown/insufficient states independently from Prevalence;
 - human-result mismatch direction and sample gating;
 - Root rarity thresholds and evidence gating;
 - rated Explorer Prevalence remaining local to its source position;
-- supplementary evidence completing, failing, or arriving late without blocking or reopening successful Weather when it is not a pending Constellation-selection dependency.
+- supplementary/background evidence completing, failing, or arriving late without blocking or reopening successful Weather.
 
 `LichessEval` verification separately owns minimum source depth, absence versus provider issues, stale fallback, and request lifetime.
 

@@ -18,7 +18,7 @@ globalThis.history = { state: null, replaceState() {} };
 
 const { clearGraph } = await import('../src/db.js');
 const { START_FEN, canonicalPosition } = await import('../src/graph.js');
-const { loadExplorer } = await import('../src/explorer.js');
+const { loadExplorerReading } = await import('../src/explorer.js');
 const { lichessEval } = await import('../src/lichess-eval.js');
 const { loadMasters } = await import('../src/masters.js');
 
@@ -72,7 +72,7 @@ test('real Lichess-backed clients share the production gateway', async () => {
   };
 
   const requests = [
-    loadExplorer(center, { force: true }),
+    loadExplorerReading(center, { force: true }),
     loadMasters(center),
     lichessEval.get(center),
   ];

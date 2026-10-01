@@ -1,36 +1,42 @@
 # Do:
 
-Continue the `ChartedGraph` requirements review and align implementation only where the settled domain model exposes a real code mismatch. Keep `ChartedGraph` as the durable domain model and `PositionGraph` as the distinct application/architecture boundary for validated edge access and mutation unless later requirements invalidate that separation.
+Align implementation with the settled `ChartedGraph` model: Graph Edges are durable topology, not containers for mutable Explorer evidence or current-view selection state. Remove code paths that rewrite existing Graph Edges only to refresh Explorer games/share/timestamps, and stop using Graph Edge objects as containers for Candidate/Salience annotations where the owning Constellation layer can carry that state separately.
 
-As the review surfaces additional code/document mismatches in Nodes, Edges, Growth and retention, or their technical realization, fold them into this outcome rather than creating competing graph-alignment work.
+Review the remaining `manual` / `derived` representation against the settled contract. Preserve an explicit-materialization distinction only where current product behavior needs it; remove or rename provenance fields that no longer carry an independent product meaning.
 
 # Because:
 
-`docs/components/charted-graph.md` owns durable graph semantics, while `docs/architecture/position-graph.md` owns the edge API, normalization, mutation coordination, and persistence mechanics. `PositionGraph.updateEdge()` is constrained to mutable evidence updates and preservation of already-established retention provenance; `ensureEdge()` is the operation that may establish `manual` or `derived` provenance. That keeps graph-retention reasons distinct from statistical refresh while preserving the existing `ChartedGraph` / `PositionGraph` separation.
+`docs/components/charted-graph.md` now defines a Graph Edge as one durable legal `source + Move + target` relationship. Mutable Explorer statistics, source-observation versions, eligibility, Salience, family/depth membership, and other current-view state are outside Graph Edge persistence.
 
-The persistence boundary now follows that separation more directly: `PositionGraph` consumes `src/edge-store.js`, `PositionRepository` consumes `src/position-store.js`, and shared IndexedDB setup/transaction mechanics live in `src/indexed-db.js`. `src/db.js` remains only a compatibility and test/maintenance surface rather than the application-level mixed node/edge API.
+`docs/components/knowledge-acquisition.md` now limits Explorer reconciliation to graph growth: resolve returned moves, admit unknown legal relationships under acquisition policy, and establish missing topology. Already-known relationships require no graph rewrite merely because another Reading contains the same Move. Reconciliation therefore converges against actual graph state and does not need durable Explorer projection revisions or source-order bookkeeping.
 
-Atomic edge-store mutation preserves per-edge read/modify/write coordination and retention-provenance merging. It does not establish source-observation freshness. Explorer Reading identity/order and prevention of an older Reading overwriting a newer projected observation are owned by `backlog/2026-09-30-explorer-reading-projection.md` rather than by `PositionGraph`.
+`docs/components/constellation.md` and `docs/components/constellation-selection.md` define a Candidate as a known Graph Edge combined with current evidence and current-view selection state. The implementation still decorates edge-shaped objects with `games`, `share`, `qualifies`, and `salienceOrder`, so code has not yet caught up with the ownership split.
 
-The reviewed canonical-position identity, Move resolution, edge normalization, explicit Move materialization, transposition persistence, and Knowledge Acquisition callers currently follow the graph boundary. The remaining risk is that further requirements review may reveal another implementation behavior that does not match the settled `ChartedGraph` contract.
+`docs/architecture/position-graph.md` now specifies a topology-oriented boundary. The current `PositionGraph.updateEdge()` and `manual` / `derived` surface remain compatibility implementation that must be reviewed against that contract rather than treated as durable requirements.
 
 # Edges:
 
-`docs/components/charted-graph.md` owns the durable graph requirements being reviewed.
+`docs/components/charted-graph.md` owns durable Graph Edge semantics.
 
-`docs/architecture/position-graph.md` owns the application-level edge boundary and its technical contract. Code changes to `src/position-graph.js`, `src/edge-store.js`, shared persistence mechanics, tests, or callers belong here when they are required by settled graph semantics.
+`docs/components/knowledge-acquisition.md` owns Edge Admission and reconciliation of graph-bearing observations into missing topology. Explorer/source clients continue to own source observations and cache freshness; `PositionRepository` supplies generic facet storage/load coordination.
 
-`docs/architecture/position-repository.md` and `src/position-store.js` own position-record persistence separately from graph-edge persistence. Shared IndexedDB mechanics in `src/indexed-db.js` should remain domain-neutral.
+`docs/components/constellation.md`, `docs/components/constellation-selection.md`, and `docs/components/evidence.md` own current evidence, Candidate selection state, and visible relationships. Implementation changes should move ephemeral state toward those owners rather than inventing a second persistent projection protocol.
 
-Source-specific graph-admission policy, Explorer Reading projection identity/order, Constellation selection, and Lichess source semantics remain outside this outcome even when their implementations also consume graph data.
+`docs/architecture/position-graph.md` owns the application-level Graph Edge boundary and persistence mechanics. `docs/architecture/position-repository.md` owns canonical position records and source-facet infrastructure separately.
 
 # Unsettled:
 
-Which additional implementation-alignment findings, if any, emerge while the human continues reviewing the ChartedGraph Nodes, Edges, Growth and retention, and architecture boundaries.
+Whether the existing `manual` flag should survive under a clearer explicit-materialization name, and whether any current product behavior still depends on `derived` as durable state rather than simply on the existence of the Graph Edge.
+
+Whether any real consumer still depends on persisted `edge.games`, `edge.share`, `edge.updatedAt`, or `edge.qualifies` after current Explorer evidence is joined at the Evidence/Constellation boundary. Any such dependency must either move to the owning layer or be justified as a distinct durable graph requirement.
 
 # Complete:
 
-The ChartedGraph requirements review is settled, every implementation mismatch discovered during that review is either repaired or explicitly retained for a documented boundary reason, and the resulting code/tests use coherent graph terminology without changing established graph behavior unintentionally.
+Graph Edge persistence contains only canonical legal relationship state plus any explicitly justified durable behavioral property; mutable Explorer statistics and current-view Candidate/Salience annotations are no longer persisted as graph state.
+
+Explorer reconciliation establishes missing admitted topology, is naturally idempotent for already-known relationships, and remains retryable for missing relationships after partial persistence failure without an observation revision/projection watermark protocol.
+
+Constellation selection carries current evidence and selection annotations outside Graph Edge state, and tests verify that source-evidence eviction or refresh can change current evidence without mutating established `ChartedGraph` topology.
 
 # Sync:
 

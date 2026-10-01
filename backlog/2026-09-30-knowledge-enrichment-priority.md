@@ -8,7 +8,7 @@ Knowledge Acquisition should decide which known positions/facets are worth warmi
 
 `docs/components/knowledge-acquisition.md` assigns proactive enrichment to Knowledge Acquisition because graph growth is the event that establishes that Chessview considers a position or relationship useful enough to remember. Warming relevant evidence after that decision can shift latency away from later navigation without making optional evidence part of current Constellation settlement.
 
-`LichessGateway` now supports the generic transport rule this outcome needed: the next available request slot goes to queued foreground work before queued background work, without preempting an in-flight request. `PositionRepository` exposes the highest urgency among live subscribers to one shared facet producer, so later foreground demand can promote queued speculative work and losing that demand can demote it again.
+`LichessGateway` now supports the generic transport rule this outcome needed: after cooldown/request-spacing eligibility opens the next transport slot, queued obsolete work is pruned and current live urgency is evaluated so foreground work is selected before background work without preempting an in-flight request. `PositionRepository` exposes the highest urgency among live subscribers to one shared facet producer, so later foreground demand can promote queued speculative work and losing that demand can demote it again without reinsertion or duplicate acquisition.
 
 # Edges:
 
@@ -16,9 +16,9 @@ Knowledge Acquisition owns which positions/facets become proactive enrichment ca
 
 Source clients such as Explorer, Masters, and `LichessEval` retain endpoint-specific cache/freshness, validation, stale fallback, and successful-absence semantics. Proactive enrichment should nominate source facets rather than duplicate those policies.
 
-`LichessGateway` owns cross-client transport serialization, cooldown, queued cancellation, and generic foreground/background precedence. The two-class urgency model is sufficient for the current observed need; richer priority classes or anti-starvation behavior remain unnecessary until concrete behavior earns them.
+`LichessGateway` owns cross-client transport serialization, cooldown, queued cancellation, and generic foreground/background precedence at dispatch time. Queue order itself need not be rewritten as urgency changes: live priority remains lazy until the next transport slot is eligible. The two-class urgency model is sufficient for the current observed need; richer priority classes, explicit promotion APIs, queue reordering machinery, or anti-starvation behavior remain unnecessary until concrete behavior earns them.
 
-A request already in flight is not preempted merely because foreground work arrives. Existing shared per-position/facet producer lifetime and caller cancellation through `PositionRepository` continue to prevent obsolete speculative callers from forcing unnecessary network work.
+A request already in flight is not preempted merely because foreground work arrives. Existing shared per-position/facet producer lifetime and caller cancellation through `PositionRepository` continue to prevent obsolete speculative callers from forcing unnecessary network work. Queued requests whose producer signal becomes obsolete are pruned before dispatch rather than reserving a later transport slot.
 
 Proactive enrichment is supplementary/background to the current view. It must not keep Weather unsettled, invalidate a trustworthy Constellation, or make missing engine evidence a structural selection dependency.
 
@@ -38,7 +38,7 @@ Choose how background candidates are ordered inside Knowledge Acquisition. Usefu
 
 Deterministic tests prove that newly nominated useful graph knowledge can schedule bounded proactive enrichment without recursively exploding the queue; already-usable/fresh facets avoid unnecessary network access through their source clients; obsolete speculative work can disappear before send; and later explicit/current-view demand can share and promote already-queued work rather than duplicate it.
 
-Existing one-request-at-a-time, foreground-over-background queued precedence, shared 429 cooldown, source-specific cache/failure semantics, shared producer lifetime, and caller cancellation remain intact. Background enrichment never controls Weather or becomes required for Constellation settlement. A later visit to successfully warmed knowledge can consume the already available source evidence without repeating avoidable acquisition.
+Existing one-request-at-a-time behavior, dispatch-time foreground-over-background queued precedence after cooldown/request spacing, shared 429 cooldown, source-specific cache/failure semantics, shared producer lifetime, and caller cancellation remain intact. Background enrichment never controls Weather or becomes required for Constellation settlement. A later visit to successfully warmed knowledge can consume the already available source evidence without repeating avoidable acquisition.
 
 # Sync:
 

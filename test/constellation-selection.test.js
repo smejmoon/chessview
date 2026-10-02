@@ -10,25 +10,54 @@ import { chooseRootNeighborhood } from '../src/visible-graph.js';
 
 const SOURCE = '8/8/8/8/8/8/8/K6k w - -';
 
-test('automatic selection requires evidenced local Prevalence while explicit edges remain navigable', () => {
-  const edge = { source: SOURCE, target: 'a', uci: 'a1a2' };
-  assert.equal(selectionCandidate({ edge }), null);
-  assert.equal(selectionCandidate({ edge: { ...edge, explicit: true } })?.automatic, false);
+function graphEdge(source, target, uci, metadata = {}) {
+  return { id: `${source}|${uci}|${target}`, source, target, uci, san: uci, ...metadata };
+}
+
+test('Candidate admission requires evidenced local Prevalence even for explicit Graph Edges', () => {
+  const ordinary = graphEdge(SOURCE, 'a', 'a1a2');
+  const explicit = { ...ordinary, explicit: true };
+  assert.equal(selectionCandidate({ edge: ordinary }), null);
+  assert.equal(selectionCandidate({ edge: explicit }), null);
+});
+
+test('explicit Graph Edges with current Prevalence use ordinary Candidate evidence semantics', () => {
+  const frequency = { games: 40, sourceGames: 1000, share: 0.04 };
+  const ordinary = selectionCandidate({
+    edge: graphEdge(SOURCE, 'ordinary', 'a1a2'),
+    frequency,
+    engineQuality: { quality: 'strong' },
+  });
+  const explicitEdge = graphEdge(SOURCE, 'explicit', 'a1b1', { explicit: true });
+  const explicit = selectionCandidate({
+    edge: explicitEdge,
+    frequency,
+    engineQuality: { quality: 'strong' },
+  });
+
+  assert.ok(ordinary);
+  assert.ok(explicit);
+  assert.equal(explicit.edge, explicitEdge);
+  assert.equal(explicit.edge.explicit, true);
+  assert.deepEqual(
+    { rare: explicit.rare, positive: explicit.positive, rescued: explicit.rescued, negative: explicit.negative, omitFirst: explicit.omitFirst },
+    { rare: ordinary.rare, positive: ordinary.positive, rescued: ordinary.rescued, negative: ordinary.negative, omitFirst: ordinary.omitFirst },
+  );
 });
 
 test('same-source Salience starts from Prevalence and lets clear evidence move a sibling one local place', () => {
   const commonNeutral = selectionCandidate({
-    edge: { source: SOURCE, target: 'common-neutral', uci: 'a1a2' },
+    edge: graphEdge(SOURCE, 'common-neutral', 'a1a2'),
     frequency: { games: 500, sourceGames: 1000, share: 0.5 },
   });
   const commonBad = selectionCandidate({
-    edge: { source: SOURCE, target: 'common-bad', uci: 'a1b1' },
+    edge: graphEdge(SOURCE, 'common-bad', 'a1b1'),
     frequency: { games: 350, sourceGames: 1000, share: 0.35 },
     engineQuality: { quality: 'bad' },
     humanResult: { quality: 'unfavorable' },
   });
   const rareStrong = selectionCandidate({
-    edge: { source: SOURCE, target: 'rare-strong', uci: 'a1b2' },
+    edge: graphEdge(SOURCE, 'rare-strong', 'a1b2'),
     frequency: { games: 40, sourceGames: 1000, share: 0.04 },
     engineQuality: { quality: 'strong' },
   });
@@ -41,59 +70,54 @@ test('same-source Salience starts from Prevalence and lets clear evidence move a
     { order: 1, prevalenceOrder: 2, evidenceAdjustment: -1 },
     { order: 2, prevalenceOrder: 1, evidenceAdjustment: 1 },
   ]);
-  assert.equal(commonBad.automatic, true, 'a frequent bad move remains eligible');
   assert.equal(rareStrong.rescued, true);
+  assert.equal(ranked[0].edge, commonNeutral.edge);
+  assert.equal(ranked[1].edge, rareStrong.edge);
+  assert.equal(ranked[2].edge, commonBad.edge);
+  assert.ok(ranked.every((item) => !Object.hasOwn(item.edge, 'salienceOrder')));
 });
 
 test('unknown same-source evidence leaves Salience in Prevalence order', () => {
   const lessPrevalent = selectionCandidate({
-    edge: { source: SOURCE, target: 'less', uci: 'a1a2' },
+    edge: graphEdge(SOURCE, 'less', 'a1a2'),
     frequency: { games: 300, sourceGames: 1000, share: 0.3 },
   });
   const morePrevalent = selectionCandidate({
-    edge: { source: SOURCE, target: 'more', uci: 'a1b1' },
+    edge: graphEdge(SOURCE, 'more', 'a1b1'),
     frequency: { games: 600, sourceGames: 1000, share: 0.6 },
   });
 
   const ranked = rankSameSourceCandidates([lessPrevalent, morePrevalent]);
   assert.deepEqual(ranked.map((item) => item.edge.target), ['more', 'less']);
-  assert.deepEqual(ranked.map((item) => item.edge.salienceOrder), [0, 1]);
+  assert.deepEqual(ranked.map((item) => item.salience.order), [0, 1]);
 });
 
 test('cross-source allocation omits known rare-negative candidates before rescued candidates', () => {
   const negative = selectionCandidate({
-    edge: { source: 'source-a', target: 'target-a', uci: 'a' },
+    edge: graphEdge('source-a', 'target-a', 'a'),
     frequency: { games: 20, sourceGames: 1000, share: 0.02 },
     humanResult: { quality: 'unfavorable' },
   });
   const rescued = selectionCandidate({
-    edge: { source: 'source-b', target: 'target-b', uci: 'b' },
+    edge: graphEdge('source-b', 'target-b', 'b'),
     frequency: { games: 10, sourceGames: 1000, share: 0.01 },
     humanResult: { quality: 'favorable' },
   });
   assert.deepEqual(rankCrossSourceCandidates([negative, rescued]).map((item) => item.edge.target), ['target-b', 'target-a']);
 });
 
-test('Root composition preserves supplied cross-source order instead of re-ranking local shares', () => {
+test('Root composition preserves supplied cross-source Candidate order', () => {
   const center = 'center';
-  const preferred = {
-    source: 'preferred-source',
-    target: center,
-    uci: 'b',
-    games: 10,
-    share: 0.01,
-    qualifies: true,
-  };
-  const rawFrequencyLeader = {
-    source: 'raw-frequency-source',
-    target: center,
-    uci: 'a',
-    games: 900,
-    share: 0.9,
-    qualifies: true,
-  };
+  const preferredEdge = graphEdge('preferred-source', center, 'b');
+  const frequencyLeaderEdge = graphEdge('raw-frequency-source', center, 'a');
+  const preferred = selectionCandidate({ edge: preferredEdge, frequency: { games: 10, share: 0.01 } });
+  const rawFrequencyLeader = selectionCandidate({ edge: frequencyLeaderEdge, frequency: { games: 900, share: 0.9 } });
 
-  const composition = chooseRootNeighborhood({ center, incomingByTarget: new Map([[center, [preferred, rawFrequencyLeader]]]), max: 1 });
+  const composition = chooseRootNeighborhood({
+    center,
+    incomingByTarget: new Map([[center, [preferred, rawFrequencyLeader]]]),
+    max: 1,
+  });
 
   assert.deepEqual(composition.nodes.map((node) => node.key), ['preferred-source']);
   assert.deepEqual(composition.relationships.map((relationship) => relationship.source), ['preferred-source']);

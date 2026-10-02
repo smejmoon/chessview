@@ -16,7 +16,9 @@ Product and component documents continue to own what each tunable means, the beh
 
 Do not move user preferences, environment or secret configuration, source facts, canonical identities, protocol constants, or intrinsic invariants into `src/config.ts`. Remaining numeric constants may stay local when they fall into those excluded categories rather than tunable policy.
 
-Keep this separate from behavior-changing outcomes such as `backlog/2026-10-01-constellation-selection-code-alignment.md`; centralization should preserve current selection, Rail, acquisition, and presentation behavior while making tunable values centrally discoverable.
+Keep this separate from behavior-changing selection work. The landed Candidate contract in `docs/components/constellation-selection.md` requires usable rated-Lichess Prevalence and keeps explicit navigation outside Candidate admission; centralization must preserve those semantics rather than recreate a shared eligibility cutoff or navigation exception.
+
+Coordinate with `backlog/2026-10-02-explorer-move-decoration.md` and `backlog/2026-10-02-other-share-semantics.md`: if a legacy qualification threshold disappears during those semantic cleanups, do not centralize dead policy merely to preserve the old value. Retained consumer-owned thresholds remain eligible for centralization when they still meet the `src/config.ts` ownership rule.
 
 # Complete:
 

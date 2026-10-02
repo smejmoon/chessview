@@ -1,13 +1,8 @@
+import type { GraphEdge } from './position-graph.ts';
+
 export const SELECTION_RARE_SHARE = 0.05;
 
-export type SelectionEdge = Readonly<{
-  source?: string;
-  target?: string;
-  uci?: string;
-  explicit?: boolean;
-  salienceOrder?: number;
-  [field: string]: unknown;
-}>;
+export type SelectionEdge = GraphEdge;
 
 export type FrequencyEvidence = Readonly<{
   share: number;
@@ -28,8 +23,7 @@ export type Salience = Readonly<{
 
 export type SelectionCandidate = Readonly<{
   edge: SelectionEdge;
-  frequency: FrequencyEvidence | null;
-  automatic: boolean;
+  frequency: FrequencyEvidence;
   rare: boolean;
   positive: boolean;
   rescued: boolean;
@@ -39,7 +33,6 @@ export type SelectionCandidate = Readonly<{
 }>;
 
 export type RankedSelectionCandidate = SelectionCandidate & Readonly<{
-  edge: SelectionEdge & Readonly<{ salienceOrder: number }>;
   salience: Salience;
 }>;
 
@@ -57,18 +50,18 @@ function stableEdgeOrder(a?: SelectionEdge | null, b?: SelectionEdge | null): nu
 }
 
 function comparePrevalence(a: SelectionCandidate, b: SelectionCandidate): number {
-  const aShare = a?.frequency?.share;
-  const bShare = b?.frequency?.share;
-  const aHasPrevalence = Number.isFinite(aShare);
-  const bHasPrevalence = Number.isFinite(bShare);
+  const aShare = a.frequency.share;
+  const bShare = b.frequency.share;
+  const aHasPrevalence = typeof aShare === 'number' && Number.isFinite(aShare);
+  const bHasPrevalence = typeof bShare === 'number' && Number.isFinite(bShare);
   if (aHasPrevalence !== bHasPrevalence) return aHasPrevalence ? -1 : 1;
   if (aHasPrevalence && bHasPrevalence && aShare !== bShare) return bShare - aShare;
-  return stableEdgeOrder(a?.edge, b?.edge);
+  return stableEdgeOrder(a.edge, b.edge);
 }
 
 function evidenceAdjustment(candidate: SelectionCandidate): number {
-  const positive = Boolean(candidate?.positive);
-  const negative = Boolean(candidate?.negative);
+  const positive = Boolean(candidate.positive);
+  const negative = Boolean(candidate.negative);
   if (positive === negative) return 0;
   return positive ? -1 : 1;
 }
@@ -79,22 +72,7 @@ export function selectionCandidate({
   engineQuality = null,
   humanResult = null,
 }: CandidateOptions = {}): SelectionCandidate | null {
-  if (!edge) return null;
-
-  if (edge.explicit) {
-    return Object.freeze({
-      edge,
-      frequency,
-      automatic: false,
-      rare: false,
-      positive: false,
-      rescued: false,
-      negative: false,
-      omitFirst: false,
-    });
-  }
-
-  if (!frequency || !Number.isFinite(frequency.share)) return null;
+  if (!edge || !frequency || !Number.isFinite(frequency.share)) return null;
 
   const engine = engineQuality?.quality ?? null;
   const human = humanResult?.quality ?? null;
@@ -105,7 +83,6 @@ export function selectionCandidate({
   return Object.freeze({
     edge,
     frequency,
-    automatic: true,
     rare,
     positive,
     rescued: positive,
@@ -118,10 +95,10 @@ export function compareSameSourceCandidates(
   a: SelectionCandidate,
   b: SelectionCandidate,
 ): number {
-  const aOrder = a?.salience?.order;
-  const bOrder = b?.salience?.order;
-  const aHasSalience = Number.isFinite(aOrder);
-  const bHasSalience = Number.isFinite(bOrder);
+  const aOrder = a.salience?.order;
+  const bOrder = b.salience?.order;
+  const aHasSalience = typeof aOrder === 'number' && Number.isFinite(aOrder);
+  const bHasSalience = typeof bOrder === 'number' && Number.isFinite(bOrder);
   if (aHasSalience !== bHasSalience) return aHasSalience ? -1 : 1;
   if (aHasSalience && bHasSalience && aOrder !== bOrder) return aOrder - bOrder;
   return comparePrevalence(a, b);
@@ -131,8 +108,8 @@ export function compareCrossSourceCandidates(
   a: SelectionCandidate,
   b: SelectionCandidate,
 ): number {
-  if (Boolean(a?.omitFirst) !== Boolean(b?.omitFirst)) return a?.omitFirst ? 1 : -1;
-  return stableEdgeOrder(a?.edge, b?.edge);
+  if (a.omitFirst !== b.omitFirst) return a.omitFirst ? 1 : -1;
+  return stableEdgeOrder(a.edge, b.edge);
 }
 
 export function rankSameSourceCandidates(
@@ -152,18 +129,17 @@ export function rankSameSourceCandidates(
     });
 
   ranked.sort((a, b) => {
-    if (Boolean(a.candidate?.omitFirst) !== Boolean(b.candidate?.omitFirst)) {
-      return a.candidate?.omitFirst ? 1 : -1;
+    if (a.candidate.omitFirst !== b.candidate.omitFirst) {
+      return a.candidate.omitFirst ? 1 : -1;
     }
     return a.localCost - b.localCost
       || a.evidenceAdjustment - b.evidenceAdjustment
       || a.prevalenceOrder - b.prevalenceOrder
-      || stableEdgeOrder(a.candidate?.edge, b.candidate?.edge);
+      || stableEdgeOrder(a.candidate.edge, b.candidate.edge);
   });
 
   return ranked.map((entry, order) => Object.freeze({
     ...entry.candidate,
-    edge: Object.freeze({ ...entry.candidate.edge, salienceOrder: order }),
     salience: Object.freeze({
       order,
       prevalenceOrder: entry.prevalenceOrder,

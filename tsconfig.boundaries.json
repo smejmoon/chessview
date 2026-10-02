@@ -11,6 +11,9 @@
     "src/move-materialization.ts",
     "src/nodus-controller.ts",
     "src/constellation-lookahead.ts",
+    "src/constellation-selection.ts",
+    "src/visible-graph.ts",
+    "src/nodus-structure.ts",
     "src/knowledge-acquisition.ts"
   ],
   "include": []

@@ -15,6 +15,7 @@ The Nodus is presented as the primary playable board, but its product meaning is
 - Clicking another navigable canonical position requests a Recenter to that known target.
 - Recenter is the application-level operation that selects another Nodus. A caller may supply a known canonical target or a Move that must first be resolved and materialized.
 - Browser-history restoration is distinct from Recenter: it restores recorded position-centered state without creating another history entry.
+- Recenter and browser-history restoration start a new current-view projection for the resulting Nodus. View-local Candidates and Constellation structure are rebuilt from durable graph knowledge plus current evidence rather than carrying forward or restoring a frozen prior projection.
 - The URL identifies the canonical Nodus rather than the move path used to reach it.
 - Stale asynchronous Move materialization from an obsolete view must not Recenter a replacement view.
 - Changing the Nodus does not redefine graph identity; `ChartedGraph` remains durable across Recenter operations.
@@ -29,4 +30,5 @@ Deterministic/browser contract tests should cover:
 - all legal promotion choices and cancellation behavior;
 - stale Move materialization being unable to Recenter a replacement view;
 - browser back/forward restoration without adding another history entry;
+- Recenter/history restoration rebuilding view-local projection state rather than restoring frozen Candidate/Constellation state;
 - durable graph identity remaining unchanged by Recenter.

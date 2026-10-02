@@ -1,30 +1,38 @@
 # Do:
 
-Provide a cheap local provisional Root projection while authoritative Root knowledge is still pending, so Roots can appear promptly without consuming Lichess request capacity ahead of more valuable foreground acquisition.
+Determine whether a cheap local provisional Root context can be shown while authoritative Root knowledge is still pending without manufacturing evidence-free Constellation Candidates or consuming Lichess request capacity merely to produce the fallback.
+
+If a useful trustworthy fallback exists, implement it as explicitly provisional structure/presentation that later refines into the authoritative Root projection within the same Nodus generation. If no such representation is useful under the current Candidate contract, reject the fallback rather than weakening Candidate evidence semantics.
 
 # Because:
 
-Root projection currently depends on `composeNodusStructure()` paths that can trigger Explorer Reading acquisition and transposition enrichment. That makes Root availability compete with Line acquisition even though a provisional one-ply predecessor view can be derived locally and later refined when authoritative graph/Explorer knowledge arrives.
+Root projection currently depends on `composeNodusStructure()` paths that can trigger Explorer Reading acquisition and transposition enrichment. That can make Root availability compete with more valuable foreground acquisition even though some one-ply predecessor reachability can be derived locally.
 
-Current-view architecture already permits a trustworthy current-generation projection to publish before structural work settles and to be replaced by a refined immutable value within the same Nodus generation. A local Root fallback should use that existing refinement model rather than introduce another generation or source-freshness protocol.
+The current Candidate contract now requires usable rated-Lichess Prevalence, and `explicit` navigation does not bypass that requirement. A locally inferred predecessor therefore cannot enter ordinary Constellation Candidate selection merely because it is legal or cheap to compute. Local reachability can be useful provisional context, but it is not historical occurrence, source Prevalence, or automatic-selection evidence.
+
+Current-view architecture already permits a trustworthy current-generation projection to publish before structural work settles and to be replaced by a refined immutable value within the same Nodus generation. Any local Root fallback should use that refinement model without inventing another generation, source-freshness protocol, or evidence-free Candidate class.
 
 # Edges:
 
-`backlog/2026-10-01-current-view-sibling-scheduling.md` owns which work receives acquisition priority between sibling Root/Line projections. This outcome is not a prerequisite for that scheduling correction: sibling scheduling can prioritize foreground acquisition without any local Root fallback.
+Foreground/background acquisition priority is already owned by the current-view and Knowledge Acquisition scheduling boundaries. This outcome must not change request urgency, producer lifetime, or sibling scheduling merely to make the fallback appear sooner.
 
-The fallback is temporary structural assistance, not a new authoritative knowledge source. It must not own persistence, remote acquisition, freshness, background scheduling, or historical-occurrence truth. Explorer/ChartedGraph knowledge remains authoritative for observed or enriched ancestry.
+The fallback is temporary structural/presentation assistance, not a new authoritative knowledge source. It must not own persistence, remote acquisition, freshness, background scheduling, historical-occurrence truth, or Candidate eligibility. Explorer/ChartedGraph knowledge remains authoritative for observed or enriched ancestry.
 
-A local candidate may establish only that a predecessor can reach the current canonical position by one legal move under the supported local validation semantics; it must not imply that the predecessor occurred historically or is reachable from the initial position.
+A locally inferred predecessor may establish only that the predecessor can reach the current canonical position by one legal move under the supported local validation semantics. It must not be persisted as graph truth or promoted to a Selection Candidate solely from that local inference.
 
 # Unsettled:
 
-Choose the smallest useful predecessor coverage for provisional Roots, including whether ordinary moves/captures and promotions are sufficient initially or whether en passant and castling are required before the fallback is trustworthy enough to publish.
+Decide whether there is a product-useful provisional Root representation outside the ordinary evidence-backed Candidate/Constellation path. If there is no clear way to present local reachability without implying historical/source evidence, settle the outcome by rejecting the fallback.
 
-Settle how provisional local candidates merge with known Root graph structure so authoritative knowledge refines or replaces them without creating duplicate Root identity or a second reconciliation lifecycle.
+If a provisional representation is useful, choose the smallest trustworthy predecessor coverage, including whether ordinary moves/captures and promotions are sufficient initially or whether en passant and castling are required before publication.
+
+Settle how provisional local Root structure refines into known Root graph/Candidate structure so authoritative knowledge replaces or absorbs it without duplicate Root identity or a second reconciliation lifecycle.
 
 # Complete:
 
-A Root projection can publish promptly from local computation when authoritative Root knowledge is unavailable, is clearly treated as provisional rather than historical truth, and later authoritative knowledge can refine the same Nodus generation without extra network acquisition being required merely to produce the fallback. The fallback introduces no independent persistence, freshness, scheduler, or currentness ownership.
+Either a Root projection can publish useful local provisional context without manufacturing evidence-free Candidates, without implying historical occurrence, and without requiring extra network acquisition merely to produce the fallback, then refine cleanly when authoritative knowledge arrives; or investigation establishes that no such trustworthy provisional representation is useful and the authoritative-only path remains the deliberate contract.
+
+In either resolution, the outcome introduces no independent persistence, freshness, scheduler, currentness, or Candidate-eligibility ownership, and local reachability never masquerades as rated-Lichess Prevalence or historical evidence.
 
 # Sync:
 

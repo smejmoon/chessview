@@ -4,19 +4,17 @@ import { chooseLineNeighborhood, chooseRootNeighborhood } from '../src/visible-g
 import { lineStrokeWidth } from '../src/edge-visual.js';
 import { visibleConnectors } from '../src/map-render.js';
 
-function rootEdge(source, target, uci, games = 0) {
-  return { source, target, uci, san: uci, games, share: 0.1 };
+function candidate(source, target, uci, share = 0.1) {
+  const edge = { id: `${source}|${uci}|${target}`, source, target, uci, san: uci };
+  return { edge, frequency: { share }, automatic: true, rare: share < 0.05, positive: false, rescued: false, negative: false, omitFirst: false };
 }
 
 test('Line connector planning keeps every convergence relationship and every family width', () => {
   const outgoingBySource = new Map([
-    ['center', [
-      { source: 'center', target: 'a', uci: 'line-a', share: 0.6, qualifies: true },
-      { source: 'center', target: 'b', uci: 'line-b', share: 0.25, qualifies: true },
-    ]],
-    ['a', [{ source: 'a', target: 'shared', uci: 'a-shared', share: 0.7, qualifies: true }]],
-    ['b', [{ source: 'b', target: 'shared', uci: 'b-shared', share: 0.8, qualifies: true }]],
-    ['shared', [{ source: 'shared', target: 'after', uci: 'shared-after', share: 0.9, qualifies: true }]],
+    ['center', [candidate('center', 'a', 'line-a', 0.6), candidate('center', 'b', 'line-b', 0.25)]],
+    ['a', [candidate('a', 'shared', 'a-shared', 0.7)]],
+    ['b', [candidate('b', 'shared', 'b-shared', 0.8)]],
+    ['shared', [candidate('shared', 'after', 'shared-after', 0.9)]],
   ]);
 
   const composition = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 4 });
@@ -40,7 +38,7 @@ test('Line connector planning keeps every convergence relationship and every fam
 
 test('Root connector planning points every graph edge toward its target', () => {
   const incomingByTarget = new Map([
-    ['center', [rootEdge('a', 'center', 'a1a2'), rootEdge('b', 'center', 'b1b2')]],
+    ['center', [candidate('a', 'center', 'a1a2'), candidate('b', 'center', 'b1b2')]],
   ]);
 
   const composition = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 2 });
@@ -54,9 +52,9 @@ test('Root connector planning points every graph edge toward its target', () => 
 
 test('Root connector planning draws every downstream relationship from one merged board', () => {
   const incomingByTarget = new Map([
-    ['center', [rootEdge('a', 'center', 'a1a2'), rootEdge('b', 'center', 'b1b2')]],
-    ['a', [rootEdge('shared', 'a', 'c1c2')]],
-    ['b', [rootEdge('shared', 'b', 'c1c3')]],
+    ['center', [candidate('a', 'center', 'a1a2'), candidate('b', 'center', 'b1b2')]],
+    ['a', [candidate('shared', 'a', 'c1c2')]],
+    ['b', [candidate('shared', 'b', 'c1c3')]],
   ]);
 
   const composition = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 3 });

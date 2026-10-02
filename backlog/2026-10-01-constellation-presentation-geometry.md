@@ -14,7 +14,7 @@ Narrow-screen screenshots exposed the mismatch as board collisions, clipping, an
 
 # Edges:
 
-`backlog/2026-10-01-constellation-selection-code-alignment.md` remains about eligibility/Salience protocol ownership; this outcome does not change automatic candidacy, ranking, or the meaning of scarce-space allocation.
+The Candidate/composition ownership boundary is already landed in `docs/components/constellation-selection.md` and `docs/components/constellation.md`: selection constructs evidence-backed Candidates and supplies same-source order, while Constellation owns coherent cross-branch allocation under presentation constraints. This outcome may change which selected Candidates fit as available space changes, but it must not change Candidate eligibility, recreate explicit-navigation admission, or re-rank siblings from the same source.
 
 Constellation continues to own which canonical positions and relationships belong in the coherent view. Interface continues to own two-dimensional coordinates, board sizes, and connector paths. This outcome is about making the constraint passed between those owners truthful and making presentation geometry internally coherent.
 

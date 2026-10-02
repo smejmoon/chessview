@@ -3,21 +3,31 @@ import assert from 'node:assert/strict';
 
 import { composeLineNeighborhood, chooseLineNeighborhood } from '../src/visible-graph.js';
 
-function edge(source, target, uci, share, metadata = {}) {
-  return { source, target, uci, share, qualifies: true, ...metadata };
+function candidate(source, target, uci, share, metadata = {}) {
+  const edge = { id: `${source}|${uci}|${target}`, source, target, uci, san: uci, ...metadata };
+  return {
+    edge,
+    frequency: share == null ? null : { share },
+    automatic: !edge.explicit,
+    rare: share != null && share < 0.05,
+    positive: false,
+    rescued: false,
+    negative: false,
+    omitFirst: false,
+  };
 }
 
 test('broad Line composition lets useful depth compete with immediate siblings', () => {
   const outgoingBySource = new Map([
     ['center', [
-      edge('center', 'a1', 'a', 0.4),
-      edge('center', 'b1', 'b', 0.25),
-      edge('center', 'c1', 'c', 0.15),
-      edge('center', 'd1', 'd', 0.1),
-      edge('center', 'e1', 'e', 0.06),
+      candidate('center', 'a1', 'a', 0.4),
+      candidate('center', 'b1', 'b', 0.25),
+      candidate('center', 'c1', 'c', 0.15),
+      candidate('center', 'd1', 'd', 0.1),
+      candidate('center', 'e1', 'e', 0.06),
     ]],
-    ['a1', [edge('a1', 'a2', 'a2', 0.7)]],
-    ['b1', [edge('b1', 'b2', 'b2', 0.65)]],
+    ['a1', [candidate('a1', 'a2', 'a2', 0.7)]],
+    ['b1', [candidate('b1', 'b2', 'b2', 0.65)]],
   ]);
 
   const composition = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 4 });
@@ -27,40 +37,53 @@ test('broad Line composition lets useful depth compete with immediate siblings',
   assert.ok(immediate.length > 1, 'meaningful first-level breadth is retained');
   assert.ok(immediate.length < composition.nodes.length, 'visible space is not exhausted by immediate siblings');
   assert.ok(composition.nodes.some((node) => node.distance > 1), 'useful branch depth competes for space');
-  assert.equal(composition.nodes.some((node) => node.key === 'e1'), false, 'not every eligible sibling must be visible');
+  assert.equal(composition.nodes.some((node) => node.key === 'e1'), false, 'not every selected sibling must be visible');
 });
 
-test('Line composition follows Salience order while preserving the move Prevalence', () => {
+test('Line composition consumes supplied Candidate order while preserving Candidate-local Prevalence', () => {
+  const salient = candidate('center', 'salient', 'b', 0.3);
+  const popular = candidate('center', 'popular', 'a', 0.7);
   const composition = chooseLineNeighborhood({
     center: 'center',
-    outgoingBySource: new Map([['center', [
-      edge('center', 'popular', 'a', 0.7, { salienceOrder: 1 }),
-      edge('center', 'salient', 'b', 0.3, { salienceOrder: 0 }),
-    ]]]),
+    outgoingBySource: new Map([['center', [salient, popular]]]),
     max: 1,
   });
 
   assert.deepEqual(composition.nodes.map((node) => node.key), ['salient']);
-  assert.equal(composition.relationships[0].edge.share, 0.3);
+  assert.equal(composition.relationships[0].edge, salient.edge);
   assert.equal(composition.families[0].lineShare, 0.3);
+  assert.equal(Object.hasOwn(salient.edge, 'salienceOrder'), false);
+  assert.equal(Object.hasOwn(salient.edge, 'share'), false);
+});
+
+test('selected rare Candidates survive composition without a second eligibility gate', () => {
+  const rare = candidate('center', 'rare', 'r', 0.01);
+  const composition = chooseLineNeighborhood({
+    center: 'center',
+    outgoingBySource: new Map([['center', [rare]]]),
+    max: 1,
+  });
+
+  assert.deepEqual(composition.nodes.map((node) => node.key), ['rare']);
+  assert.equal(composition.relationships[0].edge, rare.edge);
 });
 
 test('one structural agenda prefers a later family alternative over unrelated extra depth', () => {
   const outgoingBySource = new Map([
     ['center', [
-      edge('center', 'a', 'a', 0.6),
-      edge('center', 'b', 'b', 0.4),
+      candidate('center', 'a', 'a', 0.6),
+      candidate('center', 'b', 'b', 0.4),
     ]],
     ['a', [
-      edge('a', 'a1', 'a1', 0.6),
-      edge('a', 'a2', 'a2', 0.25),
-      edge('a', 'a3', 'a3', 0.15),
+      candidate('a', 'a1', 'a1', 0.6),
+      candidate('a', 'a2', 'a2', 0.25),
+      candidate('a', 'a3', 'a3', 0.15),
     ]],
     ['b', [
-      edge('b', 'b1', 'b1', 0.7),
-      edge('b', 'bx', 'bx', 0.3),
+      candidate('b', 'b1', 'b1', 0.7),
+      candidate('b', 'bx', 'bx', 0.3),
     ]],
-    ['b1', [edge('b1', 'b2', 'b2', 0.8)]],
+    ['b1', [candidate('b1', 'b2', 'b2', 0.8)]],
   ]);
 
   const composition = chooseLineNeighborhood({ center: 'center', outgoingBySource, max: 6 });
@@ -72,10 +95,10 @@ test('one structural agenda prefers a later family alternative over unrelated ex
 test('a full Line composition can remain structurally unsettled when a selected Reading can still improve it', () => {
   const outgoingBySource = new Map([
     ['center', [
-      edge('center', 'a1', 'a', 0.4),
-      edge('center', 'b1', 'b', 0.3),
-      edge('center', 'c1', 'c', 0.2),
-      edge('center', 'd1', 'd', 0.1),
+      candidate('center', 'a1', 'a', 0.4),
+      candidate('center', 'b1', 'b', 0.3),
+      candidate('center', 'c1', 'c', 0.2),
+      candidate('center', 'd1', 'd', 0.1),
     ]],
   ]);
   const unresolvedReadings = new Set(['a1', 'b1', 'c1']);
@@ -95,11 +118,11 @@ test('a full Line composition can remain structurally unsettled when a selected 
 test('an uncached selected position leaves the Reading frontier when its best continuation cannot change the constrained composition', () => {
   const outgoingBySource = new Map([
     ['center', [
-      edge('center', 'a1', 'a', 0.6),
-      edge('center', 'b1', 'b', 0.4),
+      candidate('center', 'a1', 'a', 0.6),
+      candidate('center', 'b1', 'b', 0.4),
     ]],
-    ['a1', [edge('a1', 'a2', 'a2', 0.8)]],
-    ['b1', [edge('b1', 'b2', 'b2', 0.8)]],
+    ['a1', [candidate('a1', 'a2', 'a2', 0.8)]],
+    ['b1', [candidate('b1', 'b2', 'b2', 0.8)]],
   ]);
   const unresolvedReadings = new Set(['a2', 'b2']);
 
@@ -117,8 +140,8 @@ test('an uncached selected position leaves the Reading frontier when its best co
 test('an unresolved selected position stays on the Reading frontier when it can reveal a zero-cost visible relationship', () => {
   const outgoingBySource = new Map([
     ['center', [
-      edge('center', 'a1', 'a', 0.6),
-      edge('center', 'b1', 'b', 0.4),
+      candidate('center', 'a1', 'a', 0.6),
+      candidate('center', 'b1', 'b', 0.4),
     ]],
   ]);
 

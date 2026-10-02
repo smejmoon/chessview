@@ -6,14 +6,15 @@ Own the coherent current-view subgraph around the Nodus: which known canonical p
 
 A Constellation is a projection of Chessview's [`ChartedGraph`](charted-graph.md), not `ChartedGraph` itself and not its two-dimensional rendering. It combines durable [Graph Edges](../glossary.md#graph-edge) with current evidence to form view-local Candidates. Eligibility, Salience, family/depth membership, and other composition annotations remain current-view state rather than Graph Edge state.
 
-[Constellation selection](constellation-selection.md) owns automatic eligibility and same-source Salience. Constellation consumes that selected/ranked Candidate set and owns coherent cross-branch allocation.
+[Constellation selection](constellation-selection.md) owns automatic eligibility and same-source Salience. Constellation consumes the selected Candidate objects in their selection order and owns coherent cross-branch allocation. Navigability is broader than Candidate membership: an explicitly materialized Graph Edge may remain navigable without belonging to the current Constellation.
 
 ## Composition
 
 - The graph Chessview knows may be larger than the current Constellation. Omitting a known position from a view never removes it from `ChartedGraph`.
 - A Candidate refers to one known Graph Edge plus the current evidence and selection state needed for this composition. Current Explorer Prevalence, human-result evidence, engine evidence, eligibility, Salience, local ordering, family membership, and depth are not persisted back onto the Graph Edge.
+- A Graph Edge does not become a Candidate merely because it is `explicit`. Explicit materialization preserves navigation behavior independently; usable current Prevalence may separately make that same Graph Edge an ordinary Candidate.
 - A [visible relationship](../glossary.md#visible-relationship) is the Constellation-local representation of a selected Candidate. It refers to durable Graph Edge identity while carrying only current-view structure needed by composition; it is not a persisted second graph.
-- Constellation allocates already-selected/ranked Candidates across branches. It may merge, omit, deepen, or truncate structure to preserve coherence and fit available space, but it does not re-run automatic Candidate eligibility.
+- Constellation allocates already-selected Candidates across branches in the same-source order supplied by selection. It may merge, omit, deepen, or truncate structure to preserve coherence and fit available space, but it does not re-run automatic Candidate eligibility or re-rank siblings from the same source.
 - Prevalence from different source positions is local evidence, not one globally comparable score. Constellation owns the cross-branch choices needed to preserve a coherent view.
 - Broad positions should retain meaningful alternatives instead of allowing one branch to consume the whole view; narrow Lines may deepen when that is the best use of available space.
 - Distinct immediate Root or first-level Line families remain distinct until their selected paths genuinely converge on the same canonical position.
@@ -21,6 +22,7 @@ A Constellation is a projection of Chessview's [`ChartedGraph`](charted-graph.md
 - Current source evidence is authoritative for evidence-dependent composition. If Explorer evidence is absent or evicted, the Graph Edge remains known while Prevalence and related evidence are unknown; Constellation must not recover stale statistics from graph persistence.
 - Optional engine evidence may influence selection when already available, but missing engine evidence does not trigger cloud-evaluation acquisition or make structural settlement wait for it.
 - As trustworthy structural information arrives, recomposition may add, remove, or rearrange visible positions and relationships without redefining canonical graph identity or requiring the previously trustworthy composition to disappear first.
+- Candidates and the resulting Constellation belong to the current Nodus generation. Recenter or history restoration starts a new current-view projection from durable graph knowledge plus current evidence; it does not carry forward or restore a frozen Candidate set from the previous Nodus generation.
 
 ## Structural discovery
 
@@ -65,8 +67,10 @@ Deterministic tests should cover:
 
 - durable known graph state being larger than the selected Constellation;
 - Candidates combining Graph Edges with current evidence without mutating persisted Graph Edges;
+- explicit-only Graph Edges remaining durable/navigable without being manufactured into evidence-free Candidates;
+- an explicit Graph Edge with usable current Prevalence participating through the ordinary Candidate path;
 - visible relationships carrying current-view family/depth/selection state without becoming persisted graph state;
-- composition consuming selected/ranked Candidates without independently re-running automatic eligibility;
+- composition consuming selected Candidate objects in selection order without independently re-running automatic eligibility or same-source ranking;
 - current Explorer evidence affecting selection while its absence leaves evidence unknown rather than falling back to stale graph statistics;
 - the same `ChartedGraph` composing differently under different presentation-space constraints without changing graph knowledge;
 - Rail inventory and Notable Line count remaining unchanged when only presentation-space constraints change Constellation membership;
@@ -78,6 +82,7 @@ Deterministic tests should cover:
 - missing optional engine evidence neither triggering structural acquisition nor delaying settlement;
 - accepted compositions producing only bounded locally relevant lookahead nominations, separate from visibility and structural settlement;
 - accepted new structural information recomposing the Constellation without invalidating canonical graph identity;
+- Recenter/history restoration rebuilding view-local Candidates and Constellation from durable graph knowledge and current evidence rather than restoring a frozen prior projection;
 - distinct immediate Root/Line families remaining distinct before genuine convergence;
 - canonical transpositions appearing once while retaining every selected relationship and family membership into or out of the convergence;
 - Constellation requesting additional graph knowledge and nominating supplementary lookahead without performing transport, persistence, or Edge Admission side effects;

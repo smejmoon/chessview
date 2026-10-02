@@ -6,7 +6,9 @@ Own automatic Candidate eligibility and same-source Salience before Constellatio
 
 A **Candidate** is current-view selection state for one known [Graph Edge](../glossary.md#graph-edge) combined with currently available evidence. A Candidate is not a Graph Edge and is never persisted as `ChartedGraph` state.
 
-Selection decides which automatic Candidates remain in contention and how siblings from the same source position are ordered. [Constellation](constellation.md) owns cross-branch allocation and the coherent subgraph ultimately selected for the current view.
+Selection decides which automatic Candidates remain in contention and how siblings from the same source position are ordered. Its output is the selected Candidate sequence in that same-source Salience order. [Constellation](constellation.md) owns cross-branch allocation and the coherent subgraph ultimately selected for the current view.
+
+Explicitly materialized navigation is separate. A Graph Edge may remain navigable because it is `explicit` even when there is no current Candidate for it.
 
 ## Inputs
 
@@ -27,9 +29,12 @@ Selection is not an engine-acquisition frontier. It may consume usable engine ev
 
 Rated Explorer acquisition is different because an Explorer Reading is also graph-bearing knowledge. Constellation may request another Reading when additional outgoing graph knowledge can still change constrained composition. Human-result and Prevalence evidence arriving with that Reading may affect selection, but optional cloud evaluation remains outside structural settlement.
 
+Explicit materialization does not itself trigger Candidate-specific Explorer acquisition. If current source evidence is already available, an explicit Graph Edge participates in selection exactly like any other Graph Edge. If usable Prevalence is unavailable, there is no Candidate; the durable explicit relationship remains navigable through the navigation surfaces that own that behavior.
+
 ## Eligibility
 
-- Automatic Candidates require usable rated Lichess Explorer Prevalence. Without it, a Move is outside automatic Constellation selection for now.
+- Candidates require usable rated Lichess Explorer Prevalence. Without it, a Move is outside automatic Constellation selection for now.
+- `explicit` does not bypass this requirement and does not change the meaning of Candidate evidence.
 - Prevalence and quality are independent. A frequent Move remains eligible even when engine or human evidence is poor because users encounter it in practice.
 - Rarity alone does not disqualify a Candidate. A rare Move remains significant when available engine quality or favorable human results provide a positive rescue signal.
 - A rare Candidate with known bad/unfavorable evidence and no positive rescue is the first omission class when the Constellation must reduce what it shows.
@@ -52,9 +57,11 @@ Salience is the selection importance of an eligible Candidate relative to siblin
 
 ## Output contract
 
-Selection hands composition an already-admitted, already-ranked Candidate set. Downstream composition may allocate, merge, truncate, or arrange those Candidates to build a coherent Constellation, but it must not independently re-run automatic eligibility or require a second admission flag on the Graph Edge or Candidate projection.
+Selection hands composition the selected Candidate objects themselves, already admitted and sequenced in same-source Salience order. Position in that sequence is the downstream same-source ordering contract. Composition may allocate, merge, truncate, or arrange those Candidates to build a coherent Constellation, but it must not independently re-run automatic eligibility, re-rank same-source Candidates, or require copied admission/order markers on the Graph Edge or on an edge-shaped projection.
 
-Explicitly materialized navigation remains a separate product behavior: `explicit` may keep known graph relationships navigable even when automatic selection would not admit them. That durable graph property is an input to navigation/selection behavior, not a replacement eligibility protocol.
+A selected Candidate may retain evidence or selection metadata when another current-view consumer needs it, but composition must not require duplicate fields such as `qualifies` or `salienceOrder` to rediscover decisions already made by selection.
+
+Explicit navigation is not part of this output contract. The durable `explicit` Graph Edge property belongs to navigation behavior; it neither manufactures an evidence-free Candidate nor guarantees Constellation space. When an explicit Graph Edge also has usable current Prevalence, the same Graph Edge may independently appear in the ordinary selected Candidate sequence.
 
 ## Verification
 
@@ -71,5 +78,7 @@ Deterministic tests should cover:
 - same-source Salience starting from Prevalence while positive/negative evidence can move a Candidate one local sibling place;
 - unknown or conflicting evidence leaving same-source Salience in Prevalence order;
 - Candidates from different source positions not being globally ordered solely by their local Prevalence;
-- a Move without usable rated Lichess Explorer Prevalence remaining outside automatic selection;
-- downstream composition accepting the selected/ranked Candidate set without consulting a second eligibility marker.
+- a Move without usable rated Lichess Explorer Prevalence producing no Candidate, including when its Graph Edge is explicit;
+- an explicit Graph Edge with usable current Prevalence producing the same evidence-backed Candidate semantics as an otherwise equivalent non-explicit Graph Edge;
+- explicit-only navigation remaining available independently of Candidate/Constellation membership;
+- downstream composition accepting selected Candidate objects in selection order without consulting a second eligibility or same-source ordering marker.

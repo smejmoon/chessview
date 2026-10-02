@@ -2,15 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chooseRootNeighborhood } from '../src/visible-graph.js';
 
-function edge(source, target, uci, games = 0) {
-  return { source, target, uci, san: uci, games, share: 0.1 };
+function candidate(source, target, uci, games = 0) {
+  const edge = { id: `${source}|${uci}|${target}`, source, target, uci, san: uci };
+  return { edge, frequency: { games, share: 0.1 }, automatic: true, rare: false, positive: false, rescued: false, negative: false, omitFirst: false };
 }
 
 test('Roots gives each immediate family ancestry before returning to a bushy family', () => {
   const incomingByTarget = new Map([
-    ['center', [edge('a', 'center', 'a1a2', 100), edge('b', 'center', 'b1b2', 80)]],
-    ['a', [edge('aa', 'a', 'a2a3', 70), edge('ax', 'a', 'a2a4', 60)]],
-    ['b', [edge('bb', 'b', 'b2b3', 50)]],
+    ['center', [candidate('a', 'center', 'a1a2', 100), candidate('b', 'center', 'b1b2', 80)]],
+    ['a', [candidate('aa', 'a', 'a2a3', 70), candidate('ax', 'a', 'a2a4', 60)]],
+    ['b', [candidate('bb', 'b', 'b2b3', 50)]],
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 5 });
@@ -23,10 +24,10 @@ test('Roots gives each immediate family ancestry before returning to a bushy fam
 
 test('Roots stays shallow-first inside each immediate family', () => {
   const incomingByTarget = new Map([
-    ['center', [edge('a', 'center', 'a1a2', 100), edge('b', 'center', 'b1b2', 80)]],
-    ['a', [edge('aa', 'a', 'a2a3', 70), edge('ax', 'a', 'a2a4', 60)]],
-    ['aa', [edge('aaa', 'aa', 'a3a4', 50)]],
-    ['b', [edge('bb', 'b', 'b2b3', 40)]],
+    ['center', [candidate('a', 'center', 'a1a2', 100), candidate('b', 'center', 'b1b2', 80)]],
+    ['a', [candidate('aa', 'a', 'a2a3', 70), candidate('ax', 'a', 'a2a4', 60)]],
+    ['aa', [candidate('aaa', 'aa', 'a3a4', 50)]],
+    ['b', [candidate('bb', 'b', 'b2b3', 40)]],
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 6 });
@@ -35,9 +36,9 @@ test('Roots stays shallow-first inside each immediate family', () => {
 
 test('Roots merges a transposed ancestor and keeps every visible downstream edge', () => {
   const incomingByTarget = new Map([
-    ['center', [edge('a', 'center', 'a1a2'), edge('b', 'center', 'b1b2')]],
-    ['a', [edge('shared', 'a', 'c1c2')]],
-    ['b', [edge('shared', 'b', 'c1c3')]],
+    ['center', [candidate('a', 'center', 'a1a2'), candidate('b', 'center', 'b1b2')]],
+    ['a', [candidate('shared', 'a', 'c1c2')]],
+    ['b', [candidate('shared', 'b', 'c1c3')]],
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 8 });
@@ -51,9 +52,9 @@ test('Roots merges a transposed ancestor and keeps every visible downstream edge
 
 test('Roots keep zero-cost convergence relationships when the board budget is full', () => {
   const incomingByTarget = new Map([
-    ['center', [edge('a', 'center', 'a1a2'), edge('b', 'center', 'b1b2')]],
-    ['a', [edge('shared', 'a', 'c1c2')]],
-    ['b', [edge('shared', 'b', 'c1c3')]],
+    ['center', [candidate('a', 'center', 'a1a2'), candidate('b', 'center', 'b1b2')]],
+    ['a', [candidate('shared', 'a', 'c1c2')]],
+    ['b', [candidate('shared', 'b', 'c1c3')]],
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 3 });
@@ -67,10 +68,10 @@ test('Roots keep zero-cost convergence relationships when the board budget is fu
 
 test('ancestry above a transposition inherits all converged Root families', () => {
   const incomingByTarget = new Map([
-    ['center', [edge('a', 'center', 'a1a2'), edge('b', 'center', 'b1b2')]],
-    ['a', [edge('shared', 'a', 'c1c2')]],
-    ['b', [edge('shared', 'b', 'c1c3')]],
-    ['shared', [edge('upstream', 'shared', 'd1d2')]],
+    ['center', [candidate('a', 'center', 'a1a2'), candidate('b', 'center', 'b1b2')]],
+    ['a', [candidate('shared', 'a', 'c1c2')]],
+    ['b', [candidate('shared', 'b', 'c1c3')]],
+    ['shared', [candidate('upstream', 'shared', 'd1d2')]],
   ]);
 
   const selected = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 4 });
@@ -83,7 +84,7 @@ test('ancestry above a transposition inherits all converged Root families', () =
 
 test('Roots selection is deterministic, preserves supplied order, and respects its visible budget', () => {
   const incomingByTarget = new Map([
-    ['center', [edge('b', 'center', 'b1b2', 10), edge('a', 'center', 'a1a2', 10), edge('c', 'center', 'c1c2', 5)]],
+    ['center', [candidate('b', 'center', 'b1b2', 10), candidate('a', 'center', 'a1a2', 10), candidate('c', 'center', 'c1c2', 5)]],
   ]);
   const first = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 2 });
   const second = chooseRootNeighborhood({ center: 'center', incomingByTarget, max: 2 });

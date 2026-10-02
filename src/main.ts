@@ -22,12 +22,28 @@ import { loadNodusRail } from './rail-source.js';
 import { createRouteLedger } from './route-ledger.ts';
 import { preferenceStore } from './preference-store.js';
 
+const COMPACT_VIEW_MAX_WIDTH_PX = 620;
+const CONSTRAINED_VIEW_MAX_WIDTH_PX = 900;
+const CONSTRAINED_VIEW_MAX_AREA_PX2 = 650_000;
+const ROOMY_VIEW_MAX_WIDTH_PX = 1250;
+const ROOMY_VIEW_MAX_AREA_PX2 = 1_000_000;
+
+const COMPACT_BOARD_BUDGET = 5;
+const CONSTRAINED_BOARD_BUDGET = 8;
+const ROOMY_BOARD_BUDGET = 12;
+const MAX_BOARD_BUDGET = 16;
+const RESIZE_REDRAW_DEBOUNCE_MS = 120;
+
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
-  if (window.innerWidth < 620) return 5;
-  if (window.innerWidth < 900 || area < 650_000) return 8;
-  if (window.innerWidth < 1250 || area < 1_000_000) return 12;
-  return 16;
+  if (window.innerWidth < COMPACT_VIEW_MAX_WIDTH_PX) return COMPACT_BOARD_BUDGET;
+  if (window.innerWidth < CONSTRAINED_VIEW_MAX_WIDTH_PX || area < CONSTRAINED_VIEW_MAX_AREA_PX2) {
+    return CONSTRAINED_BOARD_BUDGET;
+  }
+  if (window.innerWidth < ROOMY_VIEW_MAX_WIDTH_PX || area < ROOMY_VIEW_MAX_AREA_PX2) {
+    return ROOMY_BOARD_BUDGET;
+  }
+  return MAX_BOARD_BUDGET;
 }
 
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
@@ -103,7 +119,7 @@ debugLog('app start', controller.snapshot);
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { void controller.redraw(); }, 120);
+  resizeTimer = setTimeout(() => { void controller.redraw(); }, RESIZE_REDRAW_DEBOUNCE_MS);
 });
 window.addEventListener('beforeunload', () => {
   stopLichessEvalStatus();

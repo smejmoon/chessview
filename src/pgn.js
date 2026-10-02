@@ -1,3 +1,6 @@
+const DEFAULT_PGN_SUFFIX_MAX_PLIES = 6;
+const DEFAULT_PGN_PATH_MAX_DEPTH = 64;
+
 function edgeOrder(a, b) {
   return (b.games ?? 0) - (a.games ?? 0)
     || (b.share ?? 0) - (a.share ?? 0)
@@ -16,13 +19,18 @@ export function formatPgnMoves(edges, startPly = 0) {
   }).join(' ');
 }
 
-export function formatPgnSuffix(edges, maxPlies = 6) {
+export function formatPgnSuffix(edges, maxPlies = DEFAULT_PGN_SUFFIX_MAX_PLIES) {
   const startPly = Math.max(0, edges.length - Math.max(1, maxPlies));
   const suffix = formatPgnMoves(edges.slice(startPly), startPly);
   return startPly ? `… ${suffix}` : suffix;
 }
 
-export function reconstructPgnPath(target, incomingByTarget, start, maxDepth = 64) {
+export function reconstructPgnPath(
+  target,
+  incomingByTarget,
+  start,
+  maxDepth = DEFAULT_PGN_PATH_MAX_DEPTH,
+) {
   if (!target || !start) return null;
   if (target === start) return [];
 
@@ -49,7 +57,7 @@ export function reconstructPgnPath(target, incomingByTarget, start, maxDepth = 6
   return null;
 }
 
-export function reconstructPgn(target, incomingByTarget, start, maxDepth = 64) {
+export function reconstructPgn(target, incomingByTarget, start, maxDepth = DEFAULT_PGN_PATH_MAX_DEPTH) {
   const path = reconstructPgnPath(target, incomingByTarget, start, maxDepth);
   return path == null ? null : formatPgnMoves(path);
 }

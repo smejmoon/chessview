@@ -29,6 +29,8 @@ import {
 import type { SelectionCandidate } from './constellation-selection.ts';
 
 const START = canonicalPosition(START_FEN);
+const ROOT_PATH_SEARCH_MAX_DEPTH = 32;
+const ROOT_LABEL_MAX_PLIES = 6;
 
 type LoadPriority = 'foreground' | 'background';
 type Priority = LoadPriority | (() => LoadPriority);
@@ -234,7 +236,7 @@ async function collectIncomingGraph(
 
 async function collectIncomingToStart(
   target: string,
-  { maxDepth = 32, signal }: { maxDepth?: number; signal?: AbortSignal } = {},
+  { maxDepth = ROOT_PATH_SEARCH_MAX_DEPTH, signal }: { maxDepth?: number; signal?: AbortSignal } = {},
 ): Promise<Map<string, GraphEdge[]>> {
   const incomingByTarget = new Map<string, GraphEdge[]>();
   const queue: Array<{ key: string; depth: number }> = [{ key: target, depth: 0 }];
@@ -266,7 +268,7 @@ async function rootRows(
     const path = reconstructPgnPath(node.key, incomingByTarget, START);
     if (path == null) return null;
     const full = path.length ? formatPgnMoves(path) : 'start position';
-    const suffix = path.length ? formatPgnSuffix(path, 6) : 'start position';
+    const suffix = path.length ? formatPgnSuffix(path, ROOT_LABEL_MAX_PLIES) : 'start position';
     return {
       key: node.key,
       label: node.merge ? `↗ ${suffix}` : suffix,

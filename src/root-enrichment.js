@@ -4,6 +4,9 @@ import { positionGraph } from './position-graph.js';
 import { expandMoveOrderTranspositions } from './transpositions.js';
 
 const START = canonicalPosition(START_FEN);
+const ROOT_REFERENCE_PATH_MAX_DEPTH = 32;
+const ROOT_TRANSPOSITION_MAX_PATHS = 256;
+const ROOT_TRANSPOSITION_MAX_STATES = 75_000;
 
 function abortError() {
   const error = new Error('Root enrichment participation became obsolete');
@@ -11,7 +14,7 @@ function abortError() {
   return error;
 }
 
-async function referencePathFor(target, { maxDepth = 32 } = {}) {
+async function referencePathFor(target, { maxDepth = ROOT_REFERENCE_PATH_MAX_DEPTH } = {}) {
   const incomingByTarget = new Map();
   const queue = [{ key: target, depth: 0 }];
   const seen = new Set();
@@ -63,7 +66,10 @@ export function createRootTranspositionEnricher({
     const work = (async () => {
       const referencePath = await loadReferencePath(target);
       if (!referencePath?.length) return null;
-      const result = await expand(referencePath, target, { maxPaths: 256, maxStates: 75_000 });
+      const result = await expand(referencePath, target, {
+        maxPaths: ROOT_TRANSPOSITION_MAX_PATHS,
+        maxStates: ROOT_TRANSPOSITION_MAX_STATES,
+      });
       expandedTargets.add(target);
       return result;
     })().finally(() => {

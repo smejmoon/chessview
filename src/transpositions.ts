@@ -8,6 +8,8 @@ import { positionGraph } from './position-graph.ts';
 import { positionRepository } from './position-repository.js';
 
 const START = canonicalPosition(START_FEN);
+const DEFAULT_TRANSPOSITION_MAX_PATHS = 128;
+const DEFAULT_TRANSPOSITION_MAX_STATES = 50_000;
 
 type MoveArgs = Readonly<{
   from: string;
@@ -76,7 +78,10 @@ function transpositionEdge(chess: Chess, uci: string): TranspositionEdge | null 
 export function enumerateMoveOrderTranspositions(
   referencePath: readonly Readonly<{ source: string; uci: string }>[],
   targetKey: string,
-  { maxPaths = 128, maxStates = 50_000 }: TranspositionSearchOptions = {},
+  {
+    maxPaths = DEFAULT_TRANSPOSITION_MAX_PATHS,
+    maxStates = DEFAULT_TRANSPOSITION_MAX_STATES,
+  }: TranspositionSearchOptions = {},
 ): TranspositionSearchResult {
   if (!referencePath.length) return { paths: [], states: 0, truncated: false };
   if (referencePath[0]?.source !== START) return { paths: [], states: 0, truncated: false };

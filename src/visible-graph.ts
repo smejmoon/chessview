@@ -2,6 +2,11 @@ import { edgeId } from './graph.js';
 import type { SelectionCandidate } from './constellation-selection.ts';
 import type { GraphEdge } from './position-graph.ts';
 
+const DEFAULT_VISIBLE_BOARD_BUDGET = 19;
+const MAX_INCOMING_CONTEXT_BOARDS = 4;
+const MIN_INCOMING_CONTEXT_BOARDS = 1;
+const INCOMING_CONTEXT_BUDGET_DIVISOR = 4;
+
 export type VisibleFamily = {
   id: string;
   lineShare?: number;
@@ -106,7 +111,14 @@ function unique(values: readonly (string | null | undefined | false)[] = []): st
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
 
-function createVisibleGraph({ center, direction, max = 19 }: {
+function incomingContextBudget(max: number): number {
+  return Math.min(
+    MAX_INCOMING_CONTEXT_BOARDS,
+    Math.max(MIN_INCOMING_CONTEXT_BOARDS, Math.floor(max / INCOMING_CONTEXT_BUDGET_DIVISOR)),
+  );
+}
+
+function createVisibleGraph({ center, direction, max = DEFAULT_VISIBLE_BOARD_BUDGET }: {
   center: string;
   direction: Direction;
   max?: number;
@@ -310,14 +322,14 @@ export function composeLineNeighborhood({
   outgoingBySource = new Map<string, readonly SelectionCandidate[]>(),
   unresolvedReadings = new Set<string>(),
   legalTargetsBySource = new Map<string, ReadonlySet<string>>(),
-  max = 19,
+  max = DEFAULT_VISIBLE_BOARD_BUDGET,
 }: LineNeighborhoodOptions): LineCompositionPlan {
   const visible = createVisibleGraph({ center, direction: 'lines', max });
 
   incoming
     .slice()
     .sort((a, b) => (b.games ?? 0) - (a.games ?? 0) || a.key.localeCompare(b.key))
-    .slice(0, Math.min(4, Math.max(1, Math.floor(max / 4))))
+    .slice(0, incomingContextBudget(max))
     .forEach((item) => visible.addNode({ ...item, relation: 'incoming', distance: 1 }));
 
   const agenda: LineAgendaItem[] = selectedLineCandidates(outgoingBySource, center)
@@ -438,7 +450,7 @@ function rootCandidates(
 export function chooseRootNeighborhood({
   center,
   incomingByTarget = new Map<string, readonly SelectionCandidate[]>(),
-  max = 19,
+  max = DEFAULT_VISIBLE_BOARD_BUDGET,
 }: RootNeighborhoodOptions): VisibleComposition {
   const visible = createVisibleGraph({ center, direction: 'roots', max });
   const frontiers: RootFrontier[] = [];

@@ -95,7 +95,6 @@ async function putFreshExplorer(position, moves, total = 100) {
 function assertCanonicalStoredShape(edge) {
   assert.equal('games' in edge, false);
   assert.equal('share' in edge, false);
-  assert.equal('qualifies' in edge, false);
   assert.equal('updatedAt' in edge, false);
   assert.equal('manual' in edge, false);
   assert.equal('derived' in edge, false);

@@ -16,3 +16,4 @@
  * intrinsic invariants rather than tunable policy.
  */
 export const CONSTELLATION_LOOKAHEAD_LIMIT = 4;
+export const GRAPH_EDGE_ADMISSION_SAMPLE_FLOOR = 80;

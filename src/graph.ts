@@ -1,7 +1,5 @@
 import { Chess } from 'chess.js';
 
-export const AUTO_THRESHOLD = 0.05;
-export const AUTO_SAMPLE_FLOOR = 80;
 export const EXPLORER_TTL_MS = 24 * 60 * 60 * 1000;
 export const START_FEN = new Chess().fen();
 
@@ -24,7 +22,6 @@ export type ExplorerReading = GameCounts & Readonly<{
 export type DecoratedExplorerMove = ExplorerMove & Readonly<{
   games: number;
   share: number;
-  qualifies: boolean;
 }>;
 
 export type ResolveMoveInput = Readonly<{
@@ -106,20 +103,12 @@ export function decorateExplorerMoves(
   const total = totalGames(explorer);
   return (explorer?.moves ?? []).map((move) => {
     const games = moveGames(move);
-    const share = total ? games / total : 0;
     return {
       ...move,
       games,
-      share,
-      qualifies: total >= AUTO_SAMPLE_FLOOR && games / Math.max(1, total) >= AUTO_THRESHOLD,
+      share: total ? games / total : 0,
     };
   });
-}
-
-export function omittedShare(explorer?: ExplorerReading | null): number {
-  return decorateExplorerMoves(explorer)
-    .filter((move) => !move.qualifies)
-    .reduce((sum, move) => sum + move.share, 0);
 }
 
 export function edgeId(edge: EdgeIdentity): string {

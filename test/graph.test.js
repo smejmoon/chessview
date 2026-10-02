@@ -4,7 +4,6 @@ import { Chess } from 'chess.js';
 import {
   canonicalPosition,
   decorateExplorerMoves,
-  omittedShare,
   resolveMove,
   START_FEN,
 } from '../src/graph.js';
@@ -53,7 +52,7 @@ test('different move orders converge on one canonical position', () => {
   assert.equal(canonicalPosition(a), canonicalPosition(b));
 });
 
-test('5 percent qualification is local to each source sample', () => {
+test('Explorer move decoration derives local games and share without classification', () => {
   const explorer = {
     white: 50,
     draws: 20,
@@ -64,20 +63,10 @@ test('5 percent qualification is local to each source sample', () => {
     ],
   };
   const moves = decorateExplorerMoves(explorer);
+  assert.equal(moves[0].games, 5);
   assert.equal(moves[0].share, 0.05);
-  assert.equal(moves[0].qualifies, true);
-  assert.equal(moves[1].qualifies, false);
-  assert.equal(omittedShare(explorer), 0.04);
-});
-
-test('small samples stop automatic expansion', () => {
-  const explorer = {
-    white: 30,
-    draws: 20,
-    black: 29,
-    moves: [{ uci: 'e2e4', white: 25, draws: 15, black: 20 }],
-  };
-  assert.equal(decorateExplorerMoves(explorer)[0].qualifies, false);
+  assert.equal(moves[1].games, 4);
+  assert.equal(moves[1].share, 0.04);
 });
 
 test('branch-balanced neighborhood gives roots space before going deeper', () => {

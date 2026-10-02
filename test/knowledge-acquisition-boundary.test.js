@@ -95,6 +95,52 @@ test('Knowledge Acquisition skips an uninterpretable move but admits other legal
   assert.equal(merged.length, 1);
 });
 
+test('ChartedGraph Edge Admission uses source sample sufficiency without a move-share cutoff', async () => {
+  const ensured = [];
+  const acquisition = createKnowledgeAcquisition({
+    loadExplorer: async () => ({
+      white: 80,
+      draws: 0,
+      black: 0,
+      moves: [{ uci: 'e2e4', white: 1, draws: 0, black: 0 }],
+    }),
+    graph: {
+      outgoing: async () => [],
+      ensureEdge: async (edge) => {
+        ensured.push(edge);
+        return edge;
+      },
+    },
+    repository: { merge: async () => {} },
+  });
+
+  await acquisition.acquireExplorerReading(center);
+  assert.deepEqual(ensured.map((edge) => edge.uci), ['e2e4']);
+});
+
+test('ChartedGraph Edge Admission declines unknown relationships below the source sample floor', async () => {
+  let edgeEnsures = 0;
+  const acquisition = createKnowledgeAcquisition({
+    loadExplorer: async () => ({
+      white: 79,
+      draws: 0,
+      black: 0,
+      moves: [{ uci: 'e2e4', white: 79, draws: 0, black: 0 }],
+    }),
+    graph: {
+      outgoing: async () => [],
+      ensureEdge: async (edge) => {
+        edgeEnsures += 1;
+        return edge;
+      },
+    },
+    repository: { merge: async () => {} },
+  });
+
+  await acquisition.acquireExplorerReading(center);
+  assert.equal(edgeEnsures, 0);
+});
+
 test('Knowledge Acquisition propagates target persistence failure after admitting an edge', async () => {
   let edgeEnsures = 0;
   let targetWrites = 0;

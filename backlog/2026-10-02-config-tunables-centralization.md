@@ -1,6 +1,6 @@
 # Do:
 
-Inventory existing implementation-tunable policy values that are still defined inside their consumers and move the qualifying source values into named exports from `src/config.ts`, updating consumers and verification without changing behavior. Known examples include Constellation's `0.05` rarity threshold, Rail's `100`-game sample floor and `0.05` popular-share threshold, and the `30_000 ms` supplementary Explorer-warm timeout.
+Inventory existing implementation-tunable policy values that are still defined inside their consumers and move the qualifying source values into named exports from `src/config.ts`, updating consumers and verification without changing behavior. Known remaining examples include Constellation's `0.05` rarity threshold, Rail's `100`-game sample floor and `0.05` popular-share threshold, and the `30_000 ms` supplementary Explorer-warm timeout.
 
 Use the ownership rule already documented in `src/config.ts`: centralize concrete limits, thresholds, sample floors, timeouts, and similar maintainer-adjustable policy values so their algorithms do not retain private magic-number homes.
 
@@ -8,7 +8,9 @@ Use the ownership rule already documented in `src/config.ts`: centralize concret
 
 `src/config.ts` is now the declared central source-value home for Chessview implementation tunables, while several existing tunables still live in component or acquisition modules. Leaving those values distributed makes the new ownership rule incomplete and forces maintainers to keep hunting through consuming algorithms for knobs that are intended to be centrally discoverable.
 
-This outcome inherits the existing behavior of each tunable. It is a source-ownership migration, not an opportunity to change threshold meanings or values.
+The ChartedGraph Edge Admission source-sample floor is already centralized as `GRAPH_EDGE_ADMISSION_SAMPLE_FLOOR`. Generic Explorer move decoration now carries source evidence only, so this outcome must not recreate a shared eligibility or qualification policy while centralizing the remaining tunables.
+
+This outcome inherits the existing behavior of each remaining tunable. It is a source-ownership migration, not an opportunity to change threshold meanings or values.
 
 # Edges:
 
@@ -17,8 +19,6 @@ Product and component documents continue to own what each tunable means, the beh
 Do not move user preferences, environment or secret configuration, source facts, canonical identities, protocol constants, or intrinsic invariants into `src/config.ts`. Remaining numeric constants may stay local when they fall into those excluded categories rather than tunable policy.
 
 Keep this separate from behavior-changing selection work. The landed Candidate contract in `docs/components/constellation-selection.md` requires usable rated-Lichess Prevalence and keeps explicit navigation outside Candidate admission; centralization must preserve those semantics rather than recreate a shared eligibility cutoff or navigation exception.
-
-Coordinate with `backlog/2026-10-02-explorer-move-decoration.md` and `backlog/2026-10-02-other-share-semantics.md`: if a legacy qualification threshold disappears during those semantic cleanups, do not centralize dead policy merely to preserve the old value. Retained consumer-owned thresholds remain eligible for centralization when they still meet the `src/config.ts` ownership rule.
 
 # Complete:
 

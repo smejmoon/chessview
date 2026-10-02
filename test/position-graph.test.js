@@ -18,7 +18,6 @@ function explorerBackedE4() {
     san: resolved.san,
     games: 600,
     share: 0.6,
-    qualifies: true,
     updatedAt: 1,
   };
 }
@@ -26,7 +25,6 @@ function explorerBackedE4() {
 function assertCanonicalStoredShape(edge) {
   assert.equal('games' in edge, false);
   assert.equal('share' in edge, false);
-  assert.equal('qualifies' in edge, false);
   assert.equal('updatedAt' in edge, false);
   assert.equal('manual' in edge, false);
   assert.equal('derived' in edge, false);

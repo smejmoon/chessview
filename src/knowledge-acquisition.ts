@@ -1,9 +1,9 @@
 import {
-  AUTO_SAMPLE_FLOOR,
   canonicalPosition,
   resolveMove,
   totalGames,
 } from './graph.js';
+import { GRAPH_EDGE_ADMISSION_SAMPLE_FLOOR } from './config.ts';
 import { debugLog } from './debug.js';
 import { loadExplorerReading, readCachedExplorerReading } from './explorer.js';
 import { positionGraph } from './position-graph.ts';
@@ -103,7 +103,7 @@ export function createKnowledgeAcquisition({
     explorer: ExplorerReading,
   ): Promise<GraphEdge[]> {
     const edges: GraphEdge[] = [];
-    const admitUnknown = totalGames(explorer) >= AUTO_SAMPLE_FLOOR;
+    const admitUnknown = totalGames(explorer) >= GRAPH_EDGE_ADMISSION_SAMPLE_FLOOR;
     const knownByRelationship = new Map(
       (await graph.outgoing(canonical)).map((edge) => [relationshipKey(edge.uci, edge.target), edge]),
     );

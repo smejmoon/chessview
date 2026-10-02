@@ -36,7 +36,6 @@ function uciLine(path) {
 function assertNoLegacyState(edge) {
   assert.equal('games' in edge, false);
   assert.equal('share' in edge, false);
-  assert.equal('qualifies' in edge, false);
   assert.equal('updatedAt' in edge, false);
   assert.equal('manual' in edge, false);
   assert.equal('derived' in edge, false);
@@ -92,7 +91,6 @@ test('persisting a transposition path scrubs legacy state without establishing e
     ...topology,
     games: 600,
     share: 0.6,
-    qualifies: true,
     manual: false,
     derived: true,
     updatedAt: 1,

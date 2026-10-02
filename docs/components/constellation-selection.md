@@ -62,7 +62,7 @@ Salience is the selection importance of an eligible Candidate relative to siblin
 
 Selection hands composition the selected Candidate objects themselves, already admitted and sequenced in same-source Salience order. Position in that sequence is the downstream same-source ordering contract. Composition may allocate, merge, truncate, or arrange those Candidates to build a coherent Constellation, but it must not independently re-run automatic eligibility, re-rank same-source Candidates, or require copied admission/order markers on the Graph Edge or on an edge-shaped projection.
 
-A selected Candidate may retain evidence or selection metadata when another current-view consumer needs it, but composition must not require duplicate fields such as `qualifies` or `salienceOrder` to rediscover decisions already made by selection.
+A selected Candidate may retain evidence or selection metadata when another current-view consumer needs it, but composition must not require duplicate admission or ordering state to rediscover decisions already made by selection.
 
 Explicit navigation is not part of this output contract. The durable `explicit` Graph Edge property belongs to navigation behavior; it neither manufactures an evidence-free Candidate nor guarantees Constellation space. When an explicit Graph Edge also has usable current Prevalence, the same Graph Edge may independently appear in the ordinary selected Candidate sequence.
 

@@ -156,7 +156,7 @@ function compareLineSelection(a, b) {
 
 function rankedLineEdges(outgoingBySource, key) {
   return (outgoingBySource.get(key) ?? [])
-    .filter((edge) => edge.qualifies || edge.manual)
+    .filter((edge) => edge.qualifies || edge.explicit)
     .slice()
     .sort(compareLineSelection);
 }

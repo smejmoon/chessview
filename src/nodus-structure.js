@@ -63,7 +63,7 @@ function createCandidateSource(signal, { hydrateExplorer = true, priority = 'for
 
   async function candidate(edge) {
     if (!edge) return null;
-    if (edge.manual) {
+    if (edge.explicit) {
       return selectionCandidate({ edge: { ...edge, qualifies: true } });
     }
 

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { isNotableLine } from '../src/rail-selection.js';
 
 test('Notable Line requires source evidence and keeps sufficiently sampled plausible moves', () => {
-  assert.equal(isNotableLine({ edge: { manual: true } }), false);
+  assert.equal(isNotableLine({ edge: { explicit: true } }), false);
   assert.equal(isNotableLine({
     edge: { uci: 'a1a2' },
     frequency: { games: 1000, share: 0.01 },

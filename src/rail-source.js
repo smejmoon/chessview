@@ -56,8 +56,6 @@ function sourceLine(center, explorer, move, sourceEval, masters) {
     san: resolved.san,
     games: move.games,
     share: move.share,
-    manual: false,
-    derived: false,
   };
   const frequency = moveFrequency(explorer, edge);
   const moveEval = moveEvaluation(center, edge, sourceEval);
@@ -79,7 +77,7 @@ function sourceLine(center, explorer, move, sourceEval, masters) {
   });
 }
 
-function manualLine(center, edge, sourceEval, masters) {
+function explicitLine(center, edge, sourceEval, masters) {
   const moveEval = moveEvaluation(center, edge, sourceEval);
   return immutable({
     edge,
@@ -89,7 +87,7 @@ function manualLine(center, edge, sourceEval, masters) {
     mastersMismatch: humanMismatch(masters, edge, center, moveEval),
     lichessMismatch: null,
     notable: false,
-    source: 'manual',
+    source: 'explicit',
   });
 }
 
@@ -114,11 +112,11 @@ export function createRailSource({
       .map((move) => sourceLine(center, explorer, move, sourceEval, masters))
       .filter(Boolean);
     const sourceUci = new Set(sourceLines.map((line) => line.edge.uci));
-    const manualLines = outgoing
-      .filter((edge) => edge.manual && !sourceUci.has(edge.uci))
+    const explicitLines = outgoing
+      .filter((edge) => edge.explicit && !sourceUci.has(edge.uci))
       .sort(stableEdgeOrder)
-      .map((edge) => manualLine(center, edge, sourceEval, masters));
-    const lines = immutable([...sourceLines, ...manualLines]);
+      .map((edge) => explicitLine(center, edge, sourceEval, masters));
+    const lines = immutable([...sourceLines, ...explicitLines]);
 
     return immutable({
       rootsCount: incoming.length,

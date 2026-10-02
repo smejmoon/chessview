@@ -4,7 +4,7 @@ export type SelectionEdge = Readonly<{
   source?: string;
   target?: string;
   uci?: string;
-  manual?: boolean;
+  explicit?: boolean;
   salienceOrder?: number;
   [field: string]: unknown;
 }>;
@@ -81,7 +81,7 @@ export function selectionCandidate({
 }: CandidateOptions = {}): SelectionCandidate | null {
   if (!edge) return null;
 
-  if (edge.manual) {
+  if (edge.explicit) {
     return Object.freeze({
       edge,
       frequency,

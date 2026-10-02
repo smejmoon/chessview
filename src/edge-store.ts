@@ -8,7 +8,9 @@ export interface StoredEdge {
   id: string;
   source: string;
   target: string;
-  [field: string]: unknown;
+  uci: string;
+  san: string;
+  explicit?: boolean;
 }
 
 export type EdgeMutation = (existing: StoredEdge | null) => StoredEdge | null;

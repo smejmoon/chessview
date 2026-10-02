@@ -92,11 +92,13 @@ async function putFreshExplorer(position, moves, total = 100) {
   });
 }
 
-function assertNoExplorerEvidence(edge) {
+function assertCanonicalStoredShape(edge) {
   assert.equal('games' in edge, false);
   assert.equal('share' in edge, false);
   assert.equal('qualifies' in edge, false);
   assert.equal('updatedAt' in edge, false);
+  assert.equal('manual' in edge, false);
+  assert.equal('derived' in edge, false);
 }
 
 test('401 clears the stored Lichess access token', async () => {
@@ -168,13 +170,13 @@ test('selected Line acquisition stops when recomposition clears the structural R
   assert.equal(progressCalls, 1);
 });
 
-test('fresh cached Explorer Reading leaves known manual topology unchanged without network', async () => {
+test('fresh cached Explorer Reading leaves known explicit topology unchanged without network', async () => {
   await clearGraph();
   await putFreshStartExplorer();
   const resolved = resolveMove(center, { uci: 'e2e4' });
   const known = {
     id: '', source: center, target: resolved.target, uci: resolved.uci, san: resolved.san,
-    manual: true, derived: false,
+    explicit: true,
   };
   known.id = edgeId(known);
   await putEdges([known]);
@@ -186,8 +188,8 @@ test('fresh cached Explorer Reading leaves known manual topology unchanged witho
   const stored = (await getOutgoing(center)).find((edge) => edge.uci === 'e2e4');
   assert.equal(networkCalls, 0);
   assert.ok(stored);
-  assert.equal(stored.manual, true);
-  assertNoExplorerEvidence(stored);
+  assert.equal(stored.explicit, true);
+  assertCanonicalStoredShape(stored);
 });
 
 test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal move without persisting its evidence', async () => {
@@ -207,7 +209,7 @@ test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal mo
   const stored = (await getOutgoing(center)).find((edge) => edge.uci === 'a2a3');
   assert.ok(stored);
   assert.equal(stored.target, rare.target);
-  assertNoExplorerEvidence(stored);
+  assertCanonicalStoredShape(stored);
 });
 
 test('insufficient Explorer Reading leaves known topology unchanged and does not Edge Admit an unknown one', async () => {
@@ -217,7 +219,7 @@ test('insufficient Explorer Reading leaves known topology unchanged and does not
   const c4 = resolveMove(center, { uci: 'c2c4' });
   const known = {
     id: '', source: center, target: e4.target, uci: e4.uci, san: e4.san,
-    manual: true, derived: false,
+    explicit: true,
   };
   known.id = edgeId(known);
   await putEdges([known]);
@@ -235,8 +237,8 @@ test('insufficient Explorer Reading leaves known topology unchanged and does not
 
   const edges = await getOutgoing(center);
   const stored = edges.find((edge) => edge.uci === 'e2e4');
-  assert.equal(stored.manual, true);
-  assertNoExplorerEvidence(stored);
+  assert.equal(stored.explicit, true);
+  assertCanonicalStoredShape(stored);
   assert.equal(edges.some((edge) => edge.target === c4.target), false);
 });
 
@@ -323,8 +325,8 @@ test('Explorer Reading refresh grows admitted topology without rewriting or retr
   const d4 = resolveMove(center, { uci: 'd2d4' });
   const c4 = resolveMove(center, { uci: 'c2c4' });
   const existing = [
-    { id: '', source: center, target: e4.target, uci: e4.uci, san: e4.san, manual: true, derived: false },
-    { id: '', source: center, target: d4.target, uci: d4.uci, san: d4.san, manual: false, derived: false },
+    { id: '', source: center, target: e4.target, uci: e4.uci, san: e4.san, explicit: true },
+    { id: '', source: center, target: d4.target, uci: d4.uci, san: d4.san, explicit: false },
   ];
   existing.forEach((edge) => { edge.id = edgeId(edge); });
   await putEdges(existing);
@@ -342,8 +344,8 @@ test('Explorer Reading refresh grows admitted topology without rewriting or retr
   const edges = await getOutgoing(center);
   const byUci = new Map(edges.map((edge) => [edge.uci, edge]));
   assert.equal(edges.length, 3);
-  assert.equal(byUci.get('e2e4').manual, true);
+  assert.equal(byUci.get('e2e4').explicit, true);
   assert.ok(byUci.has('d2d4'));
   assert.equal(byUci.get('c2c4').target, c4.target);
-  edges.forEach(assertNoExplorerEvidence);
+  edges.forEach(assertCanonicalStoredShape);
 });

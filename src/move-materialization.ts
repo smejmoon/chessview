@@ -76,7 +76,7 @@ export async function materializeMove(input: MaterializeMoveInput): Promise<Mate
   };
 
   await positionRepository.ensure(resolved.target);
-  const stored = await positionGraph.ensureEdge(edge, { manual: true });
+  const stored = await positionGraph.ensureEdge(edge, { explicit: true });
   log('move materialization stored', {
     san: resolved.san,
     uci: stored.uci,

@@ -10,10 +10,10 @@ import { chooseRootNeighborhood } from '../src/visible-graph.js';
 
 const SOURCE = '8/8/8/8/8/8/8/K6k w - -';
 
-test('automatic selection requires evidenced local Prevalence while manual edges remain explicit', () => {
+test('automatic selection requires evidenced local Prevalence while explicit edges remain navigable', () => {
   const edge = { source: SOURCE, target: 'a', uci: 'a1a2' };
   assert.equal(selectionCandidate({ edge }), null);
-  assert.equal(selectionCandidate({ edge: { ...edge, manual: true } })?.automatic, false);
+  assert.equal(selectionCandidate({ edge: { ...edge, explicit: true } })?.automatic, false);
 });
 
 test('same-source Salience starts from Prevalence and lets clear evidence move a sibling one local place', () => {

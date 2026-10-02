@@ -2,38 +2,26 @@ import { getIncoming, getOutgoing, mutateEdge } from './edge-store.ts';
 import type { EdgeMutation, StoredEdge } from './edge-store.ts';
 import { canonicalPosition, edgeId, resolveMove } from './graph.js';
 
-export type GraphEdge = StoredEdge & Readonly<{
-  uci: string;
-  san: string;
-  manual?: boolean;
-  derived?: boolean;
-}>;
+export type GraphEdge = StoredEdge;
 
-export type GraphEdgeInput = Readonly<Record<string, unknown> & {
+export type GraphEdgeInput = Readonly<{
   source: string;
   target: string;
   from?: string;
   to?: string;
   promotion?: string;
   uci?: string;
-  manual?: boolean;
-  derived?: boolean;
+  san?: string;
 }>;
 
-export type EdgeProvenance = Readonly<{
-  manual?: boolean;
-  derived?: boolean;
-}>;
-
-export type EdgeUpdateOptions = Readonly<{
-  create?: boolean;
+export type EdgeOptions = Readonly<{
+  explicit?: boolean;
 }>;
 
 export interface PositionGraph {
   outgoing(position: string): Promise<GraphEdge[]>;
   incoming(position: string): Promise<GraphEdge[]>;
-  ensureEdge(edge: GraphEdgeInput, provenance?: EdgeProvenance): Promise<GraphEdge>;
-  updateEdge(edge: GraphEdgeInput, options?: EdgeUpdateOptions): Promise<GraphEdge | null>;
+  ensureEdge(edge: GraphEdgeInput, options?: EdgeOptions): Promise<GraphEdge>;
 }
 
 type EdgeReader = (position: string) => Promise<StoredEdge[]>;
@@ -59,7 +47,7 @@ function asGraphEdge(edge: StoredEdge | null, operation: string): GraphEdge {
   ) {
     throw new Error(`PositionGraph ${operation} did not produce a valid graph edge`);
   }
-  return edge as GraphEdge;
+  return edge;
 }
 
 function asGraphEdges(edges: readonly StoredEdge[]): GraphEdge[] {
@@ -89,15 +77,15 @@ function normalizeEdge(edge: GraphEdgeInput): GraphEdge {
     san: resolved.san,
   };
   normalized.id = edgeId(normalized);
-  return asGraphEdge(normalized, 'normalization');
+  return normalized;
 }
 
 /**
  * Application-level boundary for durable graph-edge access and mutation.
  *
  * PositionGraph owns canonical edge identity, legal source/move/target validation,
- * durable incoming/outgoing edge access, monotonic topology, and accumulation of
- * independent manual/derived provenance.
+ * durable incoming/outgoing edge access, monotonic topology, and the durable
+ * explicit-materialization distinction used by navigation/selection behavior.
  */
 export function createPositionGraph({
   readOutgoing = getOutgoing,
@@ -114,34 +102,17 @@ export function createPositionGraph({
 
   async function ensureEdge(
     edge: GraphEdgeInput,
-    { manual = false, derived = false }: EdgeProvenance = {},
+    { explicit = false }: EdgeOptions = {},
   ): Promise<GraphEdge> {
     const normalized = normalizeEdge(edge);
     const stored = await mutateStoredEdge(normalized.id, (existing) => ({
       ...normalized,
-      manual: Boolean(existing?.manual || edge.manual || manual),
-      derived: Boolean(existing?.derived || edge.derived || derived),
+      explicit: Boolean(existing?.explicit || explicit),
     }));
     return asGraphEdge(stored, 'ensureEdge');
   }
 
-  async function updateEdge(
-    edge: GraphEdgeInput,
-    { create = false }: EdgeUpdateOptions = {},
-  ): Promise<GraphEdge | null> {
-    const normalized = normalizeEdge(edge);
-    const stored = await mutateStoredEdge(normalized.id, (existing) => {
-      if (!existing && !create) return null;
-      return {
-        ...normalized,
-        manual: Boolean(existing?.manual),
-        derived: Boolean(existing?.derived),
-      };
-    });
-    return stored == null ? null : asGraphEdge(stored, 'updateEdge');
-  }
-
-  return Object.freeze({ outgoing, incoming, ensureEdge, updateEdge });
+  return Object.freeze({ outgoing, incoming, ensureEdge });
 }
 
 export const positionGraph = createPositionGraph();

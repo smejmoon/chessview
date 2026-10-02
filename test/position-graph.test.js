@@ -23,11 +23,13 @@ function explorerBackedE4() {
   };
 }
 
-function assertNoExplorerEvidence(edge) {
+function assertCanonicalStoredShape(edge) {
   assert.equal('games' in edge, false);
   assert.equal('share' in edge, false);
   assert.equal('qualifies' in edge, false);
   assert.equal('updatedAt' in edge, false);
+  assert.equal('manual' in edge, false);
+  assert.equal('derived' in edge, false);
 }
 
 test('PositionGraph canonicalizes queries and persists only durable relationship state', async () => {
@@ -40,128 +42,59 @@ test('PositionGraph canonicalizes queries and persists only durable relationship
   assert.equal(stored.source, source);
   assert.equal(stored.target, target);
   assert.equal(stored.id, edgeId(stored));
-  assertNoExplorerEvidence(stored);
+  assert.equal(stored.explicit, false);
+  assertCanonicalStoredShape(stored);
 
   const outgoing = await positionGraph.outgoing(START_FEN);
   const incoming = await positionGraph.incoming(edge.target);
   assert.equal(outgoing.length, 1);
   assert.equal(incoming.length, 1);
   assert.equal(outgoing[0].id, incoming[0].id);
-  assertNoExplorerEvidence(outgoing[0]);
+  assertCanonicalStoredShape(outgoing[0]);
 });
 
-test('ensuring an existing edge scrubs legacy evidence while provenance accumulates', async () => {
+test('ensureEdge scrubs legacy fields and only its explicit option establishes explicit materialization', async () => {
   await clearGraph();
   const edge = explorerBackedE4();
-  const legacy = { ...edge, id: edgeId(edge), manual: false, derived: false };
+  const legacy = {
+    ...edge,
+    id: edgeId(edge),
+    manual: true,
+    derived: true,
+  };
   await putEdges([legacy]);
 
-  const manual = await positionGraph.ensureEdge(edge, { manual: true });
-  assertNoExplorerEvidence(manual);
-  assert.equal(manual.manual, true);
-
-  const derived = await positionGraph.ensureEdge(edge, { derived: true });
-  assert.equal(derived.manual, true);
-  assert.equal(derived.derived, true);
-  assertNoExplorerEvidence(derived);
-  assert.equal((await positionGraph.outgoing(edge.source)).length, 1);
-});
-
-test('updateEdge changes no source evidence and preserves identity/provenance', async () => {
-  await clearGraph();
-  const edge = explorerBackedE4();
-
-  assert.equal(await positionGraph.updateEdge(edge), null);
-  assert.equal((await positionGraph.outgoing(edge.source)).length, 0);
-
-  const created = await positionGraph.updateEdge(edge, { create: true });
-  const manual = await positionGraph.ensureEdge(edge, { manual: true });
-  const refreshed = await positionGraph.updateEdge({
-    ...edge,
-    games: 40,
-    share: 0.04,
-    qualifies: false,
-    updatedAt: 2,
-  });
-
-  assert.equal(created.id, manual.id);
-  assert.equal(refreshed.id, created.id);
-  assert.equal(refreshed.source, created.source);
-  assert.equal(refreshed.target, created.target);
-  assert.equal(refreshed.uci, created.uci);
-  assert.equal(refreshed.manual, true);
-  assertNoExplorerEvidence(created);
-  assertNoExplorerEvidence(refreshed);
-  assert.equal((await positionGraph.outgoing(edge.source)).length, 1);
-});
-
-test('updateEdge never establishes retention provenance from its payload', async () => {
-  await clearGraph();
-  const edge = explorerBackedE4();
-
-  const created = await positionGraph.updateEdge({
+  const ordinary = await positionGraph.ensureEdge({
     ...edge,
     manual: true,
     derived: true,
-  }, { create: true });
-  assert.equal(created.manual, false);
-  assert.equal(created.derived, false);
-  assertNoExplorerEvidence(created);
-
-  const refreshed = await positionGraph.updateEdge({
-    ...edge,
-    manual: true,
-    derived: true,
-    games: 250,
-    share: 0.25,
-    updatedAt: 3,
   });
-  assert.equal(refreshed.manual, false);
-  assert.equal(refreshed.derived, false);
-  assertNoExplorerEvidence(refreshed);
+  assert.equal(ordinary.explicit, false);
+  assertCanonicalStoredShape(ordinary);
+
+  const explicit = await positionGraph.ensureEdge(edge, { explicit: true });
+  assert.equal(explicit.explicit, true);
+  assertCanonicalStoredShape(explicit);
+  assert.equal((await positionGraph.outgoing(edge.source)).length, 1);
 });
 
-test('concurrent provenance additions accumulate on one edge', async () => {
+test('concurrent ensures retain one canonical relationship and explicit materialization', async () => {
   await clearGraph();
   const edge = explorerBackedE4();
-  await positionGraph.updateEdge(edge, { create: true });
 
   await Promise.all([
-    positionGraph.ensureEdge(edge, { manual: true }),
-    positionGraph.ensureEdge(edge, { derived: true }),
+    positionGraph.ensureEdge(edge),
+    positionGraph.ensureEdge(edge, { explicit: true }),
   ]);
 
   const [stored] = await positionGraph.outgoing(edge.source);
-  assert.equal(stored.manual, true);
-  assert.equal(stored.derived, true);
-  assertNoExplorerEvidence(stored);
+  assert.equal(stored.explicit, true);
+  assert.equal(stored.id, edgeId(stored));
+  assertCanonicalStoredShape(stored);
 });
 
-test('concurrent refresh-shaped input and provenance addition retain topology and provenance only', async () => {
-  await clearGraph();
-  const edge = explorerBackedE4();
-  await positionGraph.updateEdge(edge, { create: true });
-
-  await Promise.all([
-    positionGraph.ensureEdge({
-      ...edge,
-      games: 0,
-      share: 0,
-      qualifies: false,
-      updatedAt: 1,
-    }, { manual: true }),
-    positionGraph.updateEdge({
-      ...edge,
-      games: 250,
-      share: 0.25,
-      qualifies: true,
-      updatedAt: 3,
-    }),
-  ]);
-
-  const [stored] = await positionGraph.outgoing(edge.source);
-  assert.equal(stored.manual, true);
-  assertNoExplorerEvidence(stored);
+test('PositionGraph exposes no mutable-evidence update operation', () => {
+  assert.equal('updateEdge' in positionGraph, false);
 });
 
 test('PositionGraph rejects an edge whose target does not match its legal move', async () => {

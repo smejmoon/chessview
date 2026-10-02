@@ -10,6 +10,9 @@
  * Do not use this file for user preferences, environment/secret configuration,
  * external service requirements, source facts, canonical identities, protocol
  * constants, storage/schema identities, or intrinsic algorithm invariants.
+ * Semantic implementation-local values should instead be named beside their
+ * consumer. See docs/architecture/quantitative-values.md for the ownership
+ * heuristic and review guidance.
  */
 export const CONSTELLATION_LOOKAHEAD_LIMIT = 4;
 export const CONSTELLATION_RARE_SHARE = 0.05;

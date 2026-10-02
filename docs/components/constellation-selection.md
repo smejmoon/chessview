@@ -29,6 +29,8 @@ Selection is not an engine-acquisition frontier. It may consume usable engine ev
 
 Rated Explorer acquisition is different because an Explorer Reading is also graph-bearing knowledge. Constellation may request another Reading when additional outgoing graph knowledge can still change constrained composition. Human-result and Prevalence evidence arriving with that Reading may affect selection, but optional cloud evaluation remains outside structural settlement.
 
+Evidence already obtained from Lichess is treated as the current source snapshot for selection. The snapshot may be partial: usable Explorer Prevalence may exist while optional engine evidence is unavailable. Missing optional evidence changes no ordering by itself and does not trigger compensating acquisition or remembered ranking state.
+
 Explicit materialization does not itself trigger Candidate-specific Explorer acquisition. If current source evidence is already available, an explicit Graph Edge participates in selection exactly like any other Graph Edge. If usable Prevalence is unavailable, there is no Candidate; the durable explicit relationship remains navigable through the navigation surfaces that own that behavior.
 
 ## Eligibility
@@ -45,10 +47,11 @@ Explicit materialization does not itself trigger Candidate-specific Explorer acq
 Salience is the selection importance of an eligible Candidate relative to sibling alternatives from the same source position. It may depend on Prevalence and other available selection evidence, but it is neither a population statistic nor a Graph Edge property.
 
 - Same-source Salience starts from descending Prevalence order.
-- Clear positive selection evidence — strong engine quality or favorable human-result evidence — promotes a Candidate by one local sibling place. Clear negative evidence — bad engine quality or unfavorable human-result evidence — demotes it by one local sibling place.
+- Clear positive selection evidence — strong engine quality or favorable human-result evidence — promotes a Candidate by at most one local sibling place among otherwise ordinary Candidates.
+- Negative evidence does not ordinarily demote a Candidate from its Prevalence position. Frequent bad/unfavorable Moves remain structurally important because users encounter them in practice.
 - Unknown, neutral, or conflicting positive and negative evidence does not adjust the Prevalence-derived order.
-- A rare Candidate with known negative evidence and no positive rescue remains the first omission class and is ordered after otherwise eligible siblings when constrained space requires omission.
-- Promotions and demotions are local ordinal adjustments, not percentages or globally comparable scores.
+- A rare Candidate with known negative evidence and no positive rescue is a separate first-omission class and is ordered after otherwise eligible siblings when constrained space requires omission. Within that class, Prevalence order is preserved.
+- Positive promotion is a local ordinal adjustment, not a percentage or globally comparable score.
 - Prevalence from different source positions is local evidence and does not define one global rank across unrelated branches or depths.
 
 [Constellation](constellation.md) owns how locally ordered Candidates compete across branches and how lower-Salience eligible Candidates may be omitted to preserve coherence and fit available presentation space.
@@ -68,15 +71,16 @@ Explicit navigation is not part of this output contract. The durable `explicit` 
 Deterministic tests should cover:
 
 - a Candidate retaining an unchanged Graph Edge while carrying current evidence/selection state separately;
-- a frequent bad Move remaining eligible;
+- a frequent bad Move remaining eligible and retaining its Prevalence priority rather than receiving an ordinary negative demotion;
 - a rare Move remaining significant when already-available engine evidence rescues it;
 - a rare Move remaining significant when favorable human results rescue it without engine rescue;
 - unknown, failed, or insufficient rescue evidence not being treated as bad/unfavorable evidence;
 - selection not starting cloud-evaluation acquisition merely because unknown engine evidence could alter ranking or constrained membership;
-- missing engine evidence not creating a structural settlement dependency;
+- missing engine evidence not creating a structural settlement dependency or changing the Prevalence baseline;
 - a rare Candidate with known negative evidence and no positive rescue being omitted before otherwise comparable Candidates;
-- same-source Salience starting from Prevalence while positive/negative evidence can move a Candidate one local sibling place;
-- unknown or conflicting evidence leaving same-source Salience in Prevalence order;
+- same-source Salience starting from Prevalence while clear positive evidence can promote a Candidate by at most one local sibling place among ordinary Candidates;
+- multiple positive promotions remaining local without cascading a Candidate more than one sibling place;
+- unknown, negative-only, or conflicting evidence leaving ordinary same-source Salience in Prevalence order;
 - Candidates from different source positions not being globally ordered solely by their local Prevalence;
 - a Move without usable rated Lichess Explorer Prevalence producing no Candidate, including when its Graph Edge is explicit;
 - an explicit Graph Edge with usable current Prevalence producing the same evidence-backed Candidate semantics as an otherwise equivalent non-explicit Graph Edge;

@@ -43,6 +43,13 @@ type CandidateOptions = Readonly<{
   humanResult?: QualityEvidence | null;
 }>;
 
+type SameSourceRankEntry = Readonly<{
+  candidate: SelectionCandidate;
+  prevalenceOrder: number;
+  evidenceAdjustment: number;
+  localCost: number;
+}>;
+
 function stableEdgeOrder(a?: SelectionEdge | null, b?: SelectionEdge | null): number {
   return (a?.uci ?? '').localeCompare(b?.uci ?? '')
     || (a?.target ?? '').localeCompare(b?.target ?? '')
@@ -60,10 +67,14 @@ function comparePrevalence(a: SelectionCandidate, b: SelectionCandidate): number
 }
 
 function evidenceAdjustment(candidate: SelectionCandidate): number {
-  const positive = Boolean(candidate.positive);
-  const negative = Boolean(candidate.negative);
-  if (positive === negative) return 0;
-  return positive ? -1 : 1;
+  return candidate.positive && !candidate.negative ? -1 : 0;
+}
+
+function compareOrdinarySalience(a: SameSourceRankEntry, b: SameSourceRankEntry): number {
+  return a.localCost - b.localCost
+    || a.evidenceAdjustment - b.evidenceAdjustment
+    || a.prevalenceOrder - b.prevalenceOrder
+    || stableEdgeOrder(a.candidate.edge, b.candidate.edge);
 }
 
 export function selectionCandidate({
@@ -118,7 +129,7 @@ export function rankSameSourceCandidates(
   const ranked = candidates
     .slice()
     .sort(comparePrevalence)
-    .map((candidate, prevalenceOrder) => {
+    .map((candidate, prevalenceOrder): SameSourceRankEntry => {
       const adjustment = evidenceAdjustment(candidate);
       return {
         candidate,
@@ -128,17 +139,15 @@ export function rankSameSourceCandidates(
       };
     });
 
-  ranked.sort((a, b) => {
-    if (a.candidate.omitFirst !== b.candidate.omitFirst) {
-      return a.candidate.omitFirst ? 1 : -1;
-    }
-    return a.localCost - b.localCost
-      || a.evidenceAdjustment - b.evidenceAdjustment
-      || a.prevalenceOrder - b.prevalenceOrder
-      || stableEdgeOrder(a.candidate.edge, b.candidate.edge);
-  });
+  const ordinary = ranked
+    .filter((entry) => !entry.candidate.omitFirst)
+    .sort(compareOrdinarySalience);
+  const firstOmission = ranked
+    .filter((entry) => entry.candidate.omitFirst)
+    .sort((a, b) => a.prevalenceOrder - b.prevalenceOrder
+      || stableEdgeOrder(a.candidate.edge, b.candidate.edge));
 
-  return ranked.map((entry, order) => Object.freeze({
+  return [...ordinary, ...firstOmission].map((entry, order) => Object.freeze({
     ...entry.candidate,
     salience: Object.freeze({
       order,

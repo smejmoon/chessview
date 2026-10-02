@@ -1,4 +1,4 @@
-const DEFAULT_LOOKAHEAD_LIMIT = 4;
+import { CONSTELLATION_LOOKAHEAD_LIMIT } from './config.ts';
 
 export type ConstellationLookaheadNode = Readonly<{
   key?: string;
@@ -17,14 +17,14 @@ export type ConstellationLookaheadOptions = Readonly<{
 }>;
 
 function limitValue(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_LOOKAHEAD_LIMIT;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return CONSTELLATION_LOOKAHEAD_LIMIT;
   return Math.max(0, Math.floor(value));
 }
 
 export function nominateConstellationLookahead({
   center,
   structure,
-  max = DEFAULT_LOOKAHEAD_LIMIT,
+  max = CONSTELLATION_LOOKAHEAD_LIMIT,
 }: ConstellationLookaheadOptions = {}): readonly string[] {
   const limit = limitValue(max);
   if (limit === 0) return Object.freeze([] as string[]);

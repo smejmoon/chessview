@@ -48,7 +48,7 @@ Salience is the selection importance of an eligible Candidate relative to siblin
 
 [Constellation](constellation.md) owns how locally ordered Candidates compete across branches and how lower-Salience eligible Candidates may be omitted to preserve coherence and fit available presentation space.
 
-A fixed `5%` eligibility cutoff is not a product commitment of this algorithm. Concrete rarity, rescue, bad/unsuccessful evidence, evidence-sufficiency, and same-source Salience rules are tunable implementation choices unless separately promoted into durable requirements.
+`5%` is the current rarity threshold, not an automatic eligibility cutoff. Rarity, rescue, negative-evidence, evidence-sufficiency, and same-source Salience behavior are current component rules. Their thresholds and details may evolve, but changes must update this contract and its verification rather than being treated as implementation-only choices.
 
 ## Output contract
 

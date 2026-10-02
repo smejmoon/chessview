@@ -49,7 +49,7 @@ Lookahead is deliberately weaker than structural discovery:
 - it does not recursively expand through warmed results;
 - it does not create graph identity or source-cache policy.
 
-Lookahead relevance belongs here because Constellation already owns coherent locality around the Nodus. Exact breadth and tie-breaking may remain implementation policy while preserving boundedness and local relevance.
+Lookahead relevance belongs here because Constellation already owns coherent locality around the Nodus. Nomination remains bounded and follows the accepted composition's existing node order rather than introducing a second relevance ranking. The concrete lookahead limit is an implementation tunable defined in typed configuration; this contract owns boundedness and ordering, not the current numeric value.
 
 ## Presentation boundary
 

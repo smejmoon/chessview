@@ -1,42 +1,41 @@
-const DB_NAME = 'chessview-cache-v1';
-const DB_VERSION = 1;
-const METADATA_STORE = 'metadata';
-const CACHE_SCHEMA_KEY = 'store-schemas';
-
-const CACHE_SCHEMA_VERSIONS = {
-  nodes: 1,
-  edges: 2,
-} as const;
-
-type CacheStoreName = keyof typeof CACHE_SCHEMA_VERSIONS;
-
-type CacheSchemaRecord = Readonly<{
-  key: typeof CACHE_SCHEMA_KEY;
-  versions?: Partial<Record<CacheStoreName, unknown>>;
-}>;
+import {
+  CACHE_SCHEMA_KEY,
+  CACHE_SCHEMA_VERSIONS,
+  EDGE_SOURCE_INDEX,
+  EDGE_TARGET_INDEX,
+  EDGES_KEY_PATH,
+  EDGES_STORE,
+  METADATA_KEY_PATH,
+  METADATA_STORE,
+  NODES_KEY_PATH,
+  NODES_STORE,
+  type CacheSchemaRecord,
+  type CacheStoreName,
+} from './cache-schema.ts';
+import { DB_NAME, DB_VERSION } from './indexed-db-identity.ts';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 function createStores(db: IDBDatabase, transaction: IDBTransaction): void {
-  if (!db.objectStoreNames.contains('nodes')) {
-    db.createObjectStore('nodes', { keyPath: 'key' });
+  if (!db.objectStoreNames.contains(NODES_STORE)) {
+    db.createObjectStore(NODES_STORE, { keyPath: NODES_KEY_PATH });
   }
 
   let edges: IDBObjectStore;
-  if (!db.objectStoreNames.contains('edges')) {
-    edges = db.createObjectStore('edges', { keyPath: 'id' });
+  if (!db.objectStoreNames.contains(EDGES_STORE)) {
+    edges = db.createObjectStore(EDGES_STORE, { keyPath: EDGES_KEY_PATH });
   } else {
-    edges = transaction.objectStore('edges');
+    edges = transaction.objectStore(EDGES_STORE);
   }
-  if (!edges.indexNames.contains('source')) {
-    edges.createIndex('source', 'source', { unique: false });
+  if (!edges.indexNames.contains(EDGE_SOURCE_INDEX)) {
+    edges.createIndex(EDGE_SOURCE_INDEX, EDGE_SOURCE_INDEX, { unique: false });
   }
-  if (!edges.indexNames.contains('target')) {
-    edges.createIndex('target', 'target', { unique: false });
+  if (!edges.indexNames.contains(EDGE_TARGET_INDEX)) {
+    edges.createIndex(EDGE_TARGET_INDEX, EDGE_TARGET_INDEX, { unique: false });
   }
 
   if (!db.objectStoreNames.contains(METADATA_STORE)) {
-    db.createObjectStore(METADATA_STORE, { keyPath: 'key' });
+    db.createObjectStore(METADATA_STORE, { keyPath: METADATA_KEY_PATH });
   }
 }
 

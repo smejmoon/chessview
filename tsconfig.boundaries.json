@@ -6,6 +6,7 @@
     "useUnknownInCatchVariables": true
   },
   "files": [
+    "src/graph.ts",
     "src/route-ledger.ts",
     "src/position-graph.ts",
     "src/move-materialization.ts",

@@ -40,9 +40,9 @@ Edge mutation is an atomic per-edge read/modify/write operation. `src/edge-store
 
 That coordination prevents concurrent Graph Edge establishment from creating competing stored snapshots and allows explicit materialization to merge with an already-established relationship.
 
-IndexedDB stores edges by durable edge ID and indexes them by canonical `source` and `target` for directional neighborhood reads. The stored edge shape is canonical relationship state — `id`, `source`, `target`, `uci`, and `san` — plus optional `explicit` materialization. `src/edge-store.ts` is the typed low-level edge persistence adapter. Shared IndexedDB opening, schema creation, migration, request wrapping, and transaction completion live in `src/indexed-db.ts`; they do not own graph identity, legality, admission policy, source evidence, or Constellation state.
+IndexedDB stores edges by durable edge ID and indexes them by canonical `source` and `target` for directional neighborhood reads. The stored edge shape is canonical relationship state — `id`, `source`, `target`, `uci`, and `san` — plus optional `explicit` materialization. `src/edge-store.ts` is the typed low-level edge persistence adapter. Shared IndexedDB opening, physical store/index creation, logical cache-schema validation, request wrapping, and transaction completion live in `src/indexed-db.ts`; they do not own graph identity, legality, admission policy, source evidence, or Constellation state.
 
-IndexedDB schema version 2 migrates version-1 edge records in place. Legacy `manual: true` becomes `explicit: true`; `derived`, Explorer statistics/timestamps, eligibility, and arbitrary legacy edge fields are dropped. This preserves the only durable behavioral distinction while normalizing existing installations to the current Graph Edge shape.
+Graph Edge persistence is rebuildable browser cache. It has its own logical schema version, independent from the position-node cache schema. A Graph Edge schema mismatch clears the `edges` store and stamps the current schema version; old Graph Edge records are not migrated or interpreted. Physical IndexedDB layout changes use a new cache database epoch rather than converting an older cache in place.
 
 The matching `.js` files are compatibility re-export shims so existing JavaScript callers can keep stable import paths during incremental TypeScript migration. `src/db.js` remains only a compatibility and test/maintenance surface, including whole-store reset. Application graph code does not use it as a mixed persistence API.
 
@@ -66,7 +66,7 @@ Constellation selection, Evidence, and current-view state consume Graph Edges bu
 - `src/graph.js::edgeId()` computes durable Graph Edge identity from the normalized relationship.
 - `src/edge-store.ts::mutateEdge()` provides typed atomic per-edge read/modify/write persistence over the canonical stored edge shape.
 - `src/edge-store.ts::getIncoming()` and `getOutgoing()` provide typed indexed directional edge reads.
-- `src/indexed-db.ts` owns typed shared IndexedDB setup, the v1-to-v2 edge migration, and transaction/request mechanics.
+- `src/indexed-db.ts` owns typed shared IndexedDB setup, per-store cache schema invalidation, and transaction/request mechanics.
 - `src/edge-store.js` and `src/indexed-db.js` are compatibility re-export shims for JavaScript callers.
 
 ## Verification
@@ -80,7 +80,7 @@ Deterministic tests should cover:
 - ensuring an existing Graph Edge not rewriting Explorer statistics or current-view state;
 - explicit materialization being retained when the same relationship is also learned automatically;
 - concurrent establishment retaining one canonical relationship and any durable explicit property;
-- the v1-to-v2 migration preserving legacy explicit/manual materialization while removing `derived`, Explorer evidence, and current-view fields;
+- an incompatible Graph Edge cache schema clearing only Graph Edge records while independently compatible cache data survives;
 - an ensure not retargeting or deleting established topology;
 - durable incoming/outgoing reads continuing to work from IndexedDB without a second graph cache.
 

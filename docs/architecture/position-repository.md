@@ -12,6 +12,8 @@ The repository keeps one in-memory record per canonical key when it has been rea
 
 Application code that reads or writes position nodes goes through `PositionRepository`. `src/position-store.ts` is the typed low-level node persistence adapter; shared IndexedDB opening, schema creation, and request/transaction mechanics live in `src/indexed-db.ts`. Graph Edges remain independently persisted through [`PositionGraph`](position-graph.md), which owns Graph Edge identity and mutation rather than position-record hydration.
 
+Position persistence is rebuildable browser cache. The `nodes` store has its own logical cache-schema version independent from Graph Edge persistence. A node-schema mismatch clears cached position records and stamps the current version rather than migrating old records. Physical IndexedDB layout changes use a new cache database epoch rather than converting an older cache in place.
+
 `src/position-store.js` and `src/indexed-db.js` are compatibility re-export shims for JavaScript callers during incremental TypeScript migration. `src/db.js` is retained only as a compatibility and test/maintenance surface, including whole-store reset. Application position code does not use it as a mixed node/edge persistence API.
 
 ## Facet hydration
@@ -40,4 +42,4 @@ Lichess-backed endpoint clients own endpoint meaning and call `PositionRepositor
 
 ## Verification
 
-Deterministic tests should cover in-memory reuse before IndexedDB fallback, persisted updates remaining visible through the repository, independently cancellable callers sharing one facet load, effective shared urgency following the highest live caller demand, last-caller cancellation aborting the shared producer, replacement callers being able to start fresh work after a cancelled producer is detached, source-client freshness remaining independent per facet, and source-facet eviction leaving `ChartedGraph` topology unchanged.
+Deterministic tests should cover in-memory reuse before IndexedDB fallback, persisted updates remaining visible through the repository, independently cancellable callers sharing one facet load, effective shared urgency following the highest live caller demand, last-caller cancellation aborting the shared producer, replacement callers being able to start fresh work after a cancelled producer is detached, source-client freshness remaining independent per facet, source-facet eviction leaving `ChartedGraph` topology unchanged, and an incompatible node-cache schema clearing nodes without invalidating an independently compatible Graph Edge cache.

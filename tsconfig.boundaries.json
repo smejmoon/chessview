@@ -16,7 +16,8 @@
     "src/visible-graph.ts",
     "src/nodus-structure.ts",
     "src/knowledge-acquisition.ts",
-    "src/nodus-renderer.ts"
+    "src/nodus-renderer.ts",
+    "src/eval-ui.ts"
   ],
   "include": []
 }

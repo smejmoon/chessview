@@ -6,7 +6,7 @@
 
 ## API
 
-The application-level API should stay small and topology-oriented:
+The application-level API is deliberately small and topology-oriented:
 
 ```js
 positionGraph.outgoing(position)
@@ -16,7 +16,7 @@ positionGraph.ensureEdge(edge, {
 })
 ```
 
-The exact implementation may retain compatibility shims while code is migrated away from the older `manual` / `derived` / `updateEdge()` surface, but the settled architectural contract is that mutable Explorer evidence is not updated through `PositionGraph`.
+Mutable Explorer evidence is not updated through `PositionGraph`. There is no Graph Edge refresh/update operation distinct from ensuring a durable relationship.
 
 `outgoing(position)` and `incoming(position)` canonicalize their position argument before reading durable Graph Edges.
 
@@ -28,7 +28,7 @@ The durable edge ID, SAN, and UCI are recomputed from the validated canonical re
 
 ## Mutation semantics
 
-`ensureEdge(edge, options)` ensures one durable Graph Edge exists for the supplied legal identity. For a new identity it persists the normalized relationship. For an existing identity it preserves that relationship and may add a durable explicit-materialization property if product behavior needs that distinction.
+`ensureEdge(edge, options)` ensures one durable Graph Edge exists for the supplied legal identity. For a new identity it persists the normalized relationship. For an existing identity it preserves that relationship and may add the durable `explicit` materialization property used when product behavior needs that distinction.
 
 Ordinary source reconciliation does not rewrite an existing Graph Edge merely because another Explorer Reading contains the same Move. Explorer game counts, move share, timestamps, source revisions, eligibility, Salience, and other source/current-view fields are not Graph Edge mutation concerns.
 
@@ -38,9 +38,11 @@ Neither source refresh nor `ensureEdge()` can retarget an existing Graph Edge or
 
 Edge mutation is an atomic per-edge read/modify/write operation. `src/edge-store.ts::mutateEdge()` reads the current edge and applies one update inside the same IndexedDB `edges` transaction before committing the replacement value.
 
-That coordination prevents concurrent Graph Edge establishment from creating competing stored snapshots and allows durable behavioral properties such as explicit materialization to merge with an already-established relationship.
+That coordination prevents concurrent Graph Edge establishment from creating competing stored snapshots and allows explicit materialization to merge with an already-established relationship.
 
-IndexedDB stores edges by durable edge ID and indexes them by canonical `source` and `target` for directional neighborhood reads. `src/edge-store.ts` is the typed low-level edge persistence adapter. Shared IndexedDB opening, schema creation, request wrapping, and transaction completion live in `src/indexed-db.ts`; they do not own graph identity, legality, admission policy, source evidence, or Constellation state.
+IndexedDB stores edges by durable edge ID and indexes them by canonical `source` and `target` for directional neighborhood reads. The stored edge shape is canonical relationship state — `id`, `source`, `target`, `uci`, and `san` — plus optional `explicit` materialization. `src/edge-store.ts` is the typed low-level edge persistence adapter. Shared IndexedDB opening, schema creation, migration, request wrapping, and transaction completion live in `src/indexed-db.ts`; they do not own graph identity, legality, admission policy, source evidence, or Constellation state.
+
+IndexedDB schema version 2 migrates version-1 edge records in place. Legacy `manual: true` becomes `explicit: true`; `derived`, Explorer statistics/timestamps, eligibility, and arbitrary legacy edge fields are dropped. This preserves the only durable behavioral distinction while normalizing existing installations to the current Graph Edge shape.
 
 The matching `.js` files are compatibility re-export shims so existing JavaScript callers can keep stable import paths during incremental TypeScript migration. `src/db.js` remains only a compatibility and test/maintenance surface, including whole-store reset. Application graph code does not use it as a mixed persistence API.
 
@@ -58,13 +60,13 @@ Constellation selection, Evidence, and current-view state consume Graph Edges bu
 
 ## Implementation
 
-- `src/position-graph.ts` implements the current application boundary and its normalization, ensure, update, incoming, and outgoing operations. The compatibility `updateEdge()` and `manual` / `derived` representation remain implementation-alignment work where they exceed this settled contract.
+- `src/position-graph.ts` implements the application boundary and its normalization, ensure, incoming, and outgoing operations. It exposes only the durable `explicit` materialization option beyond canonical relationship identity.
 - `src/graph.js::canonicalPosition()` provides canonical position identity.
 - `src/graph.js::resolveMove()` provides legal source-position + Move resolution used to validate edge target and notation.
 - `src/graph.js::edgeId()` computes durable Graph Edge identity from the normalized relationship.
-- `src/edge-store.ts::mutateEdge()` provides typed atomic per-edge read/modify/write persistence.
+- `src/edge-store.ts::mutateEdge()` provides typed atomic per-edge read/modify/write persistence over the canonical stored edge shape.
 - `src/edge-store.ts::getIncoming()` and `getOutgoing()` provide typed indexed directional edge reads.
-- `src/indexed-db.ts` owns typed shared IndexedDB setup and transaction/request mechanics.
+- `src/indexed-db.ts` owns typed shared IndexedDB setup, the v1-to-v2 edge migration, and transaction/request mechanics.
 - `src/edge-store.js` and `src/indexed-db.js` are compatibility re-export shims for JavaScript callers.
 
 ## Verification
@@ -78,6 +80,7 @@ Deterministic tests should cover:
 - ensuring an existing Graph Edge not rewriting Explorer statistics or current-view state;
 - explicit materialization being retained when the same relationship is also learned automatically;
 - concurrent establishment retaining one canonical relationship and any durable explicit property;
+- the v1-to-v2 migration preserving legacy explicit/manual materialization while removing `derived`, Explorer evidence, and current-view fields;
 - an ensure not retargeting or deleting established topology;
 - durable incoming/outgoing reads continuing to work from IndexedDB without a second graph cache.
 

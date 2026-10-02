@@ -14,7 +14,7 @@ Application code that reads or writes position nodes goes through `PositionRepos
 
 Position persistence is rebuildable browser cache. The `nodes` store has its own logical cache-schema version independent from Graph Edge persistence. A node-schema mismatch clears cached position records and stamps the current version rather than migrating old records. Physical IndexedDB layout changes use a new cache database epoch rather than converting an older cache in place.
 
-`src/position-store.js` and `src/indexed-db.js` are compatibility re-export shims for JavaScript callers during incremental TypeScript migration. `src/db.js` is retained only as a compatibility and test/maintenance surface, including whole-store reset. Application position code does not use it as a mixed node/edge persistence API.
+`src/position-store.js`, `src/indexed-db.js`, and `src/db.js` are compatibility re-export shims for JavaScript callers during incremental TypeScript migration. `src/db.ts` is retained only as the typed test/maintenance surface, including whole-store reset. Application position code does not use it as a mixed node/edge persistence API.
 
 ## Facet hydration
 

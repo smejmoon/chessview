@@ -42,11 +42,14 @@ All application-issued HTTP requests to Lichess APIs and services go through the
 The gateway must:
 
 - allow at most one Lichess request in flight at a time;
+- apply Chessview's voluntary minimum interval between request starts; the current value is `LICHESS_REQUEST_MIN_INTERVAL_MS` in `src/config.ts` (250 ms);
 - coordinate HTTP 429 cooldown across clients;
 - wait at least one full minute after a 429 before subsequent Lichess API traffic resumes;
 - prevent queued work from being sent after its `AbortSignal` becomes obsolete;
 - when the next transport slot becomes available, send queued foreground work before queued background work while preserving FIFO order within the same effective urgency;
 - preserve transport outcomes so domain clients can distinguish successful absence from failure to obtain data.
+
+The voluntary start interval is Chessview pacing policy used to reduce burstiness between otherwise serial requests. It is not a Lichess-mandated rate limit and does not replace the full-minute post-429 cooldown. Its concrete value lives in `src/config.ts`; this document owns the behavior and distinction that value implements.
 
 Priority is generic transport urgency only. The gateway does not decide which chess or current-view work is foreground. It observes the effective urgency supplied by callers when choosing the next queued request; an already in-flight request is not preempted.
 
@@ -67,7 +70,7 @@ Endpoint clients retain responsibility for request parameters, parsing, source v
 
 ## External constraint
 
-The request policy is intended to satisfy Lichess's published API guidance: only one request at a time, and after HTTP 429 wait a full minute before resuming API usage. Lichess notes that underlying rate limits vary and can change. Re-verify the live guidance at <https://lichess.org/page/api-tips> before changing Chessview's transport policy.
+The request policy is intended to satisfy [Lichess's published API guidance](https://lichess.org/page/api-tips): only one request at a time, and after HTTP 429 wait a full minute before resuming API usage. Lichess notes that underlying rate limits vary and can change. Chessview's 250 ms voluntary start spacing is additional application policy, not a requirement stated by that guidance. Re-verify the live Lichess guidance before changing Chessview's transport policy.
 
 ## Verification
 
@@ -78,6 +81,7 @@ Deterministic tests should cover:
 - malformed rated Explorer payloads not being cached or exposed as usable Explorer Readings;
 - malformed cached Explorer values being treated as unusable rather than fresh source data;
 - cross-client serialization between rated Explorer, Masters, cloud evaluation, and other gateway users;
+- default request-start spacing following `LICHESS_REQUEST_MIN_INTERVAL_MS` while remaining independent from the 429 cooldown;
 - queued foreground work receiving the next available transport slot ahead of queued background work without preempting an in-flight request;
 - live shared-producer demand promoting and demoting the effective urgency seen by queued transport;
 - a 429 from one client delaying later traffic from another client;

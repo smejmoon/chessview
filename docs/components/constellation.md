@@ -57,7 +57,7 @@ Constellation optimizes for a coherent, understandable structure rather than max
 
 The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count or opening-depth cap. Presentation may supply capacity constraints, but two-dimensional coordinates, board sizes, connector paths, colors, and labels remain presentation concerns.
 
-Rail inventory is independent of Constellation capacity. The Lines Rail may list every immediate Line from the current usable `LichessGamesDB` Reading and count [Notable Lines](../glossary.md#notable-line), while Constellation independently chooses which selected relationships and descendants best fit the current view. A Notable Line is not guaranteed a visible board, and presentation-space changes may alter Constellation membership without changing settled Rail values.
+Rail inventory and counts are independent of Constellation capacity. Presentation-space changes may alter Constellation membership without changing settled Rail values. [Rail](rail.md) owns its source inventory and Notable-Line semantics.
 
 ## Verification
 

@@ -15,8 +15,7 @@ Selection may use:
 - one known Graph Edge;
 - rated Lichess Explorer Prevalence at that Move's immediate source position;
 - engine-quality evidence already available to the current composition;
-- human-result evidence supplied by rated Explorer Readings;
-- canonical graph identity needed to recognize transpositions.
+- human-result evidence supplied by rated Explorer Readings.
 
 [Evidence](evidence.md) owns the meaning, calculation, and unknown/unavailable state of quality, human-result, and Prevalence signals. Selection consumes those signals without redefining them.
 
@@ -35,7 +34,6 @@ Rated Explorer acquisition is different because an Explorer Reading is also grap
 - Rarity alone does not disqualify a Candidate. A rare Move remains significant when available engine quality or favorable human results provide a positive rescue signal.
 - A rare Candidate with known bad/unfavorable evidence and no positive rescue is the first omission class when the Constellation must reduce what it shows.
 - Missing, failed, insufficient, or otherwise unknown rescue evidence is not bad/unfavorable evidence and cannot establish that omission class on its own.
-- Explicitly materialized graph knowledge may remain navigable even when it is outside automatic Constellation candidacy.
 
 ## Salience
 
@@ -48,9 +46,9 @@ Salience is the selection importance of an eligible Candidate relative to siblin
 - Promotions and demotions are local ordinal adjustments, not percentages or globally comparable scores.
 - Prevalence from different source positions is local evidence and does not define one global rank across unrelated branches or depths.
 
-Canonical transpositions are coalesced by graph identity before visible space is spent on duplicate positions. [Constellation](constellation.md) owns how locally ordered Candidates compete across branches and how lower-Salience eligible Candidates may be omitted to preserve coherence and fit available presentation space.
+[Constellation](constellation.md) owns how locally ordered Candidates compete across branches and how lower-Salience eligible Candidates may be omitted to preserve coherence and fit available presentation space.
 
-A fixed `5%` eligibility cutoff and a fixed `19`-board visibility limit are not product commitments of this algorithm. Concrete rarity, rescue, bad/unsuccessful evidence, evidence-sufficiency, and same-source Salience rules are tunable implementation choices unless separately promoted into durable requirements.
+A fixed `5%` eligibility cutoff is not a product commitment of this algorithm. Concrete rarity, rescue, bad/unsuccessful evidence, evidence-sufficiency, and same-source Salience rules are tunable implementation choices unless separately promoted into durable requirements.
 
 ## Output contract
 
@@ -74,5 +72,4 @@ Deterministic tests should cover:
 - unknown or conflicting evidence leaving same-source Salience in Prevalence order;
 - Candidates from different source positions not being globally ordered solely by their local Prevalence;
 - a Move without usable rated Lichess Explorer Prevalence remaining outside automatic selection;
-- canonical transpositions not consuming duplicate visible-position capacity;
 - downstream composition accepting the selected/ranked Candidate set without consulting a second eligibility marker.

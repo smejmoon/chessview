@@ -15,7 +15,8 @@
     "src/constellation-selection.ts",
     "src/visible-graph.ts",
     "src/nodus-structure.ts",
-    "src/knowledge-acquisition.ts"
+    "src/knowledge-acquisition.ts",
+    "src/nodus-renderer.ts"
   ],
   "include": []
 }

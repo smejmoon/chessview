@@ -10,7 +10,7 @@ Treat normal Explorer request cancellation as cancellation rather than as a refr
 
 This outcome belongs to the Explorer source-client lifecycle. It does not change Explorer Reading data shape, source freshness, authentication semantics, graph admission, Weather, `ChartedGraph` identity, or the bounded supplementary-warm lifetime owned by Knowledge Acquisition.
 
-It may be implemented in the same pass as nearby graph/Knowledge Acquisition repairs when convenient, but it does not block `backlog/2026-09-30-charted-graph-code-alignment.md` and that graph-alignment outcome does not need to absorb this source-client diagnostic concern.
+It remains independent of graph/Knowledge Acquisition alignment work and does not need to absorb graph-persistence concerns.
 
 # Complete:
 

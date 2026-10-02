@@ -1,6 +1,5 @@
+import { CONSTELLATION_RARE_SHARE } from './config.ts';
 import type { GraphEdge } from './position-graph.ts';
-
-export const SELECTION_RARE_SHARE = 0.05;
 
 export type SelectionEdge = GraphEdge;
 
@@ -87,7 +86,7 @@ export function selectionCandidate({
 
   const engine = engineQuality?.quality ?? null;
   const human = humanResult?.quality ?? null;
-  const rare = frequency.share < SELECTION_RARE_SHARE;
+  const rare = frequency.share < CONSTELLATION_RARE_SHARE;
   const positive = engine === 'strong' || human === 'favorable';
   const negative = engine === 'bad' || human === 'unfavorable';
 

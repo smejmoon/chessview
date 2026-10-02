@@ -1,16 +1,17 @@
 import {
+  GRAPH_EDGE_ADMISSION_SAMPLE_FLOOR,
+  SUPPLEMENTARY_EXPLORER_WARM_TIMEOUT_MS,
+} from './config.ts';
+import { debugLog } from './debug.js';
+import { loadExplorerReading, readCachedExplorerReading } from './explorer.js';
+import {
   canonicalPosition,
   resolveMove,
   totalGames,
 } from './graph.js';
-import { GRAPH_EDGE_ADMISSION_SAMPLE_FLOOR } from './config.ts';
-import { debugLog } from './debug.js';
-import { loadExplorerReading, readCachedExplorerReading } from './explorer.js';
 import { positionGraph } from './position-graph.ts';
 import { positionRepository } from './position-repository.js';
 import type { GraphEdge, GraphEdgeInput, PositionGraph } from './position-graph.ts';
-
-const SUPPLEMENTARY_WARM_TIMEOUT_MS = 30_000;
 
 export type AcquisitionPriority = 'foreground' | 'background';
 export type AcquisitionPriorityInput = AcquisitionPriority | (() => AcquisitionPriority);
@@ -95,7 +96,7 @@ export function createKnowledgeAcquisition({
   readCachedExplorer = readCachedExplorerReading as ReadCachedExplorer,
   graph = positionGraph,
   repository = positionRepository,
-  warmTimeoutMs = SUPPLEMENTARY_WARM_TIMEOUT_MS,
+  warmTimeoutMs = SUPPLEMENTARY_EXPLORER_WARM_TIMEOUT_MS,
   createTimeoutSignal = (ms: number) => AbortSignal.timeout(ms),
 }: KnowledgeAcquisitionOptions = {}) {
   async function reconcileExplorerReading(

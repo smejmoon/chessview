@@ -1,3 +1,5 @@
+import { LICHESS_REQUEST_MIN_INTERVAL_MS } from './config.ts';
+
 function abortError() {
   const error = new Error('The operation was aborted');
   error.name = 'AbortError';
@@ -18,7 +20,7 @@ export function createRequestGate({
   now = () => Date.now(),
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   cooldownMs = 60_000,
-  minIntervalMs = 250,
+  minIntervalMs = LICHESS_REQUEST_MIN_INTERVAL_MS,
 } = {}) {
   const queue = [];
   let draining = false;

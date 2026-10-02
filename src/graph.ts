@@ -1,6 +1,6 @@
 import { Chess } from 'chess.js';
 
-export const EXPLORER_TTL_MS = 24 * 60 * 60 * 1000;
+export { EXPLORER_TTL_MS } from './config.ts';
 export const START_FEN = new Chess().fen();
 
 export type GameCounts = Readonly<{

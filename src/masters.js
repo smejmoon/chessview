@@ -1,8 +1,9 @@
+import { MASTERS_TTL_MS } from './config.ts';
 import { canonicalPosition, toPlayableFen } from './graph.js';
 import { lichessGateway } from './lichess-gateway.js';
 import { positionRepository } from './position-repository.js';
 
-export const MASTERS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export { MASTERS_TTL_MS } from './config.ts';
 
 const MASTERS_ENDPOINT = 'https://explorer.lichess.org/masters';
 

@@ -1,9 +1,15 @@
+import {
+  LICHESS_EVAL_MIN_DEPTH,
+  LICHESS_EVAL_TTL_MS,
+} from './config.ts';
 import { canonicalPosition, toPlayableFen } from './graph.js';
 import { lichessGateway } from './lichess-gateway.js';
 import { positionRepository } from './position-repository.js';
 
-export const LICHESS_EVAL_MIN_DEPTH = 18;
-export const LICHESS_EVAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export {
+  LICHESS_EVAL_MIN_DEPTH,
+  LICHESS_EVAL_TTL_MS,
+} from './config.ts';
 
 const ENDPOINT = 'https://lichess.org/api/cloud-eval';
 

@@ -1,5 +1,5 @@
+import { EXPLORER_TTL_MS } from './config.ts';
 import {
-  EXPLORER_TTL_MS,
   canonicalPosition,
   toPlayableFen,
   totalGames,

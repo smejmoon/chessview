@@ -1,15 +1,16 @@
+import {
+  ENGINE_BAD_CP,
+  ENGINE_DUBIOUS_CP,
+  HUMAN_FAVORABLE_DELTA,
+  HUMAN_MISMATCH_DELTA,
+  HUMAN_MISMATCH_SAMPLE_FLOOR,
+  HUMAN_RESULT_SAMPLE_FLOOR,
+  HUMAN_UNFAVORABLE_DELTA,
+  ROOT_RARE_SHARE,
+  ROOT_RARITY_SAMPLE_FLOOR,
+  ROOT_VERY_RARE_SHARE,
+} from './config.ts';
 import { canonicalPosition } from './graph.js';
-
-export const ENGINE_DUBIOUS_CP = 50;
-export const ENGINE_BAD_CP = 100;
-export const HUMAN_RESULT_SAMPLE_FLOOR = 200;
-export const HUMAN_FAVORABLE_DELTA = 0.02;
-export const HUMAN_UNFAVORABLE_DELTA = 0.08;
-export const HUMAN_MISMATCH_SAMPLE_FLOOR = 100;
-export const HUMAN_MISMATCH_DELTA = 0.05;
-export const ROOT_RARE_SHARE = 0.05;
-export const ROOT_VERY_RARE_SHARE = 0.01;
-export const ROOT_RARITY_SAMPLE_FLOOR = 100;
 
 function moveGames(move) {
   return (move?.white ?? 0) + (move?.draws ?? 0) + (move?.black ?? 0);

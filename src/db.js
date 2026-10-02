@@ -1,3 +1,4 @@
+import { EDGES_STORE, NODES_STORE } from './cache-schema.ts';
 import { clearStores } from './indexed-db.js';
 import { invalidateNodeStore } from './position-store.js';
 
@@ -8,6 +9,6 @@ export { getNode, nodeStoreVersion, putNode } from './position-store.js';
 export { getIncoming, getOutgoing, mutateEdge, putEdges } from './edge-store.js';
 
 export async function clearGraph() {
-  await clearStores(['nodes', 'edges']);
+  await clearStores([NODES_STORE, EDGES_STORE]);
   invalidateNodeStore();
 }

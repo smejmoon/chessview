@@ -40,7 +40,7 @@ Edge mutation is an atomic per-edge read/modify/write operation. `src/edge-store
 
 That coordination prevents concurrent Graph Edge establishment from creating competing stored snapshots and allows explicit materialization to merge with an already-established relationship.
 
-IndexedDB stores edges by durable edge ID and indexes them by canonical `source` and `target` for directional neighborhood reads. The stored edge shape is canonical relationship state — `id`, `source`, `target`, `uci`, and `san` — plus optional `explicit` materialization. `src/edge-store.ts` is the typed low-level edge persistence adapter. Shared IndexedDB opening, physical store/index creation, logical cache-schema validation, request wrapping, and transaction completion live in `src/indexed-db.ts`; they do not own graph identity, legality, admission policy, source evidence, or Constellation state.
+IndexedDB stores edges by durable edge ID and indexes them by canonical `source` and `target` for directional neighborhood reads. The stored edge shape is canonical relationship state — `id`, `source`, `target`, `uci`, and `san` — plus optional `explicit` materialization. `src/edge-store.ts` is the typed low-level edge persistence adapter. `src/cache-schema.ts` owns the shared storage structural identities — store names, key paths, index names, and logical per-store schema versions — consumed by both low-level adapters and schema setup. `src/indexed-db.ts` owns shared IndexedDB opening, physical store/index creation using those identities, logical cache-schema validation, request wrapping, and transaction completion; it does not own graph identity, legality, admission policy, source evidence, or Constellation state.
 
 Graph Edge persistence is rebuildable browser cache. It has its own logical schema version, independent from the position-node cache schema. A Graph Edge schema mismatch clears the `edges` store and stamps the current schema version; old Graph Edge records are not migrated or interpreted. Physical IndexedDB layout changes use a new cache database epoch rather than converting an older cache in place.
 
@@ -66,6 +66,7 @@ Constellation selection, Evidence, and current-view state consume Graph Edges bu
 - `src/graph.js::edgeId()` computes durable Graph Edge identity from the normalized relationship.
 - `src/edge-store.ts::mutateEdge()` provides typed atomic per-edge read/modify/write persistence over the canonical stored edge shape.
 - `src/edge-store.ts::getIncoming()` and `getOutgoing()` provide typed indexed directional edge reads.
+- `src/cache-schema.ts` owns shared storage identities and logical per-store cache-schema versions.
 - `src/indexed-db.ts` owns typed shared IndexedDB setup, per-store cache schema invalidation, and transaction/request mechanics.
 - `src/edge-store.js` and `src/indexed-db.js` are compatibility re-export shims for JavaScript callers.
 

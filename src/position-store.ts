@@ -1,3 +1,4 @@
+import { NODES_STORE } from './cache-schema.ts';
 import {
   openDb,
   requestAsPromise,
@@ -22,14 +23,14 @@ export function invalidateNodeStore(): void {
 export async function getNode(key: string): Promise<StoredPosition | undefined> {
   const db = await openDb();
   return requestAsPromise<StoredPosition | undefined>(
-    db.transaction('nodes').objectStore('nodes').get(key),
+    db.transaction(NODES_STORE).objectStore(NODES_STORE).get(key),
   );
 }
 
 export async function putNode<T extends StoredPosition>(node: T): Promise<T> {
   const db = await openDb();
-  const transaction = db.transaction('nodes', 'readwrite');
-  transaction.objectStore('nodes').put(node);
+  const transaction = db.transaction(NODES_STORE, 'readwrite');
+  transaction.objectStore(NODES_STORE).put(node);
   await transactionAsPromise(transaction);
   invalidateNodeStore();
   return node;

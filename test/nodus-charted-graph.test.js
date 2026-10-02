@@ -49,7 +49,9 @@ test('a played legal move outside current Constellation selection recenters with
 
   const established = (await getOutgoing(START)).find(({ target }) => target === resolved.target);
   assert.ok(established);
-  assert.equal(established.manual, true);
+  assert.equal(established.explicit, true);
+  assert.equal('manual' in established, false);
+  assert.equal('derived' in established, false);
 
   assert.equal(await controller.recenter({ target: START }), true);
   const afterRecenter = (await getOutgoing(START)).find(({ id }) => id === established.id);

@@ -1,6 +1,6 @@
 # Do:
 
-Inventory existing implementation-tunable policy values that are still defined inside their consumers and move the qualifying source values into named exports from `src/config.ts`, updating consumers and verification without changing behavior. Known remaining examples include Constellation's `0.05` rarity threshold, Rail's `100`-game sample floor and `0.05` popular-share threshold, and the `30_000 ms` supplementary Explorer-warm timeout.
+Inventory existing implementation-tunable policy values that are still defined inside their consumers and move the qualifying source values into named exports from `src/config.ts`, updating consumers and verification without changing behavior. Known remaining examples include Constellation's `0.05` rarity threshold and the `30_000 ms` supplementary Explorer-warm timeout.
 
 Use the ownership rule already documented in `src/config.ts`: centralize concrete limits, thresholds, sample floors, timeouts, and similar maintainer-adjustable policy values so their algorithms do not retain private magic-number homes.
 
@@ -9,6 +9,8 @@ Use the ownership rule already documented in `src/config.ts`: centralize concret
 `src/config.ts` is now the declared central source-value home for Chessview implementation tunables, while several existing tunables still live in component or acquisition modules. Leaving those values distributed makes the new ownership rule incomplete and forces maintainers to keep hunting through consuming algorithms for knobs that are intended to be centrally discoverable.
 
 The ChartedGraph Edge Admission source-sample floor is already centralized as `GRAPH_EDGE_ADMISSION_SAMPLE_FLOOR`. Generic Explorer move decoration now carries source evidence only, so this outcome must not recreate a shared eligibility or qualification policy while centralizing the remaining tunables.
+
+Rail no longer owns a separate Notable-Line classifier, so its former `100`-game sample floor and `5%` popular-share threshold are dead policy rather than tunables to centralize.
 
 This outcome inherits the existing behavior of each remaining tunable. It is a source-ownership migration, not an opportunity to change threshold meanings or values.
 

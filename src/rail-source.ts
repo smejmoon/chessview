@@ -16,7 +16,6 @@ import { lichessEval } from './lichess-eval.js';
 import { loadMasters } from './masters.js';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge, PositionGraph } from './position-graph.ts';
-import { isNotableLine } from './rail-selection.ts';
 
 export type RailLoadOptions = Readonly<{
   center?: string;
@@ -109,12 +108,6 @@ function sourceLine(
     humanResult,
     mastersMismatch: humanMismatch(masters, edge, center, moveEval),
     lichessMismatch: humanMismatch(explorer, edge, center, moveEval),
-    notable: isNotableLine({
-      edge,
-      frequency,
-      engineQuality: moveEval,
-      humanResult,
-    }),
     source: 'lichess' as const,
   });
 }
@@ -128,7 +121,6 @@ function explicitLine(center: string, edge: GraphEdge, sourceEval: unknown, mast
     humanResult: null,
     mastersMismatch: humanMismatch(masters, edge, center, moveEval),
     lichessMismatch: null,
-    notable: false,
     source: 'explicit' as const,
   });
 }
@@ -162,7 +154,6 @@ export function createRailSource({
 
     return immutable({
       rootsCount: incoming.length,
-      notableLinesCount: sourceLines.filter((line) => line.notable).length,
       lines,
       masters,
     });

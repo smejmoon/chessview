@@ -119,8 +119,7 @@ function railRowHtml(row) {
   const quality = row.moveEval?.quality ?? 'unknown';
   const share = evidencedShareLabel(row.frequency);
   const mismatch = `${humanMarkerHtml(row.mastersMismatch, 'masters')}${humanMarkerHtml(row.lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
-  const notable = row.notable ? ' is-notable' : '';
-  return `<button class="eval-rail-row eval-${quality}${notable}" type="button" data-eval-nav="${escapeHtml(row.edge.target)}">
+  return `<button class="eval-rail-row eval-${quality}" type="button" data-eval-nav="${escapeHtml(row.edge.target)}">
     <span class="eval-rail-move">${escapeHtml(row.edge.san ?? row.edge.uci)}${share ? ` · ${share}` : ''}</span>
     <span class="eval-badge">${row.moveEval ? lossLabel(row.moveEval) : '—'}</span>
     <span class="eval-human-cell">${mismatch}</span><span class="eval-play">›</span></button>`;

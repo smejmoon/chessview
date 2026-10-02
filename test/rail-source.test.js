@@ -10,7 +10,7 @@ function explorerMove(uci, white, draws, black) {
   return { uci, white, draws, black };
 }
 
-test('Rail keeps every legal Lichess Line while the badge counts only Notable source Lines', async () => {
+test('Rail keeps every legal Lichess Line and explicit-only navigable Line', async () => {
   const explicit = resolveMove(CENTER, { uci: 'h2h3' });
   const explorer = {
     white: 500,
@@ -41,10 +41,10 @@ test('Rail keeps every legal Lichess Line while the badge counts only Notable so
   const rail = await loadRail({ center: CENTER });
 
   assert.equal(rail.rootsCount, 2);
-  assert.equal(rail.notableLinesCount, 2);
   assert.deepEqual(rail.lines.map((line) => line.edge.uci), ['e2e4', 'd2d4', 'a2a3', 'h2h3']);
   assert.deepEqual(rail.lines.map((line) => line.source), ['lichess', 'lichess', 'lichess', 'explicit']);
-  assert.deepEqual(rail.lines.map((line) => line.notable), [true, true, false, false]);
+  assert.equal('notableLinesCount' in rail, false);
+  assert.equal(rail.lines.some((line) => 'notable' in line), false);
   assert.ok(Object.isFrozen(rail));
   assert.ok(Object.isFrozen(rail.lines));
 });

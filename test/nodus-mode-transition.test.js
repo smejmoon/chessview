@@ -29,8 +29,7 @@ test('same-Nodus mode switch selects the sibling projection without recomputing 
   const structureCalls = [];
   const railValue = {
     rootsCount: 4,
-    notableLinesCount: 3,
-    lines: [{ edge: { uci: 'a1a2', target: 'B' }, notable: true }],
+    lines: [{ edge: { uci: 'a1a2', target: 'B' } }],
   };
   const controller = new NodusController({
     initial: { center: 'A', view: 'lines' },
@@ -49,14 +48,14 @@ test('same-Nodus mode switch selects the sibling projection without recomputing 
   assert.equal(controller.snapshot.mode, 'lines');
   assert.equal(controller.snapshot.structure.value.marker, 'A:lines');
   assert.equal(controller.snapshot.rail.value.rootsCount, 4);
-  assert.equal(controller.snapshot.rail.value.notableLinesCount, 3);
+  assert.equal(controller.snapshot.rail.value.lines.length, 1);
   assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
 
   await controller.setMode('roots');
   assert.equal(controller.snapshot.mode, 'roots');
   assert.equal(controller.snapshot.structure.status, 'loading');
   assert.equal(controller.snapshot.rail.value.rootsCount, 4);
-  assert.equal(controller.snapshot.rail.value.notableLinesCount, 3);
+  assert.equal(controller.snapshot.rail.value.lines.length, 1);
   assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
 
   roots.resolve(structure('A', 'roots'));
@@ -79,7 +78,7 @@ test('recenter starts fresh Nodus-level Rail state instead of carrying values fr
     structure: async ({ center, mode }) => structure(center, mode),
     rail: async ({ center }) => {
       if (center === 'B') return nextRail.promise;
-      return { rootsCount: 2, notableLinesCount: 1, lines: [] };
+      return { rootsCount: 2, lines: [] };
     },
     presenter: { start() {}, update() {} },
   });
@@ -93,9 +92,9 @@ test('recenter starts fresh Nodus-level Rail state instead of carrying values fr
   assert.equal(controller.snapshot.rail.status, 'loading');
   assert.equal(controller.snapshot.rail.value, null);
 
-  nextRail.resolve({ rootsCount: 1, notableLinesCount: 5, lines: [] });
+  nextRail.resolve({ rootsCount: 1, lines: [{ edge: { target: 'C' } }] });
   await flush();
   assert.equal(controller.snapshot.rail.status, 'ready');
   assert.equal(controller.snapshot.rail.value.rootsCount, 1);
-  assert.equal(controller.snapshot.rail.value.notableLinesCount, 5);
+  assert.equal(controller.snapshot.rail.value.lines.length, 1);
 });

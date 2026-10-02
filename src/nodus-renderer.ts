@@ -87,7 +87,6 @@ type RailLine = Readonly<{
 
 type RailValue = Readonly<{
   rootsCount?: number;
-  notableLinesCount?: number;
   lines?: readonly RailLine[];
 }>;
 
@@ -339,7 +338,7 @@ export function createNodusRenderer({
     const status = viewStatusSpec(presentation);
     const turn: Orientation = view.center.split(' ')[1] === 'b' ? 'black' : 'white';
     const rootCount = view.rail?.value?.rootsCount ?? 0;
-    const lineCount = view.rail?.value?.notableLinesCount ?? 0;
+    const lineCount = view.rail?.value?.lines?.length ?? 0;
     const structuralError = view.structure.error;
     const debug = isDebugEnabled();
     const guide = preferences.getGuide?.() === true;

@@ -59,7 +59,7 @@ Constellation optimizes for a coherent, understandable structure rather than max
 
 The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count or opening-depth cap. Presentation may supply capacity constraints, but two-dimensional coordinates, board sizes, connector paths, colors, and labels remain presentation concerns.
 
-Rail inventory and counts are independent of Constellation capacity. Presentation-space changes may alter Constellation membership without changing settled Rail values. [Rail](rail.md) owns its source inventory and Notable-Line semantics.
+Rail inventory and counts are independent of Constellation capacity. Presentation-space changes may alter Constellation membership without changing settled Rail values. [Rail](rail.md) owns the exhaustive navigable Line inventory and its evidence presentation.
 
 ## Verification
 
@@ -73,7 +73,7 @@ Deterministic tests should cover:
 - composition consuming selected Candidate objects in selection order without independently re-running automatic eligibility or same-source ranking;
 - current Explorer evidence affecting selection while its absence leaves evidence unknown rather than falling back to stale graph statistics;
 - the same `ChartedGraph` composing differently under different presentation-space constraints without changing graph knowledge;
-- Rail inventory and Notable Line count remaining unchanged when only presentation-space constraints change Constellation membership;
+- Rail inventory and Line count remaining unchanged when only presentation-space constraints change Constellation membership;
 - a trustworthy provisional Constellation remaining available while its Reading frontier is non-empty;
 - a full constrained composition still exposing a Reading frontier when another selected-position Reading can improve which structure occupies the available space;
 - a selected position leaving the Reading frontier once its missing Explorer data can no longer change the constrained composition;

@@ -16,11 +16,7 @@ Visible upstream context showing positions from which play can reach the Nodus.
 
 ## Line
 
-Visible downstream continuation showing positions reachable from the Nodus.
-
-## Notable Line
-
-An immediate Line from the current Nodus that the Rail currently classifies as worth calling out independently of whether that Line fits in the current Constellation. [Rail](components/rail.md) owns the classification rule and its tunables.
+A downstream continuation from the Nodus through one or more legal Moves.
 
 ## Constellation
 

@@ -36,7 +36,7 @@ Explicitly materialized moves form an additional navigation path: they remain el
 
 ## Notable Lines
 
-For now, a Source Line is Notable when either:
+A Source Line is Notable when either:
 
 - its Prevalence is at least `5%`; or
 - it has at least `100` source games and available evidence does not establish bad engine quality or unfavorable human result.

@@ -1,0 +1,1 @@
+export const CONSTELLATION_LOOKAHEAD_LIMIT = 4;

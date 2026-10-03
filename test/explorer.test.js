@@ -104,7 +104,7 @@ test('401 clears the stored Lichess access token', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'expired-token');
   globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => 'unauthorized' });
-  await assert.rejects(loadExplorerReading(center, { force: true }), (error) => error?.status === 401);
+  await assert.rejects(loadExplorerReading(center), (error) => error?.status === 401);
   assert.equal(localStorage.getItem('chessview.lichess.accessToken'), null);
 });
 
@@ -123,7 +123,7 @@ test('Explorer source delivery caches a usable Reading without owning Edge Admis
     return { ok: true, status: 200, json: async () => explorer, text: async () => '' };
   };
 
-  assert.deepEqual(await loadExplorerReading(center, { force: true }), explorer);
+  assert.deepEqual(await loadExplorerReading(center), explorer);
   assert.deepEqual(await loadExplorerReading(center), explorer);
   assert.equal(networkCalls, 1);
   assert.deepEqual(await getOutgoing(center), []);
@@ -203,7 +203,7 @@ test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal mo
   };
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => explorer, text: async () => '' });
 
-  await loadExplorer(center, { force: true });
+  await loadExplorer(center);
 
   const stored = (await getOutgoing(center)).find((edge) => edge.uci === 'a2a3');
   assert.ok(stored);
@@ -232,7 +232,7 @@ test('insufficient Explorer Reading leaves known topology unchanged and does not
   };
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => explorer, text: async () => '' });
 
-  await loadExplorer(center, { force: true });
+  await loadExplorer(center);
 
   const edges = await getOutgoing(center);
   const stored = edges.find((edge) => edge.uci === 'e2e4');
@@ -338,7 +338,7 @@ test('Explorer Reading refresh grows admitted topology without rewriting or retr
     ],
   };
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => refreshedExplorer, text: async () => '' });
-  await loadExplorer(center, { force: true });
+  await loadExplorer(center);
 
   const edges = await getOutgoing(center);
   const byUci = new Map(edges.map((edge) => [edge.uci, edge]));

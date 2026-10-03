@@ -127,6 +127,9 @@ type Run = {
   revision: number;
   abortController: AbortController;
   lookaheadController: AbortController | null;
+  structureTails: Record<ViewMode, Promise<boolean>>;
+  evidenceTails: Record<ViewMode, Promise<boolean>>;
+  railTail: Promise<boolean>;
   refinementKeys: Set<string>;
   refinementPending: number;
   settleTail: Promise<unknown>;
@@ -143,6 +146,10 @@ type RestoreRoute = {
 };
 
 const MODES: readonly ViewMode[] = Object.freeze(['roots', 'lines']);
+
+function otherMode(mode: ViewMode): ViewMode {
+  return mode === 'roots' ? 'lines' : 'roots';
+}
 
 function normalizeMode(mode: unknown): ViewMode {
   return mode === 'roots' ? 'roots' : 'lines';
@@ -213,6 +220,13 @@ function projections(): Record<ViewMode, ProjectionState> {
   return {
     roots: projection(),
     lines: projection(),
+  };
+}
+
+function tails(): Record<ViewMode, Promise<boolean>> {
+  return {
+    roots: Promise.resolve(false),
+    lines: Promise.resolve(false),
   };
 }
 
@@ -448,6 +462,9 @@ export class NodusController {
       revision: this.#revision,
       abortController: new AbortController(),
       lookaheadController: null,
+      structureTails: tails(),
+      evidenceTails: tails(),
+      railTail: Promise.resolve(false),
       refinementKeys: new Set(),
       refinementPending: 0,
       settleTail: Promise.resolve(),
@@ -465,23 +482,49 @@ export class NodusController {
       };
       this.#state.rail = typeof this.#rail === 'function' ? lifecycle('loading') : lifecycle('idle');
     }
-    this.#state.settling = false;
+    this.#state.settling = preserveEstablished;
     this.#log('Nodus view started', { revision: run.revision, center: this.#state.center, mode: this.#state.mode, reason });
     await this.#presentCurrent('start');
 
-    await Promise.all(MODES.map((mode) => this.#composeMode(run, mode, { preserveEstablished, publish: false })));
-    if (!this.#isCurrent(run)) return;
-    await Promise.all(MODES.map((mode) => this.#deriveEvidence(run, mode, { preserveEstablished, publish: false })));
-    if (!this.#isCurrent(run)) return;
-    await this.#deriveRail(run, { preserveEstablished, publish: false });
-    if (!this.#isCurrent(run)) return;
-    await this.#planRefinements(run);
+    if (typeof this.#rail === 'function') {
+      void this.#queueRail(run, { preserveEstablished, publish: true });
+    }
+
+    const activeMode = this.#state.mode;
+    const activeReady = await this.#queueStructure(run, activeMode, {
+      preserveEstablished,
+      publish: true,
+    });
     if (!this.#isCurrent(run)) return;
 
-    await this.#presentCurrent('update');
+    if (activeReady && typeof this.#evidence === 'function') {
+      void this.#queueEvidence(run, activeMode, { preserveEstablished, publish: true });
+    }
+
+    await this.#planRefinements(run);
+    if (!this.#isCurrent(run)) return;
+    this.#state.settling = run.refinementPending > 0;
     run.settlementReady = true;
-    this.#refreshLookahead(run, this.#state.mode);
+    await this.#presentCurrent('update');
+    this.#refreshLookahead(run, activeMode);
+
+    void this.#prepareProjection(run, otherMode(activeMode), preserveEstablished);
     if (run.settleNeeded) this.#queueSettlement(run);
+  }
+
+  async #prepareProjection(run: Run, mode: ViewMode, preserveEstablished: boolean): Promise<void> {
+    if (!this.#isCurrent(run)) return;
+    const before = this.snapshot;
+    const ready = await this.#queueStructure(run, mode, { preserveEstablished, publish: true });
+    if (!this.#isCurrent(run)) return;
+    if (ready && typeof this.#evidence === 'function') {
+      void this.#queueEvidence(run, mode, { preserveEstablished, publish: true });
+    }
+    await this.#planRefinements(run);
+    if (!this.#isCurrent(run)) return;
+    if (this.#isActiveMode(mode)) this.#refreshLookahead(run, mode);
+    const after = this.snapshot;
+    if (!sameValue(before, after)) await this.#presentCurrent('update');
   }
 
   #refreshLookahead(run: Run, mode: ViewMode): void {
@@ -503,6 +546,41 @@ export class NodusController {
       if (controller.signal.aborted || isObsoleteWork(error, controller.signal) || !this.#isCurrent(run)) return;
       this.#log('supplementary lookahead failed', { mode, error: errorMessage(error) });
     });
+  }
+
+  #queueStructure(
+    run: Run,
+    mode: ViewMode,
+    options: { preserveEstablished?: boolean; publish?: boolean } = {},
+  ): Promise<boolean> {
+    const tail = run.structureTails[mode]
+      .catch(() => false)
+      .then(() => this.#composeMode(run, mode, options));
+    run.structureTails[mode] = tail;
+    return tail;
+  }
+
+  #queueEvidence(
+    run: Run,
+    mode: ViewMode,
+    options: { preserveEstablished?: boolean; publish?: boolean } = {},
+  ): Promise<boolean> {
+    const tail = run.evidenceTails[mode]
+      .catch(() => false)
+      .then(() => this.#deriveEvidence(run, mode, options));
+    run.evidenceTails[mode] = tail;
+    return tail;
+  }
+
+  #queueRail(
+    run: Run,
+    options: { preserveEstablished?: boolean; publish?: boolean } = {},
+  ): Promise<boolean> {
+    const tail = run.railTail
+      .catch(() => false)
+      .then(() => this.#deriveRail(run, options));
+    run.railTail = tail;
+    return tail;
   }
 
   async #composeMode(
@@ -666,26 +744,62 @@ export class NodusController {
 
   async #settle(run: Run): Promise<void> {
     if (!this.#isCurrent(run)) return;
+    const activeMode = this.#state.mode;
     const before = this.snapshot;
     const beforeStructure = before.structure.value;
 
-    await Promise.all(MODES.map((mode) => this.#composeMode(run, mode, {
+    await this.#queueStructure(run, activeMode, {
       preserveEstablished: true,
       publish: false,
-    })));
+    });
     if (!this.#isCurrent(run)) return;
-    await Promise.all(MODES.map((mode) => this.#deriveEvidence(run, mode, {
-      preserveEstablished: true,
-      publish: false,
-    })));
+
+    const projectionState = this.#state.projections[activeMode];
+    const refinements: Promise<boolean>[] = [];
+    if (projectionState.structure.status === 'ready' && typeof this.#evidence === 'function') {
+      refinements.push(this.#queueEvidence(run, activeMode, {
+        preserveEstablished: true,
+        publish: false,
+      }));
+    }
+    if (typeof this.#rail === 'function') {
+      refinements.push(this.#queueRail(run, {
+        preserveEstablished: true,
+        publish: false,
+      }));
+    }
+    await Promise.all(refinements);
     if (!this.#isCurrent(run)) return;
-    await this.#deriveRail(run, { preserveEstablished: true, publish: false });
-    if (!this.#isCurrent(run)) return;
+
     await this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
 
     const after = this.snapshot;
     if (!sameValue(beforeStructure, after.structure.value)) this.#refreshLookahead(run, this.#state.mode);
+    if (!sameValue(before, after)) await this.#presentCurrent('update');
+
+    void this.#settleProjection(run, otherMode(activeMode));
+  }
+
+  async #settleProjection(run: Run, mode: ViewMode): Promise<void> {
+    if (!this.#isCurrent(run)) return;
+    const before = this.snapshot;
+    const ready = await this.#queueStructure(run, mode, {
+      preserveEstablished: true,
+      publish: false,
+    });
+    if (!this.#isCurrent(run)) return;
+    if (ready && typeof this.#evidence === 'function') {
+      await this.#queueEvidence(run, mode, {
+        preserveEstablished: true,
+        publish: false,
+      });
+    }
+    if (!this.#isCurrent(run)) return;
+    await this.#planRefinements(run);
+    if (!this.#isCurrent(run)) return;
+    if (this.#isActiveMode(mode)) this.#refreshLookahead(run, mode);
+    const after = this.snapshot;
     if (!sameValue(before, after)) await this.#presentCurrent('update');
   }
 }

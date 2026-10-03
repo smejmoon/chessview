@@ -1,42 +1,38 @@
 # Do:
 
-Finish aligning Explorer, Masters, and LichessEval as cohesive source-observation providers now that cancellation provenance and the Lichess transport boundary are established.
+Verify the aligned Explorer, Masters, and LichessEval source-observation boundaries and the Rail consumer behavior that now depends on them.
 
-For Explorer, separate source retrieval, source validation, and cache persistence so each stage can apply its own semantics. A valid fresh Reading must remain usable by the current operation when only source-cache persistence fails, with that persistence problem remaining observable through diagnostics or operational status. A malformed or contract-violating response must be treated as a `RejectedObservation`, must not be cached or exposed as usable source data, and must follow Explorer's source-specific fallback policy.
+Explorer now separates source retrieval/validation from local cache persistence: an admitted fresh Reading remains usable when only persistence fails, while rejected source data still follows Explorer fallback policy. Masters now validates observations, returns usable data or absence rather than request-failure sentinels, uses valid stale fallback when appropriate, and keeps persistence failure from invalidating admitted fresh data.
 
-For Masters, remove the request-failure sentinel from the observation channel. Return usable Masters source data or absence, and expose operational failure separately only where a consumer owns a presentation or diagnostic decision that needs it. Add source-facing validation before admitting returned data.
+Verify malformed Explorer and Masters responses, stale fallback, persistence failure, semantic `ObsoleteWork`, and genuine source failure deterministically. Verify that Rail inventory is published from usable rated Explorer data plus graph knowledge without waiting for cloud evaluation or Masters; supplementary engine and Masters evidence must refine already-usable Rail rows independently and must not suppress the inventory when delayed, absent, rate-limited, or failed.
 
-Keep LichessEval's existing separation of usable evaluation/absence from operational status, and align its internal failure semantics only where that improves the common provider boundary without changing source-specific cloud-eval behavior.
+Keep LichessEval's existing separation of usable evaluation/absence from operational status, changing it only if verification exposes a concrete semantic mismatch.
 
-Do not introduce a generic `ObservationWell`/provider base class merely to make the three implementations uniform. Reuse implementation machinery only where the providers demonstrate equivalent behavior with the same meaning; after the three providers are aligned, reassess remaining duplication and extract further shared mechanisms only when justified by the resulting code.
-
-Do not settle the name or detailed taxonomy for generic external-source failure in this entry yet. First distinguish the actual cross-boundary decision, if any, after the providers handle source-specific failure and fallback locally.
+Do not introduce a generic `ObservationWell`/provider base class merely to make the three implementations uniform. Reuse implementation machinery only where the providers demonstrate equivalent behavior with the same meaning.
 
 # Because:
 
-Cancellation provenance is no longer an open design problem for this outcome. `LichessGateway` directly owns the application-wide Lichess transport queue and translates browser abort-shaped request failures into semantic `ObsoleteWork` only when the exact request signal establishes that the request became obsolete. `PositionRepository` likewise emits `ObsoleteWork` for subscriber-lifetime exits it owns. Above those boundaries, code can classify semantic obsolescence without interpreting raw `AbortError` names.
+Cancellation provenance is established below the providers. `LichessGateway` owns the application-wide Lichess transport queue and translates browser abort-shaped request failures into semantic `ObsoleteWork` only when the exact request signal establishes obsolescence. `PositionRepository` likewise emits `ObsoleteWork` for subscriber-lifetime exits it owns. Higher layers therefore classify semantic obsolescence without interpreting raw `AbortError` names.
 
-Explorer refresh still spans source acquisition, response validation, and persistence in one recovery scope. These stages have different semantics. A failed cache write after a valid fresh Reading is a local durability problem, not a source-refresh failure; the current operation can still use that Reading. Conversely, a malformed source response was obtained successfully at the transport level but must be rejected as unusable source evidence.
+Source acquisition, source validation, and cache persistence have different semantics. Failure to persist an already admitted observation is a local durability problem, while malformed source data is unusable evidence and must never be cached or exposed as an observation.
 
-Masters still exposes a request-failure sentinel as though it were returned source data, while LichessEval keeps usable evaluation/absence separate from operational request and failure status. Aligning the three behind the same architectural shape makes retrieval lifecycle a provider responsibility without prematurely forcing one implementation algorithm on sources whose freshness, absence, validation, and fallback semantics differ.
+The provider boundary also implies a consumer rule: one usable source must not be held hostage by unrelated supplementary sources. The Rail's Source Line inventory is established by the rated Explorer observation and known graph relationships; cloud evaluation and Masters contribute supplementary evidence to those rows. Shared Lichess transport serialization and 429 cooldown may delay those supplementary providers, but that transport delay must not turn an already available Rail inventory into a loading state.
 
-The governing failure-boundary rule is: a failure crosses a boundary only when the receiving layer can make a decision that the originating layer cannot. Otherwise the originating layer handles, translates, reports, or recovers from it locally.
+The governing failure-boundary rule remains: a failure crosses a boundary only when the receiving layer can make a decision that the originating layer cannot. Otherwise the originating layer handles, translates, reports, or recovers from it locally.
 
 # Edges:
 
-This work defines source-provider and failure/control-flow semantics, not chess evidence. `ObsoleteWork`, `PersistenceFailure`, `RejectedObservation`, freshness state, fallback state, or retrieval issues must not become properties of Explorer Readings, Masters observations, cloud evaluations, Graph Edges, Candidates, or other chess-domain data.
+This work defines source-provider, consumer hydration, and failure/control-flow semantics, not chess evidence. `ObsoleteWork`, `PersistenceFailure`, `RejectedObservation`, freshness state, fallback state, retrieval issues, and supplementary-source loading state must not become properties of Explorer Readings, Masters observations, cloud evaluations, Graph Edges, Candidates, or other chess-domain data.
 
 Global Lichess transport scheduling, 429 cooldown, transport urgency, queued cancellation, and platform-abort translation belong to `LichessGateway`. Source providers may supply request parameters, urgency, and an owning `AbortSignal`, but must not recreate transport scheduling or infer cancellation from raw platform error names above the gateway.
 
-The architecture should document the general source-observation-provider shape and ownership boundary, not prescribe exact classes, method names, generic types, or a shared implementation. Explorer, Masters, and LichessEval may remain separate implementations and may differ where their source semantics differ.
+The architecture documents the general source-observation-provider shape and ownership boundary without prescribing exact classes, method names, generic types, or a shared implementation. Explorer, Masters, and LichessEval remain separate implementations where their source semantics differ.
 
-`PositionRepository` remains the owner of canonical position records, durable record operations, and shared per-facet producer/subscriber lifetime during this work. Do not change its durable-record contract merely to preserve an unpersisted source observation across unrelated future calls.
+`PositionRepository` remains the owner of canonical position records, durable record operations, and shared per-facet producer/subscriber lifetime. Do not change its durable-record contract merely to preserve an unpersisted source observation across unrelated future calls.
 
-Knowledge Acquisition still owns graph reconciliation and persistence of admitted graph knowledge. A `PersistenceFailure` during graph reconciliation may remain fatal to that acquisition operation because successful graph acquisition requires accepted graph updates to persist; the semantic category does not dictate one universal recovery policy.
+Knowledge Acquisition still owns graph reconciliation and persistence of admitted graph knowledge. A persistence failure during graph reconciliation may remain fatal to that acquisition operation because successful graph acquisition requires accepted graph updates to persist; the semantic category does not dictate one universal recovery policy.
 
 Cloud-eval authoritative absence, Explorer/Masters zero-data observations, insufficient cloud-eval depth, rejected observations, stale fallback, and source-cache persistence are provider-specific semantics. Comparable provider boundaries do not require those cases to be represented identically internally.
-
-External-source failure terminology beyond `RejectedObservation` remains intentionally open pending the provider implementation and the actual decisions that still need to cross the provider boundary.
 
 # Complete:
 
@@ -44,12 +40,14 @@ Deterministic verification shows all of the following:
 
 - Explorer, Masters, and LichessEval each form a cohesive source-observation-provider boundary: consumers receive usable observation or absence without transport, HTTP, freshness, cache, or request-failure sentinel state embedded in the data;
 - provider-specific freshness, validation, successful absence, stale fallback, and source-cache persistence semantics remain correct for each source;
-- a valid fresh Explorer observation remains usable by the current operation when only local source-cache persistence fails, while the persistence problem remains observable through diagnostics or operational status;
+- a valid fresh Explorer or Masters observation remains usable by the current operation when only local source-cache persistence fails, while the persistence problem remains observable through diagnostics or operational status;
 - malformed or contract-violating Explorer and Masters source data is rejected, is not cached or exposed as usable observation data, and follows the provider's appropriate fallback/absence policy;
-- Masters no longer exposes request-failure sentinels as source observations, while any operational failure needed for presentation remains separate from the observation itself;
-- genuine external-source failures remain distinguishable from `ObsoleteWork`, `PersistenceFailure`, and `RejectedObservation`, and only failure semantics requiring a decision above the provider boundary propagate there;
-- existing semantic `ObsoleteWork` behavior remains intact while the provider refactors are made: normal obsolescence stays quiet and raw abort-shaped failures are not reclassified by higher layers;
-- equivalent lifecycle mechanisms are reused where their semantics are genuinely the same, without introducing a speculative generic provider/Well abstraction solely for structural uniformity.
+- Masters no longer exposes request-failure sentinels as source observations, and no presentation path depends on such a sentinel;
+- Rail Source Lines and counts become usable as soon as rated Explorer plus graph inventory is available, without waiting for cloud evaluation or Masters;
+- delayed, absent, rate-limited, or failed supplementary engine/Masters evidence leaves established Rail inventory usable, while later usable evidence can refine the same rows;
+- genuine external-source failures remain distinguishable from `ObsoleteWork`, persistence failure, and rejected observations, and only failure semantics requiring a decision above the provider boundary propagate there;
+- existing semantic `ObsoleteWork` behavior remains intact: normal obsolescence stays quiet and raw abort-shaped failures are not reclassified by higher layers;
+- equivalent lifecycle mechanisms are reused only where their semantics are genuinely the same, without introducing a speculative generic provider/Well abstraction solely for structural uniformity.
 
 # Sync:
 

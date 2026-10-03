@@ -14,12 +14,19 @@ import { acquireExplorerReading } from './knowledge-acquisition.js';
 import type { ExplorerLoadOptions, ExplorerReading } from './knowledge-acquisition.ts';
 import { lichessEval } from './lichess-eval.js';
 import { loadMasters } from './masters.js';
+import { isObsoleteWork } from './obsolete-work.js';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge, PositionGraph } from './position-graph.ts';
+
+export type RailValue = Readonly<{
+  rootsCount: number;
+  lines: readonly unknown[];
+}>;
 
 export type RailLoadOptions = Readonly<{
   center?: string;
   signal?: AbortSignal;
+  onProgress?: (value: RailValue) => unknown | Promise<unknown>;
 }>;
 
 type AcquireExplorer = (
@@ -125,37 +132,83 @@ function explicitLine(center: string, edge: GraphEdge, sourceEval: unknown, mast
   });
 }
 
+function railValue(
+  center: string,
+  explorer: ExplorerReading | null,
+  incoming: readonly unknown[],
+  outgoing: readonly GraphEdge[],
+  sourceEval: unknown,
+  masters: unknown,
+): RailValue {
+  const sourceLines = (decorateExplorerMoves(explorer) as DecoratedExplorerMove[])
+    .map((move) => sourceLine(center, explorer, move, sourceEval, masters))
+    .filter(Boolean);
+  const sourceUci = new Set(sourceLines.map((line) => line.edge.uci));
+  const explicitLines = outgoing
+    .filter((edge) => edge.explicit && !sourceUci.has(edge.uci))
+    .sort(stableEdgeOrder)
+    .map((edge) => explicitLine(center, edge, sourceEval, masters));
+
+  return immutable({
+    rootsCount: incoming.length,
+    lines: [...sourceLines, ...explicitLines],
+  });
+}
+
 export function createRailSource({
   acquireExplorer = acquireExplorerReading as AcquireExplorer,
   graph = positionGraph,
   evalProvider = lichessEval as EvalProvider,
   loadMastersReading = loadMasters as MastersLoader,
 }: RailSourceOptions = {}) {
-  return async function loadRail({ center, signal }: RailLoadOptions = {}) {
+  return async function loadRail({ center, signal, onProgress }: RailLoadOptions = {}) {
     throwIfAborted(signal);
-    const [explorer, incoming, outgoing, sourceEval, masters] = await Promise.all([
+    const [explorer, incoming, outgoing] = await Promise.all([
       acquireExplorer(center, { signal }),
       graph.incoming(center),
       graph.outgoing(center),
-      evalProvider.get(center, { signal }),
-      loadMastersReading(center, { signal }),
     ]);
     throwIfAborted(signal);
 
-    const sourceLines = (decorateExplorerMoves(explorer) as DecoratedExplorerMove[])
-      .map((move) => sourceLine(center, explorer, move, sourceEval, masters))
-      .filter(Boolean);
-    const sourceUci = new Set(sourceLines.map((line) => line.edge.uci));
-    const explicitLines = outgoing
-      .filter((edge) => edge.explicit && !sourceUci.has(edge.uci))
-      .sort(stableEdgeOrder)
-      .map((edge) => explicitLine(center, edge, sourceEval, masters));
-    const lines = immutable([...sourceLines, ...explicitLines]);
+    let sourceEval: unknown = null;
+    let masters: unknown = null;
+    let current = railValue(center, explorer, incoming, outgoing, sourceEval, masters);
+    await onProgress?.(current);
 
-    return immutable({
-      rootsCount: incoming.length,
-      lines,
-    });
+    async function supplement(label: string, load: () => Promise<unknown>): Promise<unknown> {
+      try {
+        return await load();
+      } catch (error) {
+        if (isObsoleteWork(error, signal)) throw error;
+        debugLog(`Rail ${label} unavailable`, {
+          position: center,
+          error: error?.message ?? String(error),
+        }, 'warn');
+        return null;
+      }
+    }
+
+    async function publish(): Promise<void> {
+      throwIfAborted(signal);
+      current = railValue(center, explorer, incoming, outgoing, sourceEval, masters);
+      await onProgress?.(current);
+    }
+
+    await Promise.all([
+      supplement('engine evidence', () => evalProvider.get(center, { signal }))
+        .then(async (value) => {
+          sourceEval = value;
+          await publish();
+        }),
+      supplement('Masters evidence', () => loadMastersReading(center, { signal }))
+        .then(async (value) => {
+          masters = value;
+          await publish();
+        }),
+    ]);
+
+    throwIfAborted(signal);
+    return current;
   };
 }
 

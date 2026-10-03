@@ -10,6 +10,13 @@ function explorerMove(uci, white, draws, black) {
   return { uci, white, draws, black };
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
 test('Rail keeps every legal Lichess Line and explicit-only navigable Line', async () => {
   const explicit = resolveMove(CENTER, { uci: 'h2h3' });
   const explorer = {
@@ -47,4 +54,69 @@ test('Rail keeps every legal Lichess Line and explicit-only navigable Line', asy
   assert.equal(rail.lines.some((line) => 'notable' in line), false);
   assert.ok(Object.isFrozen(rail));
   assert.ok(Object.isFrozen(rail.lines));
+});
+
+test('Rail publishes Explorer inventory before delayed supplementary evidence', async () => {
+  const evaluation = deferred();
+  const masters = deferred();
+  const publications = [];
+  const explorer = {
+    white: 10,
+    draws: 5,
+    black: 5,
+    moves: [explorerMove('e2e4', 6, 2, 2)],
+  };
+  const loadRail = createRailSource({
+    acquireExplorer: async () => explorer,
+    graph: { incoming: async () => [], outgoing: async () => [] },
+    evalProvider: { get: () => evaluation.promise },
+    loadMastersReading: () => masters.promise,
+  });
+
+  const loading = loadRail({ center: CENTER, onProgress: (rail) => publications.push(rail) });
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(publications.length, 1);
+  assert.equal(publications[0].lines.length, 1);
+  assert.equal(publications[0].lines[0].moveEval, null);
+  assert.equal(publications[0].lines[0].mastersMismatch, null);
+
+  evaluation.resolve({ depth: 20, pvs: [{ moves: 'e2e4', cp: 10 }] });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.ok(publications.length >= 2);
+
+  masters.resolve({
+    white: 10,
+    draws: 5,
+    black: 5,
+    moves: [explorerMove('e2e4', 6, 2, 2)],
+  });
+  const rail = await loading;
+  assert.equal(rail.lines.length, 1);
+  assert.ok(publications.length >= 3);
+});
+
+test('supplementary Rail failure leaves published Explorer inventory usable', async () => {
+  const publications = [];
+  const explorer = {
+    white: 10,
+    draws: 5,
+    black: 5,
+    moves: [explorerMove('e2e4', 6, 2, 2)],
+  };
+  const loadRail = createRailSource({
+    acquireExplorer: async () => explorer,
+    graph: { incoming: async () => [], outgoing: async () => [] },
+    evalProvider: { get: async () => { throw new Error('eval unavailable'); } },
+    loadMastersReading: async () => { throw new Error('masters unavailable'); },
+  });
+
+  const rail = await loadRail({ center: CENTER, onProgress: (value) => publications.push(value) });
+
+  assert.equal(rail.lines.length, 1);
+  assert.ok(publications.length >= 1);
+  assert.equal(rail.lines[0].edge.uci, 'e2e4');
 });

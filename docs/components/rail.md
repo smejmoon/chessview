@@ -16,6 +16,8 @@ Explicitly materialized moves form an additional navigation path. When an explic
 
 The **Visible Constellation Lines** are selected independently by [Constellation](constellation.md) under Candidate eligibility, Salience, coherence, and presentation-space constraints. A Rail Line need not have a visible board, and presentation-space changes may alter visible Constellation membership without changing a settled Rail inventory.
 
+Rail inventory settles from the current usable rated Explorer Reading plus known explicit-only outgoing Graph Edges. Supplementary engine and Masters evidence may refine already-visible rows afterward; it is not a prerequisite for publishing that inventory.
+
 ## Requirements
 
 - The Rail shows current-position context and controls used to switch between Root and Line views.
@@ -24,12 +26,13 @@ The **Visible Constellation Lines** are selected independently by [Constellation
 - The Roots tab count reports immediate known Root relationships for the current Nodus, independent of how many Root boards fit in the current Constellation.
 - Root/Line mode switching is a display choice. It does not clear, recompute, or reinterpret settled Rail inventories or tab counts merely because the active mode changed.
 - Rail inventory and tab counts are independent of Constellation presentation capacity. Resizing, zooming, or otherwise changing how many boards fit may change Constellation membership without changing settled Rail values.
+- A usable rated Explorer Reading and known graph relationships publish the Rail inventory without waiting for cloud evaluation or Masters retrieval. Those supplementary sources may hydrate their evidence into existing rows later, and their delay, absence, rate limiting, or failure must not suppress otherwise usable Source Lines.
 - Rail values may still refine when underlying source, graph, or evidence information for the same Nodus is genuinely acquired or reconciled.
 - A Rail row keeps enough Prevalence context visible to distinguish common moves from rare ones when that distinction matters to interpretation.
 - Selecting a navigable Rail row requests a Recenter to the row's canonical target position.
 - Engine, human-result, mismatch, rarity, Prevalence, and other evidence shown in the Rail follow the [Evidence](evidence.md) component. Rail presents supplied signals without collapsing them into a separate admission or importance classification.
 - A Guide or legend that explains evidence presentation belongs to the Rail because it explains Rail/map evidence channels; it does not become a second source of evidence rules.
-- Supplementary evidence may hydrate or fail locally without changing whether the underlying Constellation is structurally usable.
+- Supplementary evidence may hydrate or fail locally without changing whether the underlying Constellation is structurally usable or whether an established Rail inventory remains available.
 - Debug/developer instrumentation may appear near the Rail in development builds, but it is not part of the Rail product contract.
 
 ## Verification
@@ -46,5 +49,7 @@ Deterministic/browser contract tests should cover:
 - same-Nodus Root/Line switching preserving settled Rail inventory and counts while new source/graph/evidence information may still refine them;
 - presentation-space changes altering Constellation membership without altering settled Rail inventory or counts;
 - Rail navigation targeting the correct canonical position;
+- Explorer/graph Rail inventory becoming available before delayed engine or Masters evidence, with later evidence refining rows in place;
+- supplementary engine or Masters failure leaving the established Rail inventory usable;
 - evidence rows preserving their supplied evidence meaning rather than deriving it from presentation state;
 - supplementary Rail evidence failure remaining local and not downgrading an established structural view.

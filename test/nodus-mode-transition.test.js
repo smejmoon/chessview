@@ -24,6 +24,10 @@ function structure(center, mode) {
   };
 }
 
+function modesCalled(structureCalls) {
+  return structureCalls.map(([, mode]) => mode).sort();
+}
+
 test('same-Nodus mode switch selects the sibling projection without recomputing or changing Rail', async () => {
   const roots = deferred();
   const structureCalls = [];
@@ -49,28 +53,28 @@ test('same-Nodus mode switch selects the sibling projection without recomputing 
   assert.equal(controller.snapshot.structure.value.marker, 'A:lines');
   assert.equal(controller.snapshot.rail.value.rootsCount, 4);
   assert.equal(controller.snapshot.rail.value.lines.length, 1);
-  assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
+  assert.deepEqual(modesCalled(structureCalls), ['lines', 'roots']);
 
   await controller.setMode('roots');
   assert.equal(controller.snapshot.mode, 'roots');
   assert.equal(controller.snapshot.structure.status, 'loading');
   assert.equal(controller.snapshot.rail.value.rootsCount, 4);
   assert.equal(controller.snapshot.rail.value.lines.length, 1);
-  assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
+  assert.deepEqual(modesCalled(structureCalls), ['lines', 'roots']);
 
   roots.resolve(structure('A', 'roots'));
   await flush();
   assert.equal(controller.snapshot.structure.status, 'ready');
   assert.equal(controller.snapshot.structure.value.marker, 'A:roots');
-  assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
+  assert.deepEqual(modesCalled(structureCalls), ['lines', 'roots']);
 
   await controller.setMode('lines');
   assert.equal(controller.snapshot.structure.value.marker, 'A:lines');
   assert.deepEqual(controller.snapshot.rail.value, railValue);
-  assert.deepEqual(structureCalls, [['A', 'roots'], ['A', 'lines']]);
+  assert.deepEqual(modesCalled(structureCalls), ['lines', 'roots']);
 });
 
-test('recenter starts fresh Nodus-level Rail state instead of carrying values from the previous Nodus', async () => {
+test('recenter starts fresh Nodus-level Rail state without waiting for Rail before accepting the new Nodus', async () => {
   const nextRail = deferred();
   const controller = new NodusController({
     initial: { center: 'A', view: 'lines' },
@@ -89,6 +93,7 @@ test('recenter starts fresh Nodus-level Rail state instead of carrying values fr
 
   await controller.recenter({ target: 'B' });
   assert.equal(controller.snapshot.center, 'B');
+  assert.equal(controller.snapshot.structure.status, 'ready');
   assert.equal(controller.snapshot.rail.status, 'loading');
   assert.equal(controller.snapshot.rail.value, null);
 

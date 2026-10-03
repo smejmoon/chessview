@@ -18,7 +18,6 @@ const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 type LoadPriority = 'foreground' | 'background';
 type Priority = LoadPriority | (() => LoadPriority);
 type LoadOptions = Readonly<{
-  force?: boolean;
   signal?: AbortSignal;
   priority?: Priority;
 }>;
@@ -282,13 +281,12 @@ export function createExplorerProvider({
 
   function ensure(
     key: string,
-    { force = false, signal, priority = 'foreground' }: LoadOptions = {},
+    { signal, priority = 'foreground' }: LoadOptions = {},
   ): Promise<ParsedExplorerReading> {
     const canonical = canonicalPosition(key);
-    const facet = force ? 'explorer:force' : 'explorer';
     return repository.load(
       canonical,
-      facet,
+      'explorer',
       async ({ signal: requestSignal, priority: requestPriority }): Promise<ParsedExplorerReading> => {
         const cached = await repository.get(canonical);
         const cachedExplorer = cachedExplorerReading(cached);
@@ -297,7 +295,7 @@ export function createExplorerProvider({
           cachedExplorer
           && now() - cachedFetchedAt < EXPLORER_TTL_MS,
         );
-        if (!force && freshCached && cachedExplorer) {
+        if (freshCached && cachedExplorer) {
           report('Explorer Reading cache hit', {
             position: canonical,
             games: totalGames(cachedExplorer),
@@ -307,8 +305,7 @@ export function createExplorerProvider({
 
         const admitted = latest.get(canonical);
         if (
-          !force
-          && admitted
+          admitted
           && !admitted.persisted
           && now() - admitted.fetchedAt < EXPLORER_TTL_MS
         ) {

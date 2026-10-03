@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { isObsoleteWork } from '../src/obsolete-work.js';
 import { createRequestGate } from '../src/request-gate.js';
 
 test('request gate never overlaps network requests', async () => {
@@ -200,7 +201,40 @@ test('aborted queued work is pruned before dispatch selection', async () => {
   obsolete.abort();
   releaseFirst();
 
-  await assert.rejects(abandoned, (error) => error?.name === 'AbortError');
+  await assert.rejects(abandoned, (error) => isObsoleteWork(error, obsolete.signal));
   await Promise.all([inFlight, background]);
   assert.deepEqual(seen, ['in-flight', 'background']);
+});
+
+test('abort-shaped transport failure without matching cancellation provenance remains a failure', async () => {
+  const rawAbort = new Error('transport failed with abort shape');
+  rawAbort.name = 'AbortError';
+  const live = new AbortController();
+  const gate = createRequestGate({
+    minIntervalMs: 0,
+    fetchImpl: async () => { throw rawAbort; },
+  });
+
+  await assert.rejects(
+    gate.run('live', { signal: live.signal }),
+    (error) => error === rawAbort && !isObsoleteWork(error, live.signal),
+  );
+});
+
+test('matching request-signal cancellation translates a transport abort into ObsoleteWork', async () => {
+  const controller = new AbortController();
+  const rawAbort = new Error('platform aborted fetch');
+  rawAbort.name = 'AbortError';
+  const gate = createRequestGate({
+    minIntervalMs: 0,
+    fetchImpl: async () => {
+      controller.abort();
+      throw rawAbort;
+    },
+  });
+
+  await assert.rejects(
+    gate.run('cancelled', { signal: controller.signal }),
+    (error) => isObsoleteWork(error) && error !== rawAbort && error.cause === rawAbort,
+  );
 });

@@ -1,6 +1,7 @@
 import { MASTERS_TTL_MS } from './config.ts';
 import { canonicalPosition, toPlayableFen } from './graph.js';
 import { lichessGateway } from './lichess-gateway.js';
+import { isObsoleteWork } from './obsolete-work.js';
 import { positionRepository } from './position-repository.js';
 
 export { MASTERS_TTL_MS } from './config.ts';
@@ -25,8 +26,8 @@ export function isMastersRequestFailure(value) {
   return value?.requestFailed === true;
 }
 
-function staleOrFailure(error, cachedValue) {
-  if (error?.name === 'AbortError') throw error;
+function staleOrFailure(error, cachedValue, signal) {
+  if (isObsoleteWork(error, signal)) throw error;
   if (cachedValue != null) return cachedValue;
   return requestFailure(error);
 }
@@ -55,7 +56,7 @@ export function loadMasters(positionKey, { signal, priority = 'foreground' } = {
       await positionRepository.merge(key, { mastersExplorer: value, mastersFetchedAt: Date.now() });
       return value;
     } catch (error) {
-      return staleOrFailure(error, cached?.mastersExplorer);
+      return staleOrFailure(error, cached?.mastersExplorer, requestSignal);
     }
   }, { signal, priority });
 }

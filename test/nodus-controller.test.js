@@ -215,6 +215,18 @@ test('critical structure failure is terminal for that view and refresh can recov
   assert.equal(controller.snapshot.structure.status, 'ready');
 });
 
+test('abort-shaped structure failure is not cancellation while the owning view remains live', async () => {
+  const rawAbort = new Error('storage transaction aborted');
+  rawAbort.name = 'AbortError';
+  const { controller } = fixture({
+    structure: async () => { throw rawAbort; },
+  });
+
+  await controller.start();
+  assert.equal(controller.snapshot.structure.status, 'failed');
+  assert.equal(controller.snapshot.structure.error, 'storage transaction aborted');
+});
+
 test('redraw presents without recomputing while refresh recomputes both sibling projections without changing history', async () => {
   const structureCalls = { roots: 0, lines: 0 };
   const { controller, calls, publications } = fixture({

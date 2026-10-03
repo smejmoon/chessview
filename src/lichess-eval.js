@@ -4,6 +4,7 @@ import {
 } from './config.ts';
 import { canonicalPosition, toPlayableFen } from './graph.js';
 import { lichessGateway } from './lichess-gateway.js';
+import { isObsoleteWork } from './obsolete-work.js';
 import { positionRepository } from './position-repository.js';
 
 export {
@@ -122,7 +123,7 @@ export function createLichessEval({
           headers: { Accept: 'application/json' },
         });
       } catch (error) {
-        if (error?.name === 'AbortError') {
+        if (isObsoleteWork(error, requestSignal)) {
           finishRequest();
           throw error;
         }

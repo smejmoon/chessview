@@ -1,14 +1,5 @@
 import { LICHESS_REQUEST_MIN_INTERVAL_MS } from './config.ts';
-
-function abortError() {
-  const error = new Error('The operation was aborted');
-  error.name = 'AbortError';
-  return error;
-}
-
-function throwIfAborted(signal) {
-  if (signal?.aborted) throw abortError();
-}
+import { isObsoleteWork, obsoleteWork, throwIfObsolete } from './obsolete-work.js';
 
 function priorityValue(priority) {
   const value = typeof priority === 'function' ? priority() : priority;
@@ -42,7 +33,7 @@ export function createRequestGate({
         continue;
       }
       queue.splice(index, 1);
-      item.reject(abortError());
+      item.reject(obsoleteWork('Queued Lichess request became obsolete', item.init.signal.reason));
     }
   }
 
@@ -53,9 +44,18 @@ export function createRequestGate({
 
   async function execute(item) {
     const { priority: _priority, ...requestInit } = item.init;
-    throwIfAborted(requestInit.signal);
+    throwIfObsolete(requestInit.signal, 'Lichess request became obsolete before dispatch');
     lastRequestAt = now();
-    const response = await fetchImpl(item.input, requestInit);
+    let response;
+    try {
+      response = await fetchImpl(item.input, requestInit);
+    } catch (error) {
+      if (isObsoleteWork(error)) throw error;
+      if (isObsoleteWork(error, requestInit.signal)) {
+        throw obsoleteWork('Lichess request became obsolete', error);
+      }
+      throw error;
+    }
     if (response?.status === 429) {
       cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
     }

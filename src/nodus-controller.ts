@@ -1,5 +1,6 @@
 import type { MaterializeMoveInput, MaterializeMoveResult, Move } from './move-materialization.ts';
 import type { Route, RouteLedger, ViewMode } from './route-ledger.ts';
+import { isObsoleteWork } from './obsolete-work.js';
 
 export type Orientation = 'white' | 'black';
 export type LifecycleStatus = 'idle' | 'loading' | 'ready' | 'failed';
@@ -159,13 +160,6 @@ function errorMessage(error: unknown): string | null {
     if (typeof message === 'string') return message;
   }
   return String(error);
-}
-
-function isAbortError(error: unknown): boolean {
-  return typeof error === 'object'
-    && error !== null
-    && 'name' in error
-    && (error as { name?: unknown }).name === 'AbortError';
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -499,7 +493,7 @@ export class NodusController {
       structure: structure.value,
       signal: controller.signal,
     }))).catch((error: unknown) => {
-      if (controller.signal.aborted || isAbortError(error) || !this.#isCurrent(run)) return;
+      if (controller.signal.aborted || isObsoleteWork(error, controller.signal) || !this.#isCurrent(run)) return;
       this.#log('supplementary lookahead failed', { mode, error: errorMessage(error) });
     });
   }
@@ -514,7 +508,7 @@ export class NodusController {
     try {
       value = await this.#structure(Object.freeze({ center: this.#state.center, mode, signal: run.abortController.signal }));
     } catch (structureError: unknown) {
-      if (!this.#isCurrent(run) || isAbortError(structureError)) return false;
+      if (!this.#isCurrent(run) || isObsoleteWork(structureError, run.abortController.signal)) return false;
       const projectionState = this.#state.projections[mode];
       projectionState.structure = lifecycle('failed', null, structureError);
       projectionState.evidence = lifecycle('idle');
@@ -552,7 +546,7 @@ export class NodusController {
         },
       }));
     } catch (error: unknown) {
-      if (!this.#isCurrent(run) || isAbortError(error)) return;
+      if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return;
       result = { error, criticalFailure: true };
     }
     if (!this.#isCurrent(run)) return;
@@ -577,7 +571,7 @@ export class NodusController {
         signal: run.abortController.signal,
       }));
     } catch (error: unknown) {
-      if (!this.#isCurrent(run) || isAbortError(error)) return;
+      if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return;
       projectionState.evidence = lifecycle('failed', null, error);
       this.#log('Nodus evidence failed', { mode, error: errorMessage(error) });
       if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
@@ -597,7 +591,7 @@ export class NodusController {
         signal: run.abortController.signal,
       }));
     } catch (error: unknown) {
-      if (!this.#isCurrent(run) || isAbortError(error)) return false;
+      if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return false;
       this.#state.rail = lifecycle('failed', null, error);
       this.#log('Nodus Rail failed', error);
       await this.#presentCurrent('update');

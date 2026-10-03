@@ -1,30 +1,26 @@
 # Do:
 
-Separate obsolete work from genuine failures throughout the source-observation paths, using semantic failure categories rather than treating every abort-shaped platform error as cancellation.
+Finish aligning Explorer, Masters, and LichessEval as cohesive source-observation providers around the established `ObsoleteWork` control-flow boundary. Separate source retrieval, source validation, and cache persistence where they currently share one recovery scope; preserve a fresh usable observation when only cache persistence fails; remove Masters request-failure sentinels from observation data; and keep provider-specific operational issues local or on a separate operational channel unless a consumer owns a decision that requires them.
 
-Establish and use these conceptual meanings:
+Use the established semantic meanings:
 
-- `ObsoleteWork`: intentional control flow for work whose owning demand/lifetime is no longer live. An abort-shaped error only has this meaning when cancellation provenance is known from the relevant Chessview-controlled lifetime/signal.
+- `ObsoleteWork`: intentional control flow for work whose owning demand/lifetime is no longer live. An abort-shaped error has this meaning only when it is semantically marked or linked to the relevant Chessview-controlled lifetime/signal.
 - `PersistenceFailure`: local persistence could not durably store an otherwise valid result or state transition. If a fresh usable source observation is already available, cache-write failure must not by itself discard that observation.
 - `RejectedObservation`: an external response was obtained but is not admitted as usable source data because it violates that source's source-facing contract.
 
-Implement Explorer, Masters, and LichessEval as cohesive source-observation providers with comparable architectural boundaries where their semantics align. Each provider should own the lifecycle needed to expose usable observations from its external source: source-specific retrieval and validation, freshness and fallback policy, cache lifecycle, and local handling/reporting of retrieval failures. Consumers should receive usable source data or absence, plus only exceptional outcomes for which the consumer owns a meaningful decision.
+Each provider should own the lifecycle needed to expose usable observations from its external source: source-specific retrieval and validation, freshness and fallback policy, cache lifecycle, and local handling/reporting of retrieval failures. Consumers should receive usable source data or absence, plus only exceptional outcomes for which the consumer owns a meaningful decision.
 
 Do not introduce a generic `ObservationWell`/provider base class merely to make the three implementations uniform. Keep the common provider shape in architecture documentation rather than encoding speculative sameness in a class hierarchy or mandatory generic interface. Reuse existing or extracted implementation primitives only where the providers demonstrate equivalent behavior with the same meaning; after the three providers are aligned, reassess remaining duplication and extract further shared mechanisms only when justified by the resulting code.
-
-Where the current implementations leak retrieval lifecycle into consumers, remove that leakage. In particular, request-failure sentinels must not masquerade as source observations, freshness/cache metadata must not become observation data, and source-specific HTTP/transport details should remain local unless a receiving layer has a decision that the provider cannot make.
 
 Do not settle the name or detailed taxonomy for generic external-source failure in this entry yet. First distinguish the actual cross-boundary decision, if any, after the providers handle source-specific failure and fallback locally.
 
 # Because:
 
-The previous Explorer cancellation fix correctly stopped normal lifecycle cancellation from being logged as `explorer refresh failed`, but it still identifies cancellation by `error.name === 'AbortError'`. That is not enough: platform/storage APIs can also produce abort-shaped errors for genuine failures.
+Explorer refresh still spans source acquisition, response validation, and persistence in one recovery scope. These stages have different semantics. A failed cache write after a valid fresh Reading is a local durability problem, not a source-refresh failure; the current operation can still use that Reading. Conversely, a malformed source response was obtained successfully at the transport level but must be rejected as unusable source evidence.
 
-The Explorer refresh path currently spans source acquisition, response validation, and persistence in one recovery scope. These stages have different semantics. A failed cache write after a valid fresh Reading is a local durability problem, not a source-refresh failure; the current operation can still use that Reading. Conversely, a malformed source response was obtained successfully at the transport level but must be rejected as unusable source evidence.
+Masters still exposes a request-failure sentinel as though it were returned source data, while LichessEval keeps usable evaluation/absence separate from operational request and failure status. Aligning the three behind the same architectural shape makes retrieval lifecycle a provider responsibility without prematurely forcing one implementation algorithm on sources whose freshness, absence, validation, and fallback semantics differ.
 
-Masters and LichessEval already solve overlapping parts of the same provider problem in different ways. Masters currently exposes a request-failure sentinel as though it were returned source data, while LichessEval keeps usable evaluation/absence separate from operational request and failure status. Aligning the three behind the same architectural shape makes retrieval lifecycle a provider responsibility without prematurely forcing one implementation algorithm on sources whose freshness, absence, validation, and fallback semantics differ.
-
-The same name-only `AbortError` assumption appears in other asynchronous boundaries, so the durable direction is to classify failures at the boundary that knows their provenance and let higher layers reason over Chessview semantic categories.
+Chessview-controlled cancellation is classified through `ObsoleteWork`: an abort-shaped platform error without a matching live-demand cancellation provenance remains a genuine failure. The remaining provider work should preserve that distinction while applying source-specific fallback and reporting policy.
 
 The governing failure-boundary rule is: a failure crosses a boundary only when the receiving layer can make a decision that the originating layer cannot. Otherwise the originating layer handles, translates, reports, or recovers from it locally.
 

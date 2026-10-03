@@ -1,11 +1,6 @@
 import { getNode, nodeStoreVersion, putNode } from './position-store.js';
 import { canonicalPosition, toPlayableFen } from './graph.js';
-
-function abortError() {
-  const error = new Error('Position load participation became obsolete');
-  error.name = 'AbortError';
-  return error;
-}
+import { obsoleteWork } from './obsolete-work.js';
 
 function priorityValue(priority) {
   const value = typeof priority === 'function' ? priority() : priority;
@@ -116,7 +111,7 @@ export function createPositionRepository({
   }
 
   function subscribe(load, signal, releaseLast, priority) {
-    if (signal?.aborted) return Promise.reject(abortError());
+    if (signal?.aborted) return Promise.reject(obsoleteWork('Position load participation became obsolete', signal.reason));
     const subscriber = { priority };
     load.subscribers.add(subscriber);
 
@@ -128,7 +123,7 @@ export function createPositionRepository({
       const onAbort = () => {
         signal?.removeEventListener('abort', onAbort);
         release();
-        reject(abortError());
+        reject(obsoleteWork('Position load participation became obsolete', signal?.reason));
       };
       signal?.addEventListener('abort', onAbort, { once: true });
 

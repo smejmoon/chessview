@@ -9,6 +9,7 @@ import {
 import { debugLog } from './debug.js';
 import { lichessSession } from './lichess-session.js';
 import { lichessGateway } from './lichess-gateway.js';
+import { isObsoleteWork } from './obsolete-work.js';
 import { positionRepository } from './position-repository.js';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
@@ -134,9 +135,10 @@ function recoverExplorerRefresh(
   error: unknown,
   canonical: string,
   cachedExplorer: ParsedExplorerReading | null,
+  signal: AbortSignal,
 ): ParsedExplorerReading {
   const details = errorLike(error);
-  if (details.name === 'AbortError') throw error;
+  if (isObsoleteWork(error, signal)) throw error;
   if (cachedExplorer) {
     debugLog('Explorer refresh failed; using stale Reading', {
       position: canonical,
@@ -219,7 +221,7 @@ export function loadExplorerReading(
         debugLog('Explorer Reading stored', { position: canonical, games: totalGames(explorer) });
         return explorer;
       } catch (error: unknown) {
-        return recoverExplorerRefresh(error, canonical, cachedExplorer);
+        return recoverExplorerRefresh(error, canonical, cachedExplorer, requestSignal);
       }
     },
     { signal, priority },

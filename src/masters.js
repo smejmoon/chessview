@@ -10,6 +10,9 @@ export { MASTERS_TTL_MS } from './config.ts';
 const MASTERS_ENDPOINT = 'https://explorer.lichess.org/masters';
 const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 
+/** @typedef {'foreground' | 'background'} LoadPriority */
+/** @typedef {LoadPriority | (() => LoadPriority)} Priority */
+
 function httpError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -109,6 +112,10 @@ export function createMastersProvider({
     }
   }
 
+  /**
+   * @param {string} positionKey
+   * @param {{ signal?: AbortSignal, priority?: Priority }} [options]
+   */
   function load(positionKey, { signal, priority = 'foreground' } = {}) {
     const key = canonicalPosition(positionKey);
     return repository.load(key, 'masters', async ({ signal: requestSignal, priority: requestPriority }) => {

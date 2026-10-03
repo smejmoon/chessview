@@ -8,10 +8,7 @@ import './debug.css';
 import { canonicalPosition } from './graph.js';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { debugLog } from './debug.js';
-import {
-  currentExplorerReading,
-  loadExplorerReading,
-} from './explorer.js';
+import { loadExplorerReading } from './explorer.js';
 import {
   reconcileExplorerReading,
   warmExplorerReading,
@@ -78,13 +75,6 @@ function projectionPriority(mode: ViewMode) {
   return () => controller.snapshot.mode === mode ? 'foreground' : 'background';
 }
 
-function explorerSignature(reading: any): string {
-  const moves = Array.isArray(reading?.moves)
-    ? reading.moves.map((move: any) => `${move?.uci}:${move?.white}:${move?.draws}:${move?.black}`).join(',')
-    : '';
-  return `${reading?.white}:${reading?.draws}:${reading?.black}:${moves}`;
-}
-
 function refinementPriority(modes: ReadonlySet<ViewMode>, alwaysForeground = false) {
   if (alwaysForeground) return 'foreground' as const;
   return () => modes.has(controller.snapshot.mode) ? 'foreground' : 'background';
@@ -95,9 +85,6 @@ async function refineCurrentNodus({ center, structures, signal }): Promise<reado
   const explorerDemand = new Map<string, Set<ViewMode>>();
   const evalDemand = new Map<string, Set<ViewMode>>();
   const mastersDemand = new Map<string, Set<ViewMode>>();
-  const foregroundExplorer = new Set<string>([center]);
-  const foregroundEval = new Set<string>([center]);
-  const foregroundMasters = new Set<string>([center]);
 
   function demand(map: Map<string, Set<ViewMode>>, position: string, mode: ViewMode) {
     if (!position) return;
@@ -114,9 +101,11 @@ async function refineCurrentNodus({ center, structures, signal }): Promise<reado
   for (const mode of ['roots', 'lines'] as const) {
     const structure: any = structures[mode];
     for (const position of structure?.readingFrontier ?? []) demand(explorerDemand, position, mode);
+    for (const node of structure?.composition?.nodes ?? []) demand(explorerDemand, node?.key, mode);
     for (const relationship of structure?.composition?.relationships ?? []) {
       const edge = relationship?.edge;
       if (!edge?.source || !edge?.target) continue;
+      demand(explorerDemand, edge.source, mode);
       demand(evalDemand, edge.source, mode);
       demand(evalDemand, edge.target, mode);
       demand(mastersDemand, edge.source, mode);
@@ -128,30 +117,32 @@ async function refineCurrentNodus({ center, structures, signal }): Promise<reado
   if (!mastersDemand.has(center)) mastersDemand.set(center, new Set());
 
   for (const [position, modes] of explorerDemand) {
-    add(`explorer:${position}`, () => loadExplorerReading(position, {
-      signal,
-      priority: refinementPriority(modes, foregroundExplorer.has(position)),
-    }));
-    const current = currentExplorerReading(position);
-    if (current) {
-      add(
-        `explorer-reconcile:${position}:${explorerSignature(current)}`,
-        () => reconcileExplorerReading(position, current),
-      );
-    }
+    let acquisition: ReturnType<typeof loadExplorerReading> | null = null;
+    const reading = () => {
+      acquisition ??= loadExplorerReading(position, {
+        signal,
+        priority: refinementPriority(modes, position === center),
+      });
+      return acquisition;
+    };
+    add(`explorer:${position}`, reading);
+    add(`explorer-reconcile:${position}`, async () => {
+      const explorer = await reading();
+      return reconcileExplorerReading(position, explorer);
+    });
   }
 
   for (const [position, modes] of evalDemand) {
     add(`cloud-eval:${position}`, () => lichessEval.get(position, {
       signal,
-      priority: refinementPriority(modes, foregroundEval.has(position)),
+      priority: refinementPriority(modes, position === center),
     }));
   }
 
   for (const [position, modes] of mastersDemand) {
     add(`masters:${position}`, () => loadMasters(position, {
       signal,
-      priority: refinementPriority(modes, foregroundMasters.has(position)),
+      priority: refinementPriority(modes, position === center),
     }));
   }
 

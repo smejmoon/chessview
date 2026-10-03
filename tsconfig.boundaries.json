@@ -18,7 +18,8 @@
     "src/knowledge-acquisition.ts",
     "src/nodus-renderer.ts",
     "src/eval-ui.ts",
-    "src/db.ts"
+    "src/db.ts",
+    "src/explorer.ts"
   ],
   "include": []
 }

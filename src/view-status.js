@@ -6,6 +6,14 @@ function statusSpec(presentation) {
   return { mark: '', label: '', title: '' };
 }
 
+function currentStatus(view) {
+  const structural = view?.structure?.status ?? 'idle';
+  if (structural === 'failed') return 'failed';
+  if (structural === 'loading') return 'loading';
+  if (view?.settling === true) return 'loading';
+  return structural;
+}
+
 export function createViewStatusPresenter({
   updatingDelayMs = 180,
   readyHoldMs = 1_200,
@@ -59,11 +67,11 @@ export function createViewStatusPresenter({
   }
 
   function start(view) {
-    return transitionTo(view?.structure?.status ?? 'idle', { force: true });
+    return transitionTo(currentStatus(view), { force: true });
   }
 
   function update(view) {
-    return transitionTo(view?.structure?.status ?? 'idle');
+    return transitionTo(currentStatus(view));
   }
 
   function fail() {

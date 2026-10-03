@@ -16,7 +16,9 @@ Explicitly materialized moves form an additional navigation path. When an explic
 
 The **Visible Constellation Lines** are selected independently by [Constellation](constellation.md) under Candidate eligibility, Salience, coherence, and presentation-space constraints. A Rail Line need not have a visible board, and presentation-space changes may alter visible Constellation membership without changing a settled Rail inventory.
 
-Rail inventory settles from the current usable rated Explorer Reading plus known explicit-only outgoing Graph Edges. Supplementary engine and Masters evidence may refine already-visible rows afterward; it is not a prerequisite for publishing that inventory.
+Rail inventory is assembled from independently usable facts rather than from one all-or-nothing acquisition operation. Known incoming/outgoing Graph relationships may publish immediately. A usable rated Explorer Reading then contributes its Source Lines whether or not reconciliation of that Reading into durable `ChartedGraph` knowledge has completed successfully. Knowledge Acquisition remains responsible for that reconciliation; its persistence outcome does not retroactively determine whether the source observation itself was usable.
+
+Supplementary engine and Masters evidence may refine already-visible rows afterward; it is not a prerequisite for publishing graph inventory or Source Lines.
 
 ## Requirements
 
@@ -26,7 +28,9 @@ Rail inventory settles from the current usable rated Explorer Reading plus known
 - The Roots tab count reports immediate known Root relationships for the current Nodus, independent of how many Root boards fit in the current Constellation.
 - Root/Line mode switching is a display choice. It does not clear, recompute, or reinterpret settled Rail inventories or tab counts merely because the active mode changed.
 - Rail inventory and tab counts are independent of Constellation presentation capacity. Resizing, zooming, or otherwise changing how many boards fit may change Constellation membership without changing settled Rail values.
-- A usable rated Explorer Reading and known graph relationships publish the Rail inventory without waiting for cloud evaluation or Masters retrieval. Those supplementary sources may hydrate their evidence into existing rows later, and their delay, absence, rate limiting, or failure must not suppress otherwise usable Source Lines.
+- Known Graph inventory may publish before rated Explorer completes. Explorer delay or failure does not suppress already-known explicit Lines or Root counts.
+- A usable rated Explorer Reading publishes Source Lines without waiting for Knowledge Acquisition to persist graph reconciliation, cloud evaluation, or Masters retrieval. Reconciliation may continue independently; its failure does not retract an otherwise usable source observation from the Rail.
+- Cloud evaluation and Masters may hydrate evidence into existing rows later, and their delay, absence, rate limiting, or failure must not suppress otherwise usable Rail inventory.
 - Rail values may still refine when underlying source, graph, or evidence information for the same Nodus is genuinely acquired or reconciled.
 - A Rail row keeps enough Prevalence context visible to distinguish common moves from rare ones when that distinction matters to interpretation.
 - Selecting a navigable Rail row requests a Recenter to the row's canonical target position.
@@ -42,6 +46,8 @@ Deterministic/browser contract tests should cover:
 - Root and Line controls selecting the intended display without restarting the Nodus solely because the mode changed;
 - a usable `LichessGamesDB` Explorer Reading contributing every legal immediate Source Line to the Rail, including Lines omitted from the current Constellation;
 - explicit-only navigable outgoing Graph Edges appearing in the Rail without requiring source evidence or automatic Constellation candidacy;
+- known Graph inventory becoming usable while Explorer is still delayed or unavailable;
+- a usable Explorer Reading contributing Source Lines before its Knowledge Acquisition reconciliation completes, with reconciliation persistence failure leaving those Source Lines usable;
 - a Graph Edge already represented by a Source Line not producing a duplicate explicit Rail row;
 - the Lines Rail remaining usable through scrolling when its inventory exceeds available height;
 - the Lines tab count matching the complete rendered Line inventory, including explicit-only rows, rather than visible-board count;

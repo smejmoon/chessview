@@ -190,6 +190,7 @@ export function createKnowledgeAcquisition({
 
   return Object.freeze({
     acquireExplorerReading,
+    reconcileExplorerReading,
     reconcileCachedExplorerReading,
     warmExplorerReading,
   });
@@ -197,6 +198,7 @@ export function createKnowledgeAcquisition({
 
 export const {
   acquireExplorerReading,
+  reconcileExplorerReading,
   reconcileCachedExplorerReading,
   warmExplorerReading,
 } = createKnowledgeAcquisition();

@@ -17,6 +17,15 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+async function waitFor(predicate, message = 'condition was not reached') {
+  for (let turn = 0; turn < 100; turn += 1) {
+    const value = predicate();
+    if (value) return value;
+    await Promise.resolve();
+  }
+  assert.fail(message);
+}
+
 test('Rail keeps every legal Lichess Line and explicit-only navigable Line', async () => {
   const explicit = resolveMove(CENTER, { uci: 'h2h3' });
   const explorer = {
@@ -30,7 +39,8 @@ test('Rail keeps every legal Lichess Line and explicit-only navigable Line', asy
     ],
   };
   const loadRail = createRailSource({
-    acquireExplorer: async () => explorer,
+    loadExplorer: async () => explorer,
+    reconcileExplorer: async () => {},
     graph: {
       incoming: async () => [{ id: 'root-1' }, { id: 'root-2' }],
       outgoing: async () => [{
@@ -56,9 +66,144 @@ test('Rail keeps every legal Lichess Line and explicit-only navigable Line', asy
   assert.ok(Object.isFrozen(rail.lines));
 });
 
-test('Rail publishes Explorer inventory before delayed supplementary evidence', async () => {
+test('Rail publishes known graph inventory while Explorer and supplementary sources are delayed', async () => {
+  const explorer = deferred();
   const evaluation = deferred();
   const masters = deferred();
+  const explicit = resolveMove(CENTER, { uci: 'h2h3' });
+  const publications = [];
+  let evaluationStarted = false;
+  let mastersStarted = false;
+  const loadRail = createRailSource({
+    loadExplorer: () => explorer.promise,
+    reconcileExplorer: async () => {},
+    graph: {
+      incoming: async () => [{ id: 'root-1' }],
+      outgoing: async () => [{
+        source: CENTER,
+        target: explicit.target,
+        uci: explicit.uci,
+        san: explicit.san,
+        explicit: true,
+      }],
+    },
+    evalProvider: {
+      get: () => {
+        evaluationStarted = true;
+        return evaluation.promise;
+      },
+    },
+    loadMastersReading: () => {
+      mastersStarted = true;
+      return masters.promise;
+    },
+  });
+
+  const loading = loadRail({ center: CENTER, onProgress: (rail) => publications.push(rail) });
+  const graphOnly = await waitFor(
+    () => publications.find((rail) => rail.lines.some((line) => line.edge.uci === 'h2h3')
+      && !rail.lines.some((line) => line.edge.uci === 'e2e4')),
+    'known graph inventory was not published',
+  );
+  assert.equal(graphOnly.rootsCount, 1);
+  await waitFor(() => evaluationStarted && mastersStarted, 'supplementary sources did not start independently');
+
+  explorer.resolve({
+    white: 10,
+    draws: 5,
+    black: 5,
+    moves: [explorerMove('e2e4', 6, 2, 2)],
+  });
+  const withExplorer = await waitFor(
+    () => publications.find((rail) => rail.lines.some((line) => line.edge.uci === 'e2e4')),
+    'Explorer Source Line was not published',
+  );
+  assert.deepEqual(withExplorer.lines.map((line) => line.edge.uci), ['e2e4', 'h2h3']);
+
+  evaluation.resolve(null);
+  masters.resolve(null);
+  const rail = await loading;
+  assert.deepEqual(rail.lines.map((line) => line.edge.uci), ['e2e4', 'h2h3']);
+});
+
+test('Rail publishes Explorer inventory before delayed supplementary evidence and reconciliation', async () => {
+  const evaluation = deferred();
+  const masters = deferred();
+  const reconciliation = deferred();
+  const publications = [];
+  let reconciliationStarted = false;
+  const explorer = {
+    white: 10,
+    draws: 5,
+    black: 5,
+    moves: [explorerMove('e2e4', 6, 2, 2)],
+  };
+  const loadRail = createRailSource({
+    loadExplorer: async () => explorer,
+    reconcileExplorer: () => {
+      reconciliationStarted = true;
+      return reconciliation.promise;
+    },
+    graph: { incoming: async () => [], outgoing: async () => [] },
+    evalProvider: { get: () => evaluation.promise },
+    loadMastersReading: () => masters.promise,
+  });
+
+  const loading = loadRail({ center: CENTER, onProgress: (rail) => publications.push(rail) });
+  const explorerPublication = await waitFor(
+    () => publications.find((rail) => rail.lines.some((line) => line.edge.uci === 'e2e4')),
+    'Explorer inventory was not published',
+  );
+  assert.equal(explorerPublication.lines[0].moveEval, null);
+  assert.equal(explorerPublication.lines[0].mastersMismatch, null);
+  await waitFor(() => reconciliationStarted, 'Explorer reconciliation did not start');
+
+  evaluation.resolve({ depth: 20, pvs: [{ moves: 'e2e4', cp: 10 }] });
+  const evaluated = await waitFor(
+    () => publications.find((rail) => rail.lines.some((line) => line.moveEval != null)),
+    'engine evidence did not refine the Rail',
+  );
+  assert.equal(evaluated.lines[0].moveEval.quality, 'strong');
+
+  masters.resolve({
+    white: 10,
+    draws: 5,
+    black: 5,
+    moves: [explorerMove('e2e4', 6, 2, 2)],
+  });
+  reconciliation.resolve([]);
+  const rail = await loading;
+  assert.equal(rail.lines.length, 1);
+  assert.equal(rail.lines[0].edge.uci, 'e2e4');
+});
+
+test('Explorer failure leaves known graph inventory usable', async () => {
+  const explicit = resolveMove(CENTER, { uci: 'h2h3' });
+  const publications = [];
+  const loadRail = createRailSource({
+    loadExplorer: async () => { throw new Error('explorer unavailable'); },
+    reconcileExplorer: async () => { throw new Error('should not reconcile'); },
+    graph: {
+      incoming: async () => [{ id: 'root-1' }],
+      outgoing: async () => [{
+        source: CENTER,
+        target: explicit.target,
+        uci: explicit.uci,
+        san: explicit.san,
+        explicit: true,
+      }],
+    },
+    evalProvider: { get: async () => null },
+    loadMastersReading: async () => null,
+  });
+
+  const rail = await loadRail({ center: CENTER, onProgress: (value) => publications.push(value) });
+  assert.equal(rail.rootsCount, 1);
+  assert.deepEqual(rail.lines.map((line) => line.edge.uci), ['h2h3']);
+  assert.ok(publications.some((value) => value.lines.some((line) => line.edge.uci === 'h2h3')));
+});
+
+test('Explorer reconciliation failure does not retract published Source Lines', async () => {
   const publications = [];
   const explorer = {
     white: 10,
@@ -67,36 +212,17 @@ test('Rail publishes Explorer inventory before delayed supplementary evidence', 
     moves: [explorerMove('e2e4', 6, 2, 2)],
   };
   const loadRail = createRailSource({
-    acquireExplorer: async () => explorer,
+    loadExplorer: async () => explorer,
+    reconcileExplorer: async () => { throw new Error('graph persistence failed'); },
     graph: { incoming: async () => [], outgoing: async () => [] },
-    evalProvider: { get: () => evaluation.promise },
-    loadMastersReading: () => masters.promise,
+    evalProvider: { get: async () => null },
+    loadMastersReading: async () => null,
   });
 
-  const loading = loadRail({ center: CENTER, onProgress: (rail) => publications.push(rail) });
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-
-  assert.equal(publications.length, 1);
-  assert.equal(publications[0].lines.length, 1);
-  assert.equal(publications[0].lines[0].moveEval, null);
-  assert.equal(publications[0].lines[0].mastersMismatch, null);
-
-  evaluation.resolve({ depth: 20, pvs: [{ moves: 'e2e4', cp: 10 }] });
-  await Promise.resolve();
-  await Promise.resolve();
-  assert.ok(publications.length >= 2);
-
-  masters.resolve({
-    white: 10,
-    draws: 5,
-    black: 5,
-    moves: [explorerMove('e2e4', 6, 2, 2)],
-  });
-  const rail = await loading;
+  const rail = await loadRail({ center: CENTER, onProgress: (value) => publications.push(value) });
   assert.equal(rail.lines.length, 1);
-  assert.ok(publications.length >= 3);
+  assert.equal(rail.lines[0].edge.uci, 'e2e4');
+  assert.ok(publications.some((value) => value.lines.some((line) => line.edge.uci === 'e2e4')));
 });
 
 test('supplementary Rail failure leaves published Explorer inventory usable', async () => {
@@ -108,7 +234,8 @@ test('supplementary Rail failure leaves published Explorer inventory usable', as
     moves: [explorerMove('e2e4', 6, 2, 2)],
   };
   const loadRail = createRailSource({
-    acquireExplorer: async () => explorer,
+    loadExplorer: async () => explorer,
+    reconcileExplorer: async () => {},
     graph: { incoming: async () => [], outgoing: async () => [] },
     evalProvider: { get: async () => { throw new Error('eval unavailable'); } },
     loadMastersReading: async () => { throw new Error('masters unavailable'); },
@@ -117,6 +244,6 @@ test('supplementary Rail failure leaves published Explorer inventory usable', as
   const rail = await loadRail({ center: CENTER, onProgress: (value) => publications.push(value) });
 
   assert.equal(rail.lines.length, 1);
-  assert.ok(publications.length >= 1);
+  assert.ok(publications.some((value) => value.lines.some((line) => line.edge.uci === 'e2e4')));
   assert.equal(rail.lines[0].edge.uci, 'e2e4');
 });

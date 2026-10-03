@@ -58,55 +58,71 @@ function cachedMastersReading(record) {
   }
 }
 
-function staleOrAbsent(error, cachedValue, signal, key) {
-  if (isObsoleteWork(error, signal)) throw error;
-  debugLog('Masters refresh failed', {
-    position: key,
-    error: error?.message ?? String(error),
-    fallback: cachedValue ? 'cached' : null,
-  }, 'warn');
-  return cachedValue;
-}
+export function createMastersProvider({
+  repository = positionRepository,
+  request = (url, options) => lichessSession.authorizedRequest(url, options),
+  now = () => Date.now(),
+  log = debugLog,
+} = {}) {
+  function report(message, detail, level = 'info') {
+    Reflect.apply(log, undefined, [message, detail, level]);
+  }
 
-async function persistMastersReading(key, value) {
-  try {
-    await positionRepository.merge(key, { mastersExplorer: value, mastersFetchedAt: Date.now() });
-  } catch (error) {
-    debugLog('Masters Reading persistence failed', {
+  function staleOrAbsent(error, cachedValue, signal, key) {
+    if (isObsoleteWork(error, signal)) throw error;
+    report('Masters refresh failed', {
       position: key,
       error: error?.message ?? String(error),
-    }, 'error');
+      fallback: cachedValue ? 'cached' : null,
+    }, 'warn');
+    return cachedValue;
   }
-}
 
-export function loadMasters(positionKey, { signal, priority = 'foreground' } = {}) {
-  const key = canonicalPosition(positionKey);
-  return positionRepository.load(key, 'masters', async ({ signal: requestSignal, priority: requestPriority }) => {
-    const cached = await positionRepository.get(key);
-    const cachedValue = cachedMastersReading(cached);
-    if (cachedValue && cached?.mastersFetchedAt && Date.now() - cached.mastersFetchedAt < MASTERS_TTL_MS) {
-      return cachedValue;
-    }
-
-    const url = new URL(MASTERS_ENDPOINT);
-    url.searchParams.set('fen', toPlayableFen(key));
-    url.searchParams.set('moves', '30');
-    url.searchParams.set('topGames', '0');
-
-    let value;
+  async function persistMastersReading(key, value) {
     try {
-      const response = await lichessSession.authorizedRequest(url, {
-        signal: requestSignal,
-        priority: requestPriority,
-        headers: { Accept: 'application/json' },
-      });
-      if (!response.ok) throw httpError(response.status, `Lichess masters explorer returned ${response.status}`);
-      value = parseMastersReading(await response.json());
+      await repository.merge(key, { mastersExplorer: value, mastersFetchedAt: now() });
     } catch (error) {
-      return staleOrAbsent(error, cachedValue, requestSignal, key);
+      report('Masters Reading persistence failed', {
+        position: key,
+        error: error?.message ?? String(error),
+      }, 'error');
     }
+  }
 
-    await persistMastersReading(key, value);
-    return value;
-  }, { signal, priority });
+  function load(positionKey, { signal, priority = 'foreground' } = {}) {
+    const key = canonicalPosition(positionKey);
+    return repository.load(key, 'masters', async ({ signal: requestSignal, priority: requestPriority }) => {
+      const cached = await repository.get(key);
+      const cachedValue = cachedMastersReading(cached);
+      if (cachedValue && cached?.mastersFetchedAt && now() - cached.mastersFetchedAt < MASTERS_TTL_MS) {
+        return cachedValue;
+      }
+
+      const url = new URL(MASTERS_ENDPOINT);
+      url.searchParams.set('fen', toPlayableFen(key));
+      url.searchParams.set('moves', '30');
+      url.searchParams.set('topGames', '0');
+
+      let value;
+      try {
+        const response = await request(url, {
+          signal: requestSignal,
+          priority: requestPriority,
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) throw httpError(response.status, `Lichess masters explorer returned ${response.status}`);
+        value = parseMastersReading(await response.json());
+      } catch (error) {
+        return staleOrAbsent(error, cachedValue, requestSignal, key);
+      }
+
+      await persistMastersReading(key, value);
+      return value;
+    }, { signal, priority });
+  }
+
+  return Object.freeze({ load });
 }
+
+export const mastersProvider = createMastersProvider();
+export const loadMasters = mastersProvider.load;

@@ -32,7 +32,7 @@ Chessview currently uses these Lichess endpoints:
 - Live rated Explorer access uses the visitor's Lichess authorization through browser OAuth2 Authorization Code + PKCE.
 - No client secret or personal token is shipped in the static bundle.
 - OAuth callback parameters and PKCE transaction state are consumed on both successful completion and terminal callback failure so reload can begin a clean sign-in.
-- Browser navigation to Lichess's OAuth authorization endpoint is the user-agent authorization handoff and is outside the request scheduler.
+- Browser navigation to Lichess's OAuth authorization endpoint is the user-agent authorization handoff and is outside the gateway-managed application transport boundary.
 - The OAuth token exchange is an application-issued Lichess API request and therefore goes through `LichessGateway`.
 
 ## Network boundary
@@ -47,7 +47,11 @@ The gateway must:
 - wait at least one full minute after a 429 before subsequent Lichess API traffic resumes;
 - prevent queued work from being sent after its `AbortSignal` becomes obsolete;
 - when the next transport slot becomes available, send queued foreground work before queued background work while preserving FIFO order within the same effective urgency;
+- translate browser abort-shaped request failures into semantic `ObsoleteWork` only when the exact request's own `AbortSignal` establishes that the request became obsolete;
+- leave an abort-shaped transport failure with a live request signal classified as a genuine transport failure rather than cancellation;
 - preserve transport outcomes so domain clients can distinguish successful absence from failure to obtain data.
+
+These responsibilities are implemented inside `LichessGateway`; request scheduling is not a separate Chessview architectural boundary or service.
 
 The voluntary start interval is Chessview pacing policy used to reduce burstiness between otherwise serial requests. It is not a Lichess-mandated rate limit and does not replace the full-minute post-429 cooldown. Its concrete value lives in `src/config.ts`; this document owns the behavior and distinction that value implements.
 
@@ -86,6 +90,8 @@ Deterministic tests should cover:
 - live shared-producer demand promoting and demoting the effective urgency seen by queued transport;
 - a 429 from one client delaying later traffic from another client;
 - cancellation of queued obsolete work before it reaches the network;
+- an in-flight abort-shaped browser rejection becoming `ObsoleteWork` when its exact request signal is aborted;
+- an abort-shaped transport failure with a live request signal remaining a genuine failure;
 - one obsolete caller detaching from shared same-position work while another live caller still receives it;
 - all callers becoming obsolete cancelling shared queued work before send;
 - cloud-eval successful absence versus request failure at the provider operational boundary;

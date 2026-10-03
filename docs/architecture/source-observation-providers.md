@@ -18,6 +18,14 @@ Successful source data remains distinct from the operational path used to obtain
 
 A provider may expose operational activity or issues separately when those are useful for diagnostics or presentation. Operational reporting must not alter the meaning of the returned observation.
 
+## Transport relationship
+
+Lichess-backed source providers send application-issued HTTP through [`LichessGateway`](lichess-gateway.md). The gateway owns global transport scheduling, 429 cooldown, queued cancellation, and translation of browser abort-shaped request failures when the exact request signal proves obsolescence. Providers do not duplicate those transport mechanics.
+
+`PositionRepository` may independently establish `ObsoleteWork` for shared-load subscriber lifetime that it owns. Once either lower boundary has established semantic `ObsoleteWork`, a provider may propagate or stop it according to the owning operation's control flow without re-interpreting raw `AbortError` names.
+
+The provider still owns the source-facing request, validation, freshness, fallback, cache, and operational policy around genuine retrieval outcomes. A transport boundary knowing that work became obsolete does not decide whether a non-obsolete source failure should use stale data, expose absence, update authentication state, or report a provider issue.
+
 ## Failure boundary
 
 Source-specific failures remain local when the provider owns the policy needed to recover, fall back, reject source data, update authentication state, report an operational issue, or otherwise decide the provider outcome.

@@ -68,7 +68,7 @@ Presentation derived from a visible relationship or Graph Edge that communicates
 
 ## ObsoleteWork
 
-Intentional termination of work whose result is no longer wanted by the owning lifetime or live demand. `ObsoleteWork` is control flow rather than failure; an abort-shaped platform error is not sufficient by itself to establish this meaning.
+Intentional termination of work whose result is no longer wanted by the owning lifetime or live demand. `ObsoleteWork` is semantic control flow established by a boundary that owns the relevant lifetime provenance; an abort-shaped platform error is not sufficient by itself to establish this meaning.
 
 ## PersistenceFailure
 

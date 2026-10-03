@@ -19,7 +19,7 @@ A layer should keep a failure local when it already owns the policy needed to re
 Examples include:
 
 - a [source observation provider](source-observation-providers.md) handling HTTP status, malformed source payloads, authentication state, cache freshness, and stale fallback;
-- a transport scheduler handling cooldown and queued-request behavior;
+- `LichessGateway` handling global request scheduling, 429 cooldown, queued cancellation, and browser-transport cancellation translation;
 - a source observation provider reporting that source-cache persistence failed while still returning an already-valid in-memory observation;
 - a repository translating IndexedDB mechanics into repository-level persistence semantics.
 
@@ -41,7 +41,11 @@ Cross-boundary failures should therefore be few and semantic. They should not mi
 
 Platform and infrastructure errors are not application semantics by themselves. A boundary may translate them when it has enough context to establish meaning.
 
-For example, an abort-shaped platform error represents `ObsoleteWork` only when the relevant operation lifetime actually became obsolete. Error shape alone is insufficient provenance. Likewise, an IndexedDB transaction abort is not automatically cancellation simply because the browser reports an `AbortError`.
+For Lichess HTTP, `LichessGateway` is the boundary that has both the browser fetch rejection and the exact request `AbortSignal`. An abort-shaped transport rejection becomes `ObsoleteWork` only when that request signal is actually aborted. An abort-shaped rejection while the request signal remains live stays a genuine transport failure. The translated `ObsoleteWork` may retain the original platform error as causal detail.
+
+Above that boundary, code classifies the semantic `ObsoleteWork` condition itself. It must not reconstruct cancellation from `error.name === 'AbortError'` or from a raw error combined with unrelated current-view or storage state.
+
+The same rule applies at other boundaries according to the provenance they own. For example, `PositionRepository` can establish `ObsoleteWork` when a subscriber's own participation signal becomes obsolete, while an IndexedDB transaction abort is not automatically cancellation simply because the browser reports an `AbortError`.
 
 Translation should preserve useful causal detail for diagnostics while exposing only the semantic condition needed by the next layer.
 

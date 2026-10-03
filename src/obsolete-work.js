@@ -22,11 +22,21 @@ export function obsoleteWork(message = 'Work became obsolete', cause = undefined
 
 /**
  * @param {unknown} error
- * @param {AbortSignal | undefined} [signal]
+ * @param {AbortSignal | undefined} [_signal]
  */
-export function isObsoleteWork(error, signal = undefined) {
-  if (error instanceof ObsoleteWork) return true;
-  return Boolean(signal?.aborted && isAbortShaped(error));
+export function isObsoleteWork(error, _signal = undefined) {
+  return error instanceof ObsoleteWork;
+}
+
+/**
+ * @param {unknown} error
+ * @param {AbortSignal | undefined} signal
+ * @param {string} [message]
+ */
+export function obsoleteFromAbort(error, signal, message = 'Work became obsolete') {
+  if (error instanceof ObsoleteWork) return error;
+  if (!signal?.aborted || !isAbortShaped(error)) return null;
+  return obsoleteWork(message, error);
 }
 
 /**

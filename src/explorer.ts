@@ -273,11 +273,6 @@ export function createExplorerProvider({
     { force = false, signal, priority = 'foreground' }: LoadOptions = {},
   ): Promise<ParsedExplorerReading> {
     const canonical = canonicalPosition(key);
-    const admitted = latest.get(canonical);
-    if (!force && admitted && now() - admitted.fetchedAt < EXPLORER_TTL_MS) {
-      return Promise.resolve(admitted.reading);
-    }
-
     const facet = force ? 'explorer:force' : 'explorer';
     return repository.load(
       canonical,
@@ -286,16 +281,25 @@ export function createExplorerProvider({
         const cached = await repository.get(canonical);
         const cachedExplorer = cachedExplorerReading(cached);
         const cachedFetchedAt = cached?.explorerFetchedAt ?? 0;
-        const fresh = Boolean(
+        const freshCached = Boolean(
           cachedExplorer
           && now() - cachedFetchedAt < EXPLORER_TTL_MS,
         );
-        if (!force && fresh && cachedExplorer) {
+        if (!force && freshCached && cachedExplorer) {
           report('Explorer Reading cache hit', {
             position: canonical,
             games: totalGames(cachedExplorer),
           });
           return admit(canonical, cachedExplorer, cachedFetchedAt);
+        }
+
+        const admitted = latest.get(canonical);
+        if (!force && admitted && now() - admitted.fetchedAt < EXPLORER_TTL_MS) {
+          report('Explorer Reading live hit', {
+            position: canonical,
+            games: totalGames(admitted.reading),
+          });
+          return admitted.reading;
         }
 
         let explorer: ParsedExplorerReading;

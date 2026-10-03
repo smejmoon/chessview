@@ -21,15 +21,18 @@ Chessview currently uses these Lichess endpoints:
 | --- | --- | --- | --- |
 | OAuth authorization handoff | browser navigation to `https://lichess.org/oauth` | Authorization Code + PKCE; `response_type=code`, Chessview `client_id`, `redirect_uri`, `code_challenge_method=S256`, `code_challenge`, and `state`. This browser navigation is outside `LichessGateway`. | <https://lichess.org/api#tag/OAuth> |
 | OAuth token exchange | `POST https://lichess.org/api/token` | `grant_type=authorization_code`, returned `code`, PKCE `code_verifier`, `redirect_uri`, and Chessview `client_id`; sent through `LichessGateway`. | <https://lichess.org/api#tag/OAuth> |
-| `LichessGamesDB` | `GET https://explorer.lichess.org/lichess` | `variant=standard`, current `fen`, `moves=30`, `topGames=0`, `recentGames=0`; authenticated with the visitor's Bearer token. | <https://lichess.org/api#tag/Opening-Explorer/operation/openingExplorerLichess> |
-| `MastersGamesDB` | `GET https://explorer.lichess.org/masters` | current `fen`, `moves=30`, `topGames=0`. | <https://lichess.org/api#tag/Opening-Explorer/operation/openingExplorerMaster> |
+| `LichessGamesDB` | `GET https://explorer.lichess.org/lichess` | `variant=standard`, current `fen`, `moves=30`, `topGames=0`, `recentGames=0`; authenticated with the visitor's Bearer token through the shared `LichessSession` authorized-request path. | <https://lichess.org/api#tag/Opening-Explorer/operation/openingExplorerLichess> |
+| `MastersGamesDB` | `GET https://explorer.lichess.org/masters` | current `fen`, `moves=30`, `topGames=0`; authenticated with the visitor's Bearer token through the same `LichessSession` authorized-request path. | <https://lichess.org/api#tag/Opening-Explorer/operation/openingExplorerMaster> |
 | Cloud evaluation | `GET https://lichess.org/api/cloud-eval` | current `fen`, `variant=standard`, `multiPv=5`. A `404` means the position is absent from the cloud-eval database. | <https://lichess.org/api#tag/Analysis/operation/apiCloudEval> |
 
 `PlayerGamesDB` maps to `GET https://explorer.lichess.org/player`, but Chessview does **not** currently issue that request. Its contract is documented in [Opening Explorer databases](opening-explorer-databases.md) for future use rather than listed as current traffic.
 
 ## Authentication
 
-- Live rated Explorer access uses the visitor's Lichess authorization through browser OAuth2 Authorization Code + PKCE.
+- Live rated Explorer and Masters access use the visitor's Lichess authorization through browser OAuth2 Authorization Code + PKCE.
+- Authenticated application requests use one `LichessSession.authorizedRequest(...)` path. Source clients do not acquire tokens or construct Bearer headers independently.
+- That session path completes or begins authorization as needed, attaches the current visitor Bearer token, delegates the HTTP request to `LichessGateway`, and clears the same stored token when Lichess rejects it with HTTP 401.
+- Concurrent clients share one pending authorization attempt, so rated Explorer and Masters cannot independently start competing OAuth redirects for the same page session.
 - No client secret or personal token is shipped in the static bundle.
 - OAuth callback parameters and PKCE transaction state are consumed on both successful completion and terminal callback failure so reload can begin a clean sign-in.
 - Browser navigation to Lichess's OAuth authorization endpoint is the user-agent authorization handoff and is outside the gateway-managed application transport boundary.
@@ -37,7 +40,7 @@ Chessview currently uses these Lichess endpoints:
 
 ## Network boundary
 
-All application-issued HTTP requests to Lichess APIs and services go through the application-wide `LichessGateway`, including rated Explorer, Masters, cloud evaluation, and OAuth token exchange. Top-level browser navigation to the OAuth authorization endpoint is not such a request.
+All application-issued HTTP requests to Lichess APIs and services go through the application-wide `LichessGateway`, including rated Explorer, Masters, cloud evaluation, and OAuth token exchange. Visitor-authorized source requests reach that gateway through `LichessSession.authorizedRequest(...)`; top-level browser navigation to the OAuth authorization endpoint is not such a request.
 
 The gateway must:
 
@@ -70,7 +73,7 @@ Endpoint clients retain responsibility for request parameters, parsing, source v
 - A transport or HTTP failure is not successful absence.
 - A non-null stale source value may be used when its endpoint client still judges it usable and a refresh fails.
 - Cloud-eval retrieval details are not exposed as evaluation values. `LichessEval` returns usable evaluation or absence and exposes request/failure activity separately through its operational status channel.
-- Authentication `401` handling remains endpoint/domain behavior, including clearing unusable authorization state.
+- `LichessSession` owns invalidating a visitor access token rejected with HTTP 401; endpoint/domain code still owns source-specific fallback, diagnostics, and user-facing interpretation of that response.
 
 ## External constraint
 

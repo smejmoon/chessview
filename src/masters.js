@@ -1,6 +1,6 @@
 import { MASTERS_TTL_MS } from './config.ts';
 import { canonicalPosition, toPlayableFen } from './graph.js';
-import { lichessGateway } from './lichess-gateway.js';
+import { lichessSession } from './lichess-session.js';
 import { isObsoleteWork } from './obsolete-work.js';
 import { positionRepository } from './position-repository.js';
 
@@ -46,7 +46,7 @@ export function loadMasters(positionKey, { signal, priority = 'foreground' } = {
     url.searchParams.set('topGames', '0');
 
     try {
-      const response = await lichessGateway.request(url, {
+      const response = await lichessSession.authorizedRequest(url, {
         signal: requestSignal,
         priority: requestPriority,
         headers: { Accept: 'application/json' },

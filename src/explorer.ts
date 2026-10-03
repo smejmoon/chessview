@@ -179,17 +179,13 @@ export function loadExplorerReading(
       }
 
       try {
-        const token = await lichessSession.requireAccessToken();
         const url = explorerUrl(canonical);
         debugLog('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
 
-        const response = await lichessGateway.request(url, {
+        const response = await lichessSession.authorizedRequest(url, {
           signal: requestSignal,
           priority: requestPriority,
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Accept: 'application/json' },
         });
 
         debugLog('explorer response', { position: canonical, status: response.status, ok: response.ok });
@@ -198,7 +194,6 @@ export function loadExplorerReading(
           try { body = (await response.text()).slice(0, 500); } catch {}
           debugLog('explorer HTTP error', { position: canonical, status: response.status, body }, 'error');
           if (response.status === 401) {
-            lichessSession.clearAccessToken();
             throw httpError(401, 'Lichess authorization expired. Reload to sign in again.');
           }
           if (response.status === 429) {

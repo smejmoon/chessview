@@ -28,6 +28,8 @@ export function createLichessSession({
   redirect = (url) => globalThis.window?.location?.assign(url),
   log = debugLog,
 } = {}) {
+  let pendingAuthorization = null;
+
   function currentLocation() {
     const value = resolve(location);
     if (!value) throw new Error('LichessSession requires a location');
@@ -183,10 +185,32 @@ export function createLichessSession({
   }
 
   async function requireAccessToken() {
-    const token = await completeCallback();
-    if (token) return token;
-    await signIn();
-    throw new Error('Redirecting to Lichess sign-in…');
+    const current = accessToken();
+    if (current) return current;
+
+    if (!pendingAuthorization) {
+      pendingAuthorization = (async () => {
+        const token = await completeCallback();
+        if (token) return token;
+        await signIn();
+        throw new Error('Redirecting to Lichess sign-in…');
+      })();
+    }
+
+    try {
+      return await pendingAuthorization;
+    } finally {
+      if (accessToken()) pendingAuthorization = null;
+    }
+  }
+
+  async function authorizedRequest(input, init = {}) {
+    const token = await requireAccessToken();
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${token}`);
+    const response = await gateway.request(input, { ...init, headers });
+    if (response?.status === 401 && accessToken() === token) clearAccessToken();
+    return response;
   }
 
   return Object.freeze({
@@ -196,6 +220,7 @@ export function createLichessSession({
     signIn,
     completeCallback,
     requireAccessToken,
+    authorizedRequest,
   });
 }
 

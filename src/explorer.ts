@@ -102,6 +102,7 @@ export type ExplorerProviderOptions = Readonly<{
 type AdmittedExplorer = Readonly<{
   reading: ParsedExplorerReading;
   fetchedAt: number;
+  persisted: boolean;
 }>;
 
 function explorerUrl(key: string): URL {
@@ -195,13 +196,22 @@ export function createExplorerProvider({
     canonical: string,
     reading: ParsedExplorerReading,
     fetchedAt: number,
-    { fresh = false }: Readonly<{ fresh?: boolean }> = {},
+    {
+      fresh = false,
+      persisted = true,
+    }: Readonly<{ fresh?: boolean; persisted?: boolean }> = {},
   ): ParsedExplorerReading {
     const existing = latest.get(canonical);
     if (!fresh && existing?.fetchedAt === fetchedAt) return existing.reading;
-    latest.set(canonical, Object.freeze({ reading, fetchedAt }));
+    latest.set(canonical, Object.freeze({ reading, fetchedAt, persisted }));
     notify(canonical, reading);
     return reading;
+  }
+
+  function markPersisted(canonical: string, reading: ParsedExplorerReading, fetchedAt: number): void {
+    const admitted = latest.get(canonical);
+    if (!admitted || admitted.reading !== reading || admitted.fetchedAt !== fetchedAt) return;
+    latest.set(canonical, Object.freeze({ ...admitted, persisted: true }));
   }
 
   async function readCached(key: string): Promise<ParsedExplorerReading | null> {
@@ -248,7 +258,7 @@ export function createExplorerProvider({
     explorer: ParsedExplorerReading,
     cached: PositionRecord | null,
     fetchedAt: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await repository.merge(canonical, {
         fen: cached?.fen ?? toPlayableFen(canonical),
@@ -258,6 +268,7 @@ export function createExplorerProvider({
         games: totalGames(explorer),
       });
       report('Explorer Reading stored', { position: canonical, games: totalGames(explorer) });
+      return true;
     } catch (error: unknown) {
       const details = errorLike(error);
       report('Explorer Reading persistence failed', {
@@ -265,6 +276,7 @@ export function createExplorerProvider({
         error: details.message ?? String(error),
         games: totalGames(explorer),
       }, 'error');
+      return false;
     }
   }
 
@@ -294,7 +306,12 @@ export function createExplorerProvider({
         }
 
         const admitted = latest.get(canonical);
-        if (!force && admitted && now() - admitted.fetchedAt < EXPLORER_TTL_MS) {
+        if (
+          !force
+          && admitted
+          && !admitted.persisted
+          && now() - admitted.fetchedAt < EXPLORER_TTL_MS
+        ) {
           report('Explorer Reading live hit', {
             position: canonical,
             games: totalGames(admitted.reading),
@@ -335,8 +352,10 @@ export function createExplorerProvider({
         }
 
         const fetchedAt = now();
-        const usable = admit(canonical, explorer, fetchedAt, { fresh: true });
-        await persist(canonical, usable, cached, fetchedAt);
+        const usable = admit(canonical, explorer, fetchedAt, { fresh: true, persisted: false });
+        if (await persist(canonical, usable, cached, fetchedAt)) {
+          markPersisted(canonical, usable, fetchedAt);
+        }
         return usable;
       },
       { signal, priority },

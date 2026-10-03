@@ -12,14 +12,12 @@ import {
 } from './evidence.js';
 import {
   currentExplorerReading,
-  loadExplorerReading,
-  subscribeExplorerReadings,
-  type ExplorerObservation,
+  readCachedExplorerReading,
 } from './explorer.js';
-import type { ExplorerLoadOptions, ExplorerReading } from './knowledge-acquisition.ts';
+import type { ExplorerReading } from './knowledge-acquisition.ts';
 import { lichessEval } from './lichess-eval.js';
-import { loadMasters } from './masters.js';
-import { isObsoleteWork, throwIfObsolete } from './obsolete-work.js';
+import { mastersProvider } from './masters.js';
+import { throwIfObsolete } from './obsolete-work.js';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge, PositionGraph } from './position-graph.ts';
 
@@ -31,33 +29,25 @@ export type RailValue = Readonly<{
 export type RailLoadOptions = Readonly<{
   center?: string;
   signal?: AbortSignal;
-  onProgress?: (value: RailValue) => unknown | Promise<unknown>;
 }>;
-
-type LoadExplorer = (
-  position: string,
-  options?: ExplorerLoadOptions,
-) => Promise<ExplorerReading | null>;
 
 type CurrentExplorer = (position: string) => ExplorerReading | null;
-type ObserveExplorer = (listener: (observation: ExplorerObservation) => void) => () => void;
+type ReadCachedExplorer = (position: string) => Promise<ExplorerReading | null>;
 
 type EvalProvider = Readonly<{
-  get(position: string, options?: Readonly<{ signal?: AbortSignal }>): Promise<unknown>;
+  available(position: string): Promise<unknown>;
 }>;
 
-type MastersLoader = (
-  position: string,
-  options?: Readonly<{ signal?: AbortSignal }>,
-) => Promise<unknown>;
+type MastersProvider = Readonly<{
+  available(position: string): Promise<unknown>;
+}>;
 
 export type RailSourceOptions = Readonly<{
-  loadExplorer?: LoadExplorer;
   currentExplorer?: CurrentExplorer;
-  observeExplorer?: ObserveExplorer;
+  readCachedExplorer?: ReadCachedExplorer;
   graph?: Pick<PositionGraph, 'incoming' | 'outgoing'>;
   evalProvider?: EvalProvider;
-  loadMastersReading?: MastersLoader;
+  mastersProvider?: MastersProvider;
 }>;
 
 type DecoratedExplorerMove = Readonly<{
@@ -156,98 +146,27 @@ function railValue(
 }
 
 export function createRailSource({
-  loadExplorer = loadExplorerReading as LoadExplorer,
   currentExplorer = currentExplorerReading as CurrentExplorer,
-  observeExplorer = subscribeExplorerReadings as ObserveExplorer,
+  readCachedExplorer = readCachedExplorerReading as ReadCachedExplorer,
   graph = positionGraph,
   evalProvider = lichessEval as EvalProvider,
-  loadMastersReading = loadMasters as MastersLoader,
+  mastersProvider: masters = mastersProvider as MastersProvider,
 }: RailSourceOptions = {}) {
-  return async function loadRail({ center, signal, onProgress }: RailLoadOptions = {}) {
+  return async function composeRail({ center, signal }: RailLoadOptions = {}) {
     throwIfObsolete(signal, 'Rail view became obsolete');
 
-    const [incoming, outgoing] = await Promise.all([
+    const [incoming, outgoing, cachedExplorer, sourceEval, mastersReading] = await Promise.all([
       graph.incoming(center),
       graph.outgoing(center),
+      readCachedExplorer(center),
+      evalProvider.available(center),
+      masters.available(center),
     ]);
     throwIfObsolete(signal, 'Rail view became obsolete');
 
-    let explorer: ExplorerReading | null = currentExplorer(center);
-    let sourceEval: unknown = null;
-    let masters: unknown = null;
-    let current = railValue(center, explorer, incoming, outgoing, sourceEval, masters);
-    await onProgress?.(current);
-
-    let publishTail = Promise.resolve();
-    async function publish(): Promise<void> {
-      throwIfObsolete(signal, 'Rail view became obsolete');
-      current = railValue(center, explorer, incoming, outgoing, sourceEval, masters);
-      await onProgress?.(current);
-    }
-    function queuePublish(): Promise<void> {
-      publishTail = publishTail.catch(() => undefined).then(publish);
-      return publishTail;
-    }
-
-    const stopObservingExplorer = observeExplorer((observation) => {
-      if (observation.position !== center || signal?.aborted) return;
-      if (observation.reading === explorer) return;
-      explorer = observation.reading;
-      void queuePublish();
-    });
-
-    async function supplement(label: string, load: () => Promise<unknown>): Promise<unknown> {
-      try {
-        return await load();
-      } catch (error) {
-        if (isObsoleteWork(error, signal)) throw error;
-        debugLog(`Rail ${label} unavailable`, {
-          position: center,
-          error: error?.message ?? String(error),
-        }, 'warn');
-        return null;
-      }
-    }
-
-    try {
-      const explorerWork = (async () => {
-        let value: ExplorerReading | null;
-        try {
-          value = await loadExplorer(center, { signal });
-        } catch (error) {
-          if (isObsoleteWork(error, signal)) throw error;
-          debugLog('Rail Explorer unavailable; keeping known graph inventory', {
-            position: center,
-            error: error?.message ?? String(error),
-          }, 'warn');
-          return;
-        }
-        if (!value || value === explorer) return;
-        explorer = value;
-        await queuePublish();
-      })();
-
-      const engineWork = supplement('engine evidence', () => evalProvider.get(center, { signal }))
-        .then(async (value) => {
-          sourceEval = value;
-          await queuePublish();
-        });
-
-      const mastersWork = supplement('Masters evidence', () => loadMastersReading(center, { signal }))
-        .then(async (value) => {
-          masters = value;
-          await queuePublish();
-        });
-
-      await Promise.all([explorerWork, engineWork, mastersWork]);
-      await publishTail;
-
-      throwIfObsolete(signal, 'Rail view became obsolete');
-      return current;
-    } finally {
-      stopObservingExplorer();
-    }
+    const explorer = currentExplorer(center) ?? cachedExplorer;
+    return railValue(center, explorer, incoming, outgoing, sourceEval, mastersReading);
   };
 }
 
-export const loadNodusRail = createRailSource();
+export const composeNodusRail = createRailSource();

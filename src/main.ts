@@ -7,19 +7,29 @@ import './debug.css';
 
 import { canonicalPosition } from './graph.js';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
-import { discoverSelectedLines } from './constellation-discovery.js';
 import { debugLog } from './debug.js';
-import { warmExplorerReading } from './knowledge-acquisition.ts';
+import {
+  currentExplorerReading,
+  loadExplorerReading,
+} from './explorer.js';
+import {
+  reconcileExplorerReading,
+  warmExplorerReading,
+} from './knowledge-acquisition.ts';
+import { loadMasters } from './masters.js';
 import { materializeMove } from './move-materialization.ts';
 import { NodusController } from './nodus-controller.ts';
+import type { RefinementTask } from './nodus-controller.ts';
 import { composeNodusStructure } from './nodus-structure.js';
 import { loadNodusEvidence } from './evidence-source.js';
 import { lichessEval } from './lichess-eval.js';
 import { createLichessEvalStatusPresenter } from './lichess-eval-presentation.js';
 import { createNodusRenderer } from './nodus-renderer.js';
 import { createNodusPresenter } from './nodus-presenter.js';
-import { loadNodusRail } from './rail-source.js';
+import { composeNodusRail } from './rail-source.js';
+import { rootTranspositionEnricher } from './root-enrichment.js';
 import { createRouteLedger } from './route-ledger.ts';
+import type { ViewMode } from './route-ledger.ts';
 import { preferenceStore } from './preference-store.js';
 
 const COMPACT_VIEW_MAX_WIDTH_PX = 620;
@@ -64,22 +74,88 @@ const presenter = createNodusPresenter({
 
 let controller: NodusController;
 
-function projectionPriority(mode: 'roots' | 'lines') {
+function projectionPriority(mode: ViewMode) {
   return () => controller.snapshot.mode === mode ? 'foreground' : 'background';
 }
 
-async function discover({ center, mode, structure, signal, onProgress }) {
-  try {
-    await discoverSelectedLines(center, structure, onProgress, {
-      signal,
-      priority: projectionPriority(mode),
-    });
-    return null;
-  } catch (error) {
-    if (signal.aborted) return null;
-    debugLog('selected Line acquisition failed', { center, error: error?.message ?? String(error) }, 'error');
-    return { error, criticalFailure: true };
+function explorerSignature(reading: any): string {
+  const moves = Array.isArray(reading?.moves)
+    ? reading.moves.map((move: any) => `${move?.uci}:${move?.white}:${move?.draws}:${move?.black}`).join(',')
+    : '';
+  return `${reading?.white}:${reading?.draws}:${reading?.black}:${moves}`;
+}
+
+function refinementPriority(modes: ReadonlySet<ViewMode>, alwaysForeground = false) {
+  if (alwaysForeground) return 'foreground' as const;
+  return () => modes.has(controller.snapshot.mode) ? 'foreground' : 'background';
+}
+
+async function refineCurrentNodus({ center, structures, signal }): Promise<readonly RefinementTask[]> {
+  const tasks = new Map<string, RefinementTask>();
+  const explorerDemand = new Map<string, Set<ViewMode>>();
+  const evalDemand = new Map<string, Set<ViewMode>>();
+  const mastersDemand = new Map<string, Set<ViewMode>>();
+  const foregroundExplorer = new Set<string>([center]);
+  const foregroundEval = new Set<string>([center]);
+  const foregroundMasters = new Set<string>([center]);
+
+  function demand(map: Map<string, Set<ViewMode>>, position: string, mode: ViewMode) {
+    if (!position) return;
+    if (!map.has(position)) map.set(position, new Set());
+    map.get(position)?.add(mode);
   }
+
+  function add(key: string, run: () => unknown | Promise<unknown>) {
+    if (!tasks.has(key)) tasks.set(key, Object.freeze({ key, run }));
+  }
+
+  add(`root-transpositions:${center}`, () => rootTranspositionEnricher.ensure(center, { signal }));
+
+  for (const mode of ['roots', 'lines'] as const) {
+    const structure: any = structures[mode];
+    for (const position of structure?.readingFrontier ?? []) demand(explorerDemand, position, mode);
+    for (const relationship of structure?.composition?.relationships ?? []) {
+      const edge = relationship?.edge;
+      if (!edge?.source || !edge?.target) continue;
+      demand(evalDemand, edge.source, mode);
+      demand(evalDemand, edge.target, mode);
+      demand(mastersDemand, edge.source, mode);
+    }
+  }
+
+  if (!explorerDemand.has(center)) explorerDemand.set(center, new Set());
+  if (!evalDemand.has(center)) evalDemand.set(center, new Set());
+  if (!mastersDemand.has(center)) mastersDemand.set(center, new Set());
+
+  for (const [position, modes] of explorerDemand) {
+    add(`explorer:${position}`, () => loadExplorerReading(position, {
+      signal,
+      priority: refinementPriority(modes, foregroundExplorer.has(position)),
+    }));
+    const current = currentExplorerReading(position);
+    if (current) {
+      add(
+        `explorer-reconcile:${position}:${explorerSignature(current)}`,
+        () => reconcileExplorerReading(position, current),
+      );
+    }
+  }
+
+  for (const [position, modes] of evalDemand) {
+    add(`cloud-eval:${position}`, () => lichessEval.get(position, {
+      signal,
+      priority: refinementPriority(modes, foregroundEval.has(position)),
+    }));
+  }
+
+  for (const [position, modes] of mastersDemand) {
+    add(`masters:${position}`, () => loadMasters(position, {
+      signal,
+      priority: refinementPriority(modes, foregroundMasters.has(position)),
+    }));
+  }
+
+  return Object.freeze([...tasks.values()]);
 }
 
 async function warmLookahead({ center, structure, signal }) {
@@ -97,17 +173,15 @@ controller = new NodusController({
     mode,
     max: boardBudget(),
     signal,
-    priority: projectionPriority(mode),
   }),
   evidence: ({ center, mode, structure, signal }) => loadNodusEvidence({
     center,
     mode,
     structure,
     signal,
-    priority: projectionPriority(mode),
   }),
-  rail: loadNodusRail,
-  discover,
+  rail: composeNodusRail,
+  refine: refineCurrentNodus,
   lookahead: warmLookahead,
   materializeMove,
   presenter,

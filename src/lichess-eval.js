@@ -14,6 +14,9 @@ export {
 
 const ENDPOINT = 'https://lichess.org/api/cloud-eval';
 
+/** @typedef {'foreground' | 'background'} LoadPriority */
+/** @typedef {LoadPriority | (() => LoadPriority)} Priority */
+
 function httpError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -109,6 +112,10 @@ export function createLichessEval({
     return cached;
   }
 
+  /**
+   * @param {string} position
+   * @param {{ signal?: AbortSignal, priority?: Priority }} [options]
+   */
   function get(position, { signal, priority = 'foreground' } = {}) {
     const key = canonicalPosition(position);
     return repository.load(key, 'cloud-eval', async ({ signal: requestSignal, priority: requestPriority }) => {

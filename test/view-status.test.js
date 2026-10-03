@@ -24,7 +24,7 @@ function fakeTimers() {
   };
 }
 
-const view = (status) => ({ structure: { status } });
+const view = (status, settling = false) => ({ structure: { status }, settling });
 
 test('Updating is delayed and Ready fades to a persistent check', () => {
   const timers = fakeTimers();
@@ -38,6 +38,24 @@ test('Updating is delayed and Ready fades to a persistent check', () => {
   presenter.update(view('ready'));
   assert.equal(presenter.presentation, 'ready');
 
+  timers.run(1_200);
+  assert.equal(presenter.presentation, 'check');
+});
+
+test('ready structure can remain current while run-owned work reports non-blocking Updating', () => {
+  const timers = fakeTimers();
+  const presenter = createViewStatusPresenter({ ...timers });
+  presenter.update(view('ready'));
+  timers.run(1_200);
+  assert.equal(presenter.presentation, 'check');
+
+  presenter.update(view('ready', true));
+  assert.equal(presenter.presentation, 'hidden');
+  timers.run(180);
+  assert.equal(presenter.presentation, 'updating');
+
+  presenter.update(view('ready', false));
+  assert.equal(presenter.presentation, 'ready');
   timers.run(1_200);
   assert.equal(presenter.presentation, 'check');
 });
@@ -99,7 +117,7 @@ test('supplementary view publications do not reset a settled structural acknowle
   timers.run(1_200);
   assert.equal(presenter.presentation, 'check');
 
-  presenter.update({ structure: { status: 'ready' }, evidence: { status: 'ready' } });
+  presenter.update({ structure: { status: 'ready' }, evidence: { status: 'ready' }, settling: false });
   assert.equal(presenter.presentation, 'check');
 });
 

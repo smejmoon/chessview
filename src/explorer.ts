@@ -154,6 +154,30 @@ function recoverExplorerRefresh(
   throw error;
 }
 
+async function persistExplorerReading(
+  canonical: string,
+  explorer: ParsedExplorerReading,
+  cached: PositionRecord | null,
+): Promise<void> {
+  try {
+    await repository.merge(canonical, {
+      fen: cached?.fen ?? toPlayableFen(canonical),
+      opening: explorer.opening ?? cached?.opening ?? null,
+      explorer,
+      explorerFetchedAt: Date.now(),
+      games: totalGames(explorer),
+    });
+    debugLog('Explorer Reading stored', { position: canonical, games: totalGames(explorer) });
+  } catch (error: unknown) {
+    const details = errorLike(error);
+    debugLog('Explorer Reading persistence failed', {
+      position: canonical,
+      error: details.message ?? String(error),
+      games: totalGames(explorer),
+    }, 'error');
+  }
+}
+
 export function loadExplorerReading(
   key: string,
   { force = false, signal, priority = 'foreground' }: LoadOptions = {},
@@ -178,6 +202,7 @@ export function loadExplorerReading(
         return cachedExplorer;
       }
 
+      let explorer: ParsedExplorerReading;
       try {
         const url = explorerUrl(canonical);
         debugLog('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
@@ -204,20 +229,13 @@ export function loadExplorerReading(
           throw httpError(response.status, `Lichess explorer returned ${response.status}`);
         }
 
-        const explorer = parseExplorerReading(await response.json());
-        await repository.merge(canonical, {
-          fen: cached?.fen ?? toPlayableFen(canonical),
-          opening: explorer.opening ?? cached?.opening ?? null,
-          explorer,
-          explorerFetchedAt: Date.now(),
-          games: totalGames(explorer),
-        });
-
-        debugLog('Explorer Reading stored', { position: canonical, games: totalGames(explorer) });
-        return explorer;
+        explorer = parseExplorerReading(await response.json());
       } catch (error: unknown) {
         return recoverExplorerRefresh(error, canonical, cachedExplorer, requestSignal);
       }
+
+      await persistExplorerReading(canonical, explorer, cached);
+      return explorer;
     },
     { signal, priority },
   );

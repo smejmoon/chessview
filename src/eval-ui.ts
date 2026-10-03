@@ -1,5 +1,4 @@
 import './eval-ui.css';
-import { isMastersRequestFailure } from './masters.js';
 import { bindRecenterTarget } from './recenter-input.js';
 import type { NodusActions } from './nodus-controller.ts';
 import type { ViewMode } from './route-ledger.ts';
@@ -63,7 +62,6 @@ type RailLine = Readonly<{
 
 type RailValue = Readonly<{
   lines?: readonly RailLine[];
-  masters?: unknown;
 }>;
 
 type Lifecycle<T> = Readonly<{
@@ -252,10 +250,9 @@ function decorateLineRail(root: Element, view: EvidencePresentationView, actions
   if (!list) return;
   const rail = railValue(view);
   const rows = rail?.lines ?? [];
-  const mastersFailed = isMastersRequestFailure(rail?.masters);
   list.classList.add('eval-rail-list');
   list.innerHTML = rows.length
-    ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span title="${mastersFailed ? 'Masters evidence request failed' : ''}">Human${mastersFailed ? ' !' : ''}</span><span></span></div>${rows.map(railRowHtml).join('')}`
+    ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span>Human</span><span></span></div>${rows.map(railRowHtml).join('')}`
     : '<div class="rail-empty">No Lichess Lines yet.</div>';
   list.querySelectorAll<HTMLElement>('[data-eval-nav]').forEach((button) => {
     bindRecenterTarget(button, actions, () => button.dataset.evalNav);

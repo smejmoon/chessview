@@ -155,7 +155,6 @@ export function createRailSource({
     return immutable({
       rootsCount: incoming.length,
       lines,
-      masters,
     });
   };
 }

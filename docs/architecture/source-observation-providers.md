@@ -18,6 +18,18 @@ Successful source data remains distinct from the operational path used to obtain
 
 A provider may expose operational activity or issues separately when those are useful for diagnostics or presentation. Operational reporting must not alter the meaning of the returned observation.
 
+## Acquisition participation and observation interest
+
+Requesting an observation and being interested in an observation are different relationships.
+
+An acquisition participant asks the provider to ensure usable source data exists. The provider may satisfy that request from an already admitted observation, from durable cache, or by joining/starting source retrieval according to its source policy. Concurrent acquisition participants for the same source facet and position share producer lifetime through `PositionRepository`; their participation may affect request priority and whether still-unneeded work can be cancelled.
+
+Observation interest is passive. A consumer may inspect the provider's latest admitted observation or subscribe to later admitted observations without starting a request, keeping a request alive, or affecting its priority. When one acquisition participant obtains a new usable observation, every currently interested consumer may use that same admitted fact according to its own domain responsibility rather than asking the requester to relay it.
+
+For Explorer, a fresh validated Reading becomes the provider's admitted live observation before best-effort source-cache persistence. The provider publishes that admitted Reading to observation interests and keeps it reusable for its freshness lifetime even if the cache write fails. Persistence failure therefore cannot erase or force a duplicate retrieval of a source observation already admitted in the current application lifetime.
+
+Passive publication does not decide graph admission, Constellation selection, Rail inventory policy, or current-view relevance. Each consumer decides whether an admitted observation changes its own result. The provider only owns the fact that the source observation is usable and current under its source-specific policy.
+
 ## Transport relationship
 
 Lichess-backed source providers send application-issued HTTP through [`LichessGateway`](lichess-gateway.md). The gateway owns global transport scheduling, 429 cooldown, queued cancellation, and translation of browser abort-shaped request failures when the exact request signal proves obsolescence. Providers do not duplicate those transport mechanics.
@@ -32,17 +44,17 @@ Source-specific failures remain local when the provider owns the policy needed t
 
 Failures cross the provider boundary only according to [Failure boundaries](failure-boundaries.md): the receiving layer must own a meaningful decision the provider cannot make itself. This keeps transport, storage, and provider-specific error taxonomies from leaking into consumers.
 
-`ObsoleteWork`, `PersistenceFailure`, and `RejectedObservation` are semantic concepts, not required public exception types for every provider operation. A provider may handle them locally when it owns the relevant decision. For example, rejecting malformed source data may lead to stale fallback rather than propagation, and failure to persist a fresh usable observation may still allow that observation to be returned.
+`ObsoleteWork`, `PersistenceFailure`, and `RejectedObservation` are semantic concepts, not required public exception types for every provider operation. A provider may handle them locally when it owns the relevant decision. For example, rejecting malformed source data may lead to stale fallback rather than propagation, and failure to persist a fresh usable observation may still allow that observation to be returned and observed by other interested consumers.
 
 ## Source-specific ownership
 
 Each provider retains ownership of the semantics peculiar to its source, including what constitutes a usable observation, what constitutes authoritative absence when the source supports it, when stored data is fresh enough to use without refresh, and when stale data remains an acceptable fallback.
 
-The common architecture does not require identical cache representation, freshness rules, absence semantics, validation depth, or operational status across providers.
+The common architecture does not require identical cache representation, freshness rules, absence semantics, validation depth, operational status, live-observation retention, or observation-subscription APIs across providers.
 
 ## Reuse
 
-Comparable provider boundaries do not imply a required common base class, generic provider object, policy interface, or shared state machine in code.
+Comparable provider boundaries do not imply a required common base class, generic provider object, policy interface, shared event bus, or shared state machine in code.
 
 Implement providers as cohesive components first. Reuse smaller mechanisms where equivalent behavior is already established, and extract broader abstractions only when multiple providers demonstrate the same semantics rather than merely similar syntax.
 

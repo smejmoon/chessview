@@ -10,8 +10,12 @@ import {
   moveEvaluation,
   moveFrequency,
 } from './evidence.js';
-import { loadExplorerReading } from './explorer.js';
-import { reconcileExplorerReading } from './knowledge-acquisition.js';
+import {
+  currentExplorerReading,
+  loadExplorerReading,
+  subscribeExplorerReadings,
+  type ExplorerObservation,
+} from './explorer.js';
 import type { ExplorerLoadOptions, ExplorerReading } from './knowledge-acquisition.ts';
 import { lichessEval } from './lichess-eval.js';
 import { loadMasters } from './masters.js';
@@ -35,10 +39,8 @@ type LoadExplorer = (
   options?: ExplorerLoadOptions,
 ) => Promise<ExplorerReading | null>;
 
-type ReconcileExplorer = (
-  position: string,
-  explorer: ExplorerReading,
-) => Promise<unknown>;
+type CurrentExplorer = (position: string) => ExplorerReading | null;
+type ObserveExplorer = (listener: (observation: ExplorerObservation) => void) => () => void;
 
 type EvalProvider = Readonly<{
   get(position: string, options?: Readonly<{ signal?: AbortSignal }>): Promise<unknown>;
@@ -51,7 +53,8 @@ type MastersLoader = (
 
 export type RailSourceOptions = Readonly<{
   loadExplorer?: LoadExplorer;
-  reconcileExplorer?: ReconcileExplorer;
+  currentExplorer?: CurrentExplorer;
+  observeExplorer?: ObserveExplorer;
   graph?: Pick<PositionGraph, 'incoming' | 'outgoing'>;
   evalProvider?: EvalProvider;
   loadMastersReading?: MastersLoader;
@@ -154,7 +157,8 @@ function railValue(
 
 export function createRailSource({
   loadExplorer = loadExplorerReading as LoadExplorer,
-  reconcileExplorer = reconcileExplorerReading as ReconcileExplorer,
+  currentExplorer = currentExplorerReading as CurrentExplorer,
+  observeExplorer = subscribeExplorerReadings as ObserveExplorer,
   graph = positionGraph,
   evalProvider = lichessEval as EvalProvider,
   loadMastersReading = loadMasters as MastersLoader,
@@ -168,17 +172,29 @@ export function createRailSource({
     ]);
     throwIfObsolete(signal, 'Rail view became obsolete');
 
-    let explorer: ExplorerReading | null = null;
+    let explorer: ExplorerReading | null = currentExplorer(center);
     let sourceEval: unknown = null;
     let masters: unknown = null;
     let current = railValue(center, explorer, incoming, outgoing, sourceEval, masters);
     await onProgress?.(current);
 
+    let publishTail = Promise.resolve();
     async function publish(): Promise<void> {
       throwIfObsolete(signal, 'Rail view became obsolete');
       current = railValue(center, explorer, incoming, outgoing, sourceEval, masters);
       await onProgress?.(current);
     }
+    function queuePublish(): Promise<void> {
+      publishTail = publishTail.catch(() => undefined).then(publish);
+      return publishTail;
+    }
+
+    const stopObservingExplorer = observeExplorer((observation) => {
+      if (observation.position !== center || signal?.aborted) return;
+      if (observation.reading === explorer) return;
+      explorer = observation.reading;
+      void queuePublish();
+    });
 
     async function supplement(label: string, load: () => Promise<unknown>): Promise<unknown> {
       try {
@@ -193,40 +209,44 @@ export function createRailSource({
       }
     }
 
-    const explorerWork = (async () => {
-      let value: ExplorerReading | null;
-      try {
-        value = await loadExplorer(center, { signal });
-      } catch (error) {
-        if (isObsoleteWork(error, signal)) throw error;
-        debugLog('Rail Explorer unavailable; keeping known graph inventory', {
-          position: center,
-          error: error?.message ?? String(error),
-        }, 'warn');
-        return;
-      }
-      if (!value) return;
-      explorer = value;
-      await publish();
-      await supplement('Explorer reconciliation', () => reconcileExplorer(center, value));
-    })();
+    try {
+      const explorerWork = (async () => {
+        let value: ExplorerReading | null;
+        try {
+          value = await loadExplorer(center, { signal });
+        } catch (error) {
+          if (isObsoleteWork(error, signal)) throw error;
+          debugLog('Rail Explorer unavailable; keeping known graph inventory', {
+            position: center,
+            error: error?.message ?? String(error),
+          }, 'warn');
+          return;
+        }
+        if (!value || value === explorer) return;
+        explorer = value;
+        await queuePublish();
+      })();
 
-    const engineWork = supplement('engine evidence', () => evalProvider.get(center, { signal }))
-      .then(async (value) => {
-        sourceEval = value;
-        await publish();
-      });
+      const engineWork = supplement('engine evidence', () => evalProvider.get(center, { signal }))
+        .then(async (value) => {
+          sourceEval = value;
+          await queuePublish();
+        });
 
-    const mastersWork = supplement('Masters evidence', () => loadMastersReading(center, { signal }))
-      .then(async (value) => {
-        masters = value;
-        await publish();
-      });
+      const mastersWork = supplement('Masters evidence', () => loadMastersReading(center, { signal }))
+        .then(async (value) => {
+          masters = value;
+          await queuePublish();
+        });
 
-    await Promise.all([explorerWork, engineWork, mastersWork]);
+      await Promise.all([explorerWork, engineWork, mastersWork]);
+      await publishTail;
 
-    throwIfObsolete(signal, 'Rail view became obsolete');
-    return current;
+      throwIfObsolete(signal, 'Rail view became obsolete');
+      return current;
+    } finally {
+      stopObservingExplorer();
+    }
   };
 }
 

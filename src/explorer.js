@@ -69,15 +69,21 @@ export async function readCachedExplorerReading(key) {
   return cachedExplorerReading(cached);
 }
 
-async function staleExplorerOrThrow(error, canonical, cachedExplorer) {
+function recoverExplorerRefresh(error, canonical, cachedExplorer) {
   if (error?.name === 'AbortError') throw error;
-  if (!cachedExplorer) throw error;
-  debugLog('Explorer refresh failed; using stale Reading', {
+  if (cachedExplorer) {
+    debugLog('Explorer refresh failed; using stale Reading', {
+      position: canonical,
+      error: error?.message ?? String(error),
+      games: totalGames(cachedExplorer),
+    }, 'warn');
+    return cachedExplorer;
+  }
+  debugLog('explorer refresh failed', {
     position: canonical,
     error: error?.message ?? String(error),
-    games: totalGames(cachedExplorer),
-  }, 'warn');
-  return cachedExplorer;
+  }, 'error');
+  throw error;
 }
 
 export function loadExplorerReading(key, { force = false, signal, priority = 'foreground' } = {}) {
@@ -138,8 +144,7 @@ export function loadExplorerReading(key, { force = false, signal, priority = 'fo
       debugLog('Explorer Reading stored', { position: canonical, games: totalGames(explorer) });
       return explorer;
     } catch (error) {
-      debugLog('explorer refresh failed', { position: canonical, error: error?.message ?? String(error) }, 'error');
-      return staleExplorerOrThrow(error, canonical, cachedExplorer);
+      return recoverExplorerRefresh(error, canonical, cachedExplorer);
     }
   }, { signal, priority });
 }

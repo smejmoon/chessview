@@ -65,3 +65,15 @@ A current-view relationship selected into a Constellation from a Candidate. It r
 ## Move cue
 
 Presentation derived from a visible relationship or Graph Edge that communicates the associated Move. An arrow is one possible move-cue treatment. A move cue does not define graph identity, navigation, or current-view state.
+
+## ObsoleteWork
+
+Intentional termination of work whose result is no longer wanted by the owning lifetime or live demand. `ObsoleteWork` is control flow rather than failure; an abort-shaped platform error is not sufficient by itself to establish this meaning.
+
+## PersistenceFailure
+
+Failure to make an otherwise valid application result or state transition durable in local persistence. A `PersistenceFailure` does not by itself make an already obtained in-memory value invalid.
+
+## RejectedObservation
+
+An external observation that was obtained but is not admitted as usable source data because it violates the source-facing contract Chessview requires. Rejection is distinct from failure to obtain an observation at all.

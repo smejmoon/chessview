@@ -64,8 +64,28 @@ export function createMastersProvider({
   now = () => Date.now(),
   log = debugLog,
 } = {}) {
+  const latest = new Map();
+
   function report(message, detail, level = 'info') {
     Reflect.apply(log, undefined, [message, detail, level]);
+  }
+
+  function admit(key, value) {
+    if (value) latest.set(key, value);
+    return value;
+  }
+
+  function current(positionKey) {
+    return latest.get(canonicalPosition(positionKey)) ?? null;
+  }
+
+  async function readCached(positionKey) {
+    const key = canonicalPosition(positionKey);
+    return cachedMastersReading(await repository.get(key));
+  }
+
+  async function available(positionKey) {
+    return current(positionKey) ?? await readCached(positionKey);
   }
 
   function staleOrAbsent(error, cachedValue, signal, key) {
@@ -75,7 +95,7 @@ export function createMastersProvider({
       error: error?.message ?? String(error),
       fallback: cachedValue ? 'cached' : null,
     }, 'warn');
-    return cachedValue;
+    return admit(key, cachedValue);
   }
 
   async function persistMastersReading(key, value) {
@@ -95,7 +115,7 @@ export function createMastersProvider({
       const cached = await repository.get(key);
       const cachedValue = cachedMastersReading(cached);
       if (cachedValue && cached?.mastersFetchedAt && now() - cached.mastersFetchedAt < MASTERS_TTL_MS) {
-        return cachedValue;
+        return admit(key, cachedValue);
       }
 
       const url = new URL(MASTERS_ENDPOINT);
@@ -116,13 +136,17 @@ export function createMastersProvider({
         return staleOrAbsent(error, cachedValue, requestSignal, key);
       }
 
+      admit(key, value);
       await persistMastersReading(key, value);
       return value;
     }, { signal, priority });
   }
 
-  return Object.freeze({ load });
+  return Object.freeze({ load, current, readCached, available });
 }
 
 export const mastersProvider = createMastersProvider();
 export const loadMasters = mastersProvider.load;
+export const currentMastersReading = mastersProvider.current;
+export const readCachedMastersReading = mastersProvider.readCached;
+export const availableMastersReading = mastersProvider.available;

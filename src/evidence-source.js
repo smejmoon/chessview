@@ -6,11 +6,9 @@ import {
   positionEvaluation,
   rootRarityFromFrequency,
 } from './evidence.js';
+import { currentExplorerReading, readCachedExplorerReading } from './explorer.js';
 import { lichessEval } from './lichess-eval.js';
-import { loadMasters } from './masters.js';
-import { positionRepository } from './position-repository.js';
-
-/** @typedef {'foreground' | 'background' | (() => 'foreground' | 'background')} RequestPriority */
+import { mastersProvider } from './masters.js';
 
 function abortError() {
   const error = new Error('Evidence view became obsolete');
@@ -32,28 +30,20 @@ function immutable(value) {
   return value;
 }
 
-async function moveEngineEvidence(source, edge, signal, priority) {
-  const sourceEval = await lichessEval.get(source, { signal, priority });
-  throwIfAborted(signal);
-  let moveEval = moveEvaluation(source, edge, sourceEval);
-  if (!moveEval && sourceEval) {
-    const targetEval = await lichessEval.get(edge.target, { signal, priority });
-    throwIfAborted(signal);
-    moveEval = moveEvaluation(source, edge, sourceEval, targetEval);
-  }
-  return moveEval;
+async function availableExplorer(position) {
+  return currentExplorerReading(position) ?? await readCachedExplorerReading(position);
 }
 
-async function relationshipEvidence(relationship, mode, signal, priority) {
+async function relationshipEvidence(relationship, mode, signal) {
   const edge = relationship.edge;
-  const sourceNode = await positionRepository.get(edge.source);
-  throwIfAborted(signal);
-  const [moveEval, masters] = await Promise.all([
-    moveEngineEvidence(edge.source, edge, signal, priority),
-    loadMasters(edge.source, { signal, priority }),
+  const [sourceEval, targetEval, masters, lichess] = await Promise.all([
+    lichessEval.available(edge.source),
+    lichessEval.available(edge.target),
+    mastersProvider.available(edge.source),
+    availableExplorer(edge.source),
   ]);
   throwIfAborted(signal);
-  const lichess = sourceNode?.explorer ?? null;
+  const moveEval = moveEvaluation(edge.source, edge, sourceEval, targetEval);
   const frequency = moveFrequency(lichess, edge);
   const humanResult = humanResultQuality(lichess, edge, edge.source);
   return immutable({
@@ -68,32 +58,27 @@ async function relationshipEvidence(relationship, mode, signal, priority) {
   });
 }
 
-async function visibleRelationshipEvidence(composition, mode, signal, priority) {
+async function visibleRelationshipEvidence(composition, mode, signal) {
   const result = [];
   for (const relationship of composition.relationships ?? []) {
     throwIfAborted(signal);
-    result.push(await relationshipEvidence(relationship, mode, signal, priority));
+    result.push(await relationshipEvidence(relationship, mode, signal));
   }
   return immutable(result);
 }
 
 /**
- * @param {{
- *   center?: string,
- *   mode?: 'roots' | 'lines',
- *   structure?: *,
- *   signal?: AbortSignal,
- *   priority?: RequestPriority,
- * }} [input]
+ * Derive the best evidence already available for one accepted projection.
+ * This function does not start source acquisition; run-owned refinement does that.
  */
-export async function loadNodusEvidence({ center, mode, structure, signal, priority = 'foreground' } = {}) {
+export async function loadNodusEvidence({ center, mode, structure, signal } = {}) {
   throwIfAborted(signal);
   const composition = structure?.composition;
   if (!composition) return immutable({ center: null, relationships: [] });
 
   const [centerCloud, relationships] = await Promise.all([
-    lichessEval.get(center, { signal, priority }),
-    visibleRelationshipEvidence(composition, mode, signal, priority),
+    lichessEval.available(center),
+    visibleRelationshipEvidence(composition, mode, signal),
   ]);
   throwIfAborted(signal);
 

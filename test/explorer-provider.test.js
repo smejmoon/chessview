@@ -28,7 +28,7 @@ function explorerReading() {
   };
 }
 
-test('Explorer admits once, fans out once, and reuses the live observation when persistence fails', async () => {
+test('Explorer admits once and reuses the live observation when persistence fails', async () => {
   let requests = 0;
   let writes = 0;
   const repository = createPositionRepository({
@@ -56,8 +56,7 @@ test('Explorer admits once, fans out once, and reuses the live observation when 
     log: () => {},
   });
 
-  const observed = [];
-  const stop = provider.subscribe((observation) => observed.push(observation));
+  assert.equal(provider.current(CENTER), null);
   const [first, second] = await Promise.all([
     provider.ensure(CENTER),
     provider.ensure(CENTER),
@@ -67,19 +66,14 @@ test('Explorer admits once, fans out once, and reuses the live observation when 
   assert.equal(writes, 1);
   assert.strictEqual(first, second);
   assert.strictEqual(provider.current(CENTER), first);
-  assert.equal(observed.length, 1);
-  assert.equal(observed[0].position, CENTER);
-  assert.strictEqual(observed[0].reading, first);
 
   const later = await provider.ensure(CENTER);
   assert.strictEqual(later, first);
   assert.equal(requests, 1);
   assert.equal(writes, 1);
-  assert.equal(observed.length, 1);
-  stop();
 });
 
-test('passive Explorer observation interest does not start or keep acquisition alive', async () => {
+test('reading current Explorer state is passive and does not start acquisition', async () => {
   let requests = 0;
   const repository = createPositionRepository({
     read: async () => null,
@@ -102,14 +96,11 @@ test('passive Explorer observation interest does not start or keep acquisition a
     log: () => {},
   });
 
-  const observed = [];
-  const stop = provider.subscribe((observation) => observed.push(observation));
+  assert.equal(provider.current(CENTER), null);
   await Promise.resolve();
   assert.equal(requests, 0);
-  assert.equal(observed.length, 0);
 
-  await provider.ensure(CENTER);
+  const reading = await provider.ensure(CENTER);
   assert.equal(requests, 1);
-  assert.equal(observed.length, 1);
-  stop();
+  assert.strictEqual(provider.current(CENTER), reading);
 });

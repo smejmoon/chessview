@@ -18,7 +18,6 @@ const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 type LoadPriority = 'foreground' | 'background';
 type Priority = LoadPriority | (() => LoadPriority);
 type LoadOptions = Readonly<{
-  force?: boolean;
   signal?: AbortSignal;
   priority?: Priority;
 }>;
@@ -83,13 +82,6 @@ type ErrorLike = Readonly<{
 
 type DebugLevel = 'info' | 'warn' | 'error';
 type Log = (message: string, detail?: unknown, level?: DebugLevel) => void;
-
-export type ExplorerObservation = Readonly<{
-  position: string;
-  reading: ParsedExplorerReading;
-}>;
-
-export type ExplorerObservationListener = (observation: ExplorerObservation) => void;
 
 export type ExplorerProviderOptions = Readonly<{
   repository?: ExplorerRepository;
@@ -172,24 +164,9 @@ export function createExplorerProvider({
   log = debugLog,
 }: ExplorerProviderOptions = {}) {
   const latest = new Map<string, AdmittedExplorer>();
-  const listeners = new Set<ExplorerObservationListener>();
 
   function report(message: string, detail?: unknown, level: DebugLevel = 'info'): void {
     Reflect.apply(log, undefined, [message, detail, level]);
-  }
-
-  function notify(position: string, reading: ParsedExplorerReading): void {
-    const observation = Object.freeze({ position, reading });
-    for (const listener of [...listeners]) {
-      try {
-        listener(observation);
-      } catch (error: unknown) {
-        report('Explorer observation listener failed', {
-          position,
-          error: errorLike(error).message ?? String(error),
-        }, 'error');
-      }
-    }
   }
 
   function admit(
@@ -204,7 +181,6 @@ export function createExplorerProvider({
     const existing = latest.get(canonical);
     if (!fresh && existing?.fetchedAt === fetchedAt) return existing.reading;
     latest.set(canonical, Object.freeze({ reading, fetchedAt, persisted }));
-    notify(canonical, reading);
     return reading;
   }
 
@@ -221,12 +197,6 @@ export function createExplorerProvider({
 
   function current(key: string): ParsedExplorerReading | null {
     return latest.get(canonicalPosition(key))?.reading ?? null;
-  }
-
-  function subscribe(listener: ExplorerObservationListener): () => void {
-    if (typeof listener !== 'function') throw new TypeError('Explorer observation listener must be a function');
-    listeners.add(listener);
-    return () => { listeners.delete(listener); };
   }
 
   function recoverRefresh(
@@ -282,13 +252,12 @@ export function createExplorerProvider({
 
   function ensure(
     key: string,
-    { force = false, signal, priority = 'foreground' }: LoadOptions = {},
+    { signal, priority = 'foreground' }: LoadOptions = {},
   ): Promise<ParsedExplorerReading> {
     const canonical = canonicalPosition(key);
-    const facet = force ? 'explorer:force' : 'explorer';
     return repository.load(
       canonical,
-      facet,
+      'explorer',
       async ({ signal: requestSignal, priority: requestPriority }): Promise<ParsedExplorerReading> => {
         const cached = await repository.get(canonical);
         const cachedExplorer = cachedExplorerReading(cached);
@@ -297,7 +266,7 @@ export function createExplorerProvider({
           cachedExplorer
           && now() - cachedFetchedAt < EXPLORER_TTL_MS,
         );
-        if (!force && freshCached && cachedExplorer) {
+        if (freshCached && cachedExplorer) {
           report('Explorer Reading cache hit', {
             position: canonical,
             games: totalGames(cachedExplorer),
@@ -307,8 +276,7 @@ export function createExplorerProvider({
 
         const admitted = latest.get(canonical);
         if (
-          !force
-          && admitted
+          admitted
           && !admitted.persisted
           && now() - admitted.fetchedAt < EXPLORER_TTL_MS
         ) {
@@ -362,11 +330,10 @@ export function createExplorerProvider({
     );
   }
 
-  return Object.freeze({ ensure, current, subscribe, readCached });
+  return Object.freeze({ ensure, current, readCached });
 }
 
 export const explorerProvider = createExplorerProvider();
 export const loadExplorerReading = explorerProvider.ensure;
 export const currentExplorerReading = explorerProvider.current;
-export const subscribeExplorerReadings = explorerProvider.subscribe;
 export const readCachedExplorerReading = explorerProvider.readCached;

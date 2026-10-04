@@ -70,7 +70,7 @@ test('aborted Explorer refresh propagates cancellation without failure diagnosti
   };
 
   const controller = new AbortController();
-  const pending = loadExplorerReading(center, { force: true, signal: controller.signal });
+  const pending = loadExplorerReading(center, { signal: controller.signal });
   await started;
   controller.abort();
 
@@ -86,7 +86,7 @@ test('failed Explorer refresh with usable stale data emits only the stale-fallba
   clearDebugLog();
   globalThis.fetch = async () => { throw new Error('offline'); };
 
-  assert.deepEqual(await loadExplorerReading(center, { force: true }), stale);
+  assert.deepEqual(await loadExplorerReading(center), stale);
 
   assert.equal(matchingEvents('explorer refresh failed').length, 0);
   const fallback = matchingEvents('Explorer refresh failed; using stale Reading');
@@ -102,7 +102,7 @@ test('failed Explorer refresh without usable stale data emits one error and prop
   globalThis.fetch = async () => { throw new Error('offline without cache'); };
 
   await assert.rejects(
-    loadExplorerReading(center, { force: true }),
+    loadExplorerReading(center),
     /offline without cache/,
   );
 

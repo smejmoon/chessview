@@ -77,6 +77,15 @@ export type EvidenceReaderOptions = Readonly<{
   mastersProvider?: AvailableProvider;
 }>;
 
+type MoveEvaluation = (
+  sourceKey: string,
+  edge: EvidenceEdge,
+  sourceEval: unknown,
+  targetEval?: unknown,
+) => MoveQualityEvidence | null;
+
+const deriveMoveEvaluation = moveEvaluation as MoveEvaluation;
+
 function immutable<T>(value: T): T {
   if (Array.isArray(value)) return Object.freeze(value.map(immutable)) as T;
   if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
@@ -154,7 +163,7 @@ export function createEvidenceReader({
     throwIfObsolete(signal, 'Evidence read became obsolete');
 
     const frequency = moveFrequency(explorer, edge) as FrequencyEvidence | null;
-    const moveEval = moveEvaluation(edge.source, edge, sourceEval, targetEval) as MoveQualityEvidence | null;
+    const moveEval = deriveMoveEvaluation(edge.source, edge, sourceEval, targetEval);
     const humanResult = humanResultQuality(explorer, edge, edge.source) as HumanResultEvidence | null;
 
     let mastersMismatch: unknown | null = null;

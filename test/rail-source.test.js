@@ -78,7 +78,7 @@ test('Rail derives known graph inventory without starting source work', async ()
   assert.deepEqual(rail.lines.map((line) => line.edge.uci), ['h2h3']);
   assert.equal(explorerReads, 1);
   assert.equal(evalReads, 1);
-  assert.equal(mastersReads, 1);
+  assert.equal(mastersReads, 0);
 });
 
 test('recomposition refines Rail from newly available facts without a Rail hydration lifecycle', async () => {

@@ -1,35 +1,54 @@
 # Do:
 
-Make structural readiness/lifecycle behavior satisfy `docs/components/weather.md` §Requirements and the current-view acceptance rules in `docs/architecture/current-view.md` §Publication boundary while preserving the Progressive truth principle in `docs/vision.md` §Experience principles. A trustworthy provisional Constellation must remain visible and navigable while unresolved structural work can still improve it; `Updating…` reports that unsettled refinement rather than acting as a publication gate. Preserve generation-scoped settlement, degraded failure when no trustworthy current structure can be established, and the delayed `Updating…` → brief `Ready` → settled-check acknowledgement.
+Make Weather a faithful presentation of structural settlement/readiness without owning or reconstructing the settlement rules.
 
-Keep supplementary evidence from controlling global Weather unless it is an unresolved Constellation-selection dependency. When structurally relevant acquisition/evidence fails or produces no usable data after a trustworthy Constellation is already published, settle that dependency as unknown as appropriate without discarding the trustworthy structure. Allow practical debounce/coalescing of transient status or recomposition updates to reduce distracting fidgeting without presenting an unsettled view as settled.
+A trustworthy provisional Constellation must remain visible and navigable while the active Constellation is Settling. `Updating…` should reflect that domain state; successful settlement should receive the existing brief Ready acknowledgement/check treatment; failure to establish any trustworthy current structure should remain globally degraded.
 
-The outcome does not require a separate Weather module if the existing implementation can provide one testable owner of these semantics without duplicated truth.
+Keep supplementary Evidence, Rail enrichment, cloud evaluation, Masters retrieval, lookahead, provider activity, and inactive-sibling work from changing Weather merely because they are running or publishing richer values.
+
+The outcome does not require a separate Weather module if the existing presenter/status implementation remains one clear testable owner of presentation semantics.
 
 # Because:
 
-`docs/components/weather.md` §Purpose / §Requirements owns current-view structural lifecycle/readiness semantics and explicitly permits trustworthy structure to remain visible during refinement. `docs/product.md` §Progressive truth distinguishes a trustworthy published view from a structurally settled view. `docs/architecture/current-view.md` §Publication boundary owns which asynchronous results may become current. `docs/components/evidence.md` §Product criticality distinguishes evidence that is structural for selection from evidence that is only supplementary.
+`docs/components/weather.md` now defines Weather as an observer/presenter of the active Constellation's structural settlement, not the owner of that settlement. `docs/glossary.md` defines Settled independently from asynchronous task completion.
+
+The remaining domain mechanics are intentionally tracked elsewhere: `2026-10-04-constellation-structural-obligations.md` owns which work participates in settlement, and `2026-10-04-settlement-incorporation-barrier.md` owns when a completed structural obligation is discharged. Weather should consume their resulting state rather than duplicate either rule.
+
+The current presentation delay/acknowledgement behavior is useful UX machinery, but it must sit downstream of correct structural truth.
 
 # Edges:
 
-`docs/components/constellation.md` §Requirements determines the visible structural result and which unresolved information can still improve it; Weather reports whether that refinement remains structurally unsettled. `docs/components/evidence.md` §Product criticality keeps annotation-only evidence supplementary, while evidence explicitly required to decide current Constellation membership/order is structural for that decision. `docs/product.md` §Weather owns the cross-product meaning of the global states.
+Current-view publication and Weather are separate. A trustworthy current structure may publish while Weather says Updating, and supplementary values may publish after Weather is settled.
 
-`LichessEval.subscribe()` is a source-operational presentation channel only. Its aggregate `requesting`/issue state must not drive Weather directly: the same provider may be serving supplementary and structural callers at once. When engine rescue is structural, Constellation/controller owns the fact that that specific dependency is outstanding and Weather derives settlement from that structural lifecycle; `LichessEval.get()` returning `null` is a terminal unknown result for that dependency, not a global provider failure state.
+`LichessEval.subscribe()` remains an operational source-status channel and must not drive Weather directly. Provider activity says nothing about whether the active Constellation has an unresolved structural obligation.
 
-Current-view publication and Weather settlement are separate decisions: a current-generation structural value may be accepted and published before all structural dependencies settle. Obsolete-generation completion must still be rejected by the current-view boundary.
+Presentation failure remains distinct from structural settlement failure. If the renderer cannot present a trustworthy view, Weather may degrade for presentation reasons without redefining Constellation settlement.
+
+A material presentation-constraint change may cause same-Nodus Constellation recomposition and therefore make Weather Updating again if that new derivation admits structural obligations. Pure redraw does not.
+
+Do not encode provider names, task keys, controller revision tokens, or generic pending-work counts into the Weather interface.
 
 # Unsettled:
 
-Choose the smallest Weather state/value interface that distinguishes usable-but-updating from settled and degraded without exposing controller revision tokens or duplicating lifecycle truth. A new code module is optional unless it is the simplest way to satisfy the durable ownership boundary.
+Choose the smallest Weather input/state interface once structural settlement truth is corrected. It should distinguish at least usable-but-settling, settled, and unavailable/degraded without exposing execution bookkeeping.
 
-Decide how pending Constellation-selection dependencies—including structural engine rescue—participate in Weather settlement and reach terminal results when usable information is unavailable, without treating transport failure, missing data, or insufficient evidence as negative chess evidence or invalidating trustworthy structure already published.
-
-Keep or adjust the existing presentation delay/acknowledgement and recomposition-coalescing behavior only after verifying the current UX. Practical anti-fidgeting may delay or combine transient updates, but must preserve a perceptible distinction between still-refining and settled.
+Keep or adjust the current delay/Ready/check timing only after verifying the resulting UX. Anti-fidgeting may debounce presentation, but it must never display Settled while the supplied structural state is unsettled.
 
 # Complete:
 
-Deterministic/browser tests exercise `docs/components/weather.md` §Verification through one testable Weather semantics owner: a trustworthy provisional Constellation stays visible and navigable while structural work remains `Updating…`; accepted refinement can recompose/republish the current view; successful settlement reaches `Ready`/check; legitimate empty structure settles successfully; failure to establish any trustworthy current structure degrades globally; failed or unavailable further refinement preserves already trustworthy structure while that specific dependency reaches a terminal settled outcome; obsolete-generation completion cannot settle or mutate the replacement view; supplementary late evidence and unrelated `LichessEval` provider activity do not reopen successful Weather; and debounce/coalescing avoids unnecessary fidgeting without falsely presenting an unsettled view as settled.
+Deterministic/browser tests prove that:
+
+- a trustworthy provisional Constellation remains usable while Weather presents Updating;
+- Settled reaches Ready/check without waiting for supplementary work;
+- late supplementary Evidence/Rail/engine/Masters/lookahead activity does not reopen Weather;
+- inactive-sibling work does not control active Weather;
+- a structural obligation admitted after same-Nodus constraint change can make Weather Updating again;
+- failure to establish trustworthy current structure presents unavailable/degraded;
+- obsolete-run completion cannot change Weather for the replacement view;
+- presentation debounce/acknowledgement never creates a false Settled interval.
+
+Weather contains presentation policy only; structural admission and incorporation ordering have no duplicate implementation here.
 
 # Sync:
 
-After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.
+After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If the completion condition is satisfied, run Backlog Close. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.

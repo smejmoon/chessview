@@ -2,9 +2,19 @@
 
 ## Purpose
 
-Own the current canonical position and the position-centered navigation behavior organized around it.
+Own the current canonical position, the position-centered navigation behavior organized around it, and the current-Nodus refinement demand implied by its active and sibling Constellations.
 
 The Nodus is presented as the primary playable board, but its product meaning is broader than that rendering: it is the position the current view, URL, history state, Rail, and Constellation are organized around.
+
+## Refinement demand
+
+Nodus owns the domain decision about what knowledge is worth pursuing for the current position-centered view. It gathers needs from the sibling Root and Line Constellations together with useful position-centered enrichment and expresses current-Nodus refinement demand without fetching, caching, or reconciling source data itself.
+
+Constellation owns admission of structural obligations within that demand. In particular, a position exposed through a Constellation Reading frontier is a structural Reading need for that projection because Constellation has determined that another Reading can still change its constrained shape. Nodus preserves that structural provenance when combining projection demand; it does not manufacture structural criticality from provider type, task identity, or mere usefulness.
+
+Nodus may also express supplementary demand for Explorer context around represented positions, engine evidence, Masters evidence, Root context, and other useful enrichment. Such demand may be prioritized according to the live active projection or be Nodus-wide, but it is not structural unless the active Constellation has admitted the corresponding obligation.
+
+The [current-view boundary](../architecture/current-view.md) translates current-Nodus refinement demand into executable work and owns deduplication, currentness, completion coordination, incorporation, and publication. [Knowledge Acquisition](knowledge-acquisition.md) and source providers own the source-specific acquisition/reconciliation behavior used to satisfy that work.
 
 ## Settlement
 
@@ -27,9 +37,9 @@ Failure of supplementary work reduces what can be learned from that work; it doe
 - Clicking another navigable canonical position requests a Recenter to that known target.
 - Recenter is the application-level operation that selects another Nodus. A caller may supply a known canonical target or a Move that must first be resolved and materialized.
 - Browser-history restoration is distinct from Recenter: it restores recorded position-centered state without creating another history entry.
-- Recenter and browser-history restoration start a new current-view run for the resulting Nodus. View-local Candidates and Constellation structure are rebuilt from durable graph knowledge plus currently available source facts rather than carrying forward a frozen prior projection.
+- Recenter and browser-history restoration start a new current-view run for the resulting Nodus. View-local Candidates, Constellation structure, and current-Nodus refinement demand are rebuilt from durable graph knowledge plus currently available source facts rather than carrying forward a frozen prior projection.
 - Explicit refresh starts a replacement run for the same Nodus while keeping the established trustworthy snapshot visible until replacement derivation is accepted. Refresh does not bypass source-provider freshness policy.
-- Root/Line mode switching selects between sibling projections within the same Nodus run; it is not a Recenter and does not itself restart source acquisition. After a mode switch, structural settlement follows the newly active Constellation.
+- Root/Line mode switching selects between sibling projections within the same Nodus run; it is not a Recenter and does not itself restart source acquisition. After a mode switch, structural settlement follows the newly active Constellation and live demand priority may follow the newly active projection without changing demand ownership.
 - The URL identifies the canonical Nodus rather than the move path used to reach it.
 - Stale asynchronous Move materialization or refinement from an obsolete run must not Recenter, publish into, or settle a replacement Nodus.
 - Changing the Nodus does not redefine graph identity; `ChartedGraph` remains durable across Recenter operations.
@@ -42,6 +52,10 @@ Deterministic/browser contract tests should cover:
 - Recenter to a known target;
 - Recenter after a legal played Move, including a move outside automatic Constellation selection;
 - all legal promotion choices and cancellation behavior;
+- current-Nodus refinement demand being derived from sibling Constellations and position-centered enrichment rather than from provider/task bookkeeping;
+- Reading-frontier positions retaining their Constellation-admitted structural provenance when Nodus combines demand;
+- represented-position Explorer, engine, Masters, and Root-context demand remaining supplementary unless a Constellation has admitted a corresponding structural obligation;
+- active-projection relevance changing demand priority without creating a second producer identity or changing structural provenance;
 - a trustworthy Nodus remaining interactive while its active Constellation is Settling;
 - structural settlement following the active Constellation rather than generic run-owned activity;
 - a completed structural result leaving the Nodus Settling until that result is incorporated;
@@ -51,5 +65,5 @@ Deterministic/browser contract tests should cover:
 - stale Move materialization/refinement being unable to affect a replacement Nodus;
 - browser back/forward restoration without adding another history entry;
 - Recenter/history restoration rebuilding view-local projection state rather than restoring frozen Candidate/Constellation state;
-- Root/Line mode switching staying inside the same Nodus run while settlement follows the newly active Constellation;
+- Root/Line mode switching staying inside the same Nodus run while settlement follows the newly active projection;
 - durable graph identity remaining unchanged by Recenter.

@@ -29,7 +29,7 @@ A Constellation is a projection of Chessview's [`ChartedGraph`](charted-graph.md
 
 A Constellation applies the glossary meaning of [Settled](../glossary.md#settled) to its **shape**. It is Settled when Chessview has finished deciding the shape of the current view with respect to its admitted structural obligations: no unresolved admitted obligation can still change constrained composition, and every completed relevant structural result has been incorporated. Repeating composition from the same admitted facts would then produce the same shape.
 
-The Reading frontier is how Constellation identifies missing Explorer knowledge that may participate in structural settlement. A frontier obligation participates only while another Reading can still change constrained composition. A completed structural Reading or reconciliation remains relevant to settlement until recomposition has incorporated its result.
+The Reading frontier is how Constellation identifies and admits missing Explorer knowledge that may participate in structural settlement. A frontier obligation participates only while another Reading can still change constrained composition. A completed structural Reading or reconciliation remains relevant to settlement until recomposition has incorporated its result. Nodus may carry that obligation alongside other current-Nodus refinement demand, but the structural admission belongs to Constellation.
 
 Missing cloud evaluation is not a structural obligation. Engine evidence already admitted to a composition may affect selection, but supplementary engine acquisition does not keep or retroactively make an otherwise Settled Constellation unsettled. Supplementary Masters, Evidence, Rail, and lookahead work likewise do not determine Constellation settlement.
 
@@ -44,7 +44,7 @@ Constellation identifies where missing graph-bearing Explorer knowledge can stil
 - A full visible-space budget does not by itself mean composition is Settled; another selected-position Reading may still change which structure deserves that space.
 - Conversely, Constellation does not expand through unselected Candidates merely to spend an acquisition budget.
 - Once another Explorer Reading cannot change the constrained composition, the position leaves the frontier and no longer participates in structural settlement.
-- Current-view planning may nominate frontier positions for Explorer acquisition/reconciliation. When such a structural result completes, the current Nodus is recomposed from facts now available; the Constellation is not Settled until that completed result has been incorporated.
+- Nodus includes frontier positions in current-Nodus refinement demand while preserving their structural provenance. Current-view coordination may then map that demand to Explorer acquisition/reconciliation. When such a structural result completes, the current Nodus is recomposed from facts now available; the Constellation is not Settled until that completed result has been incorporated.
 - A trustworthy provisional Constellation remains visible and navigable while it is Settling; [Current view](../architecture/current-view.md) coordinates incorporation and [Weather](weather.md) presents settlement state.
 
 Acquisition granularity, transport, cache policy, and Edge Admission are not part of the Constellation contract.
@@ -87,6 +87,7 @@ Deterministic tests should cover:
 - missing center Explorer evidence producing a Reading frontier without making local composition fail;
 - selected descendant positions entering/leaving the Reading frontier according to whether another Reading can still change the constrained result;
 - a Reading-frontier obligation keeping the Constellation Settling only while another Reading can change constrained composition;
+- Nodus preserving Reading-frontier structural provenance when combining current-Nodus refinement demand;
 - a completed structural Reading/reconciliation not counting as Settled until recomposition incorporates it;
 - stale but usable local Explorer evidence remaining composable without composition initiating refresh;
 - Explorer failure being unable to suppress already-known graph/navigation facts;

@@ -20,6 +20,8 @@ Constellation continues to own which canonical positions and relationships belon
 
 Rail inventory and tab counts are Nodus/source-level Rail facts under `docs/components/rail.md`, not presentation-capacity outputs. Changing map geometry may add, remove, or rearrange Constellation boards without changing settled Rail rows or counts.
 
+The recomposition trigger boundary is settled: a material change in effective composition constraints rederives the sibling Constellations inside the existing Nodus run, while a viewport change that only affects placement redraws the accepted projection. Constraint-driven recomposition may expose new Reading-frontier work and therefore make the active Constellation Settling again; it is not a new Nodus run and does not make Rail capacity-dependent.
+
 Do not make mobile support a completion dependency. A later mobile-specific interaction/layout outcome may choose a different presentation regime after this boundary is sound.
 
 Future user-controlled Constellation zoom is tracked separately; this outcome establishes the truthful presentation-space/geometry boundary that zoom can later vary.
@@ -31,8 +33,6 @@ This outcome does not change ChartedGraph identity, Knowledge Acquisition, Explo
 Decide the smallest presentation-space contract Constellation needs in order to spend visible space correctly. A raw viewport-derived board count is insufficient; avoid inventing a richer geometry protocol than the composition decision actually needs.
 
 Decide the single Interface owner for Root and Line placement so mode-specific semantics can differ without center/satellite geometry being independently authored by generic renderer code, Root decoration code, and CSS overrides.
-
-Decide how a presentation-space change triggers recomposition versus presentation-only relayout without turning resize handling into a second source of current-view truth.
 
 # Complete:
 

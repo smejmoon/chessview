@@ -6,7 +6,7 @@ Own growth of Chessview's useful [ChartedGraph](charted-graph.md) knowledge from
 
 Knowledge Acquisition is independent from what the current view ultimately shows. A request may learn more graph knowledge than the resulting [Constellation](constellation.md) contains, and durable graph knowledge may outlive every Nodus run that caused it to be learned.
 
-Knowledge Acquisition is an application/domain boundary rather than a source client, relevance selector, settlement controller, or transport scheduler. Callers own why a particular observation or reconciliation is useful now; Knowledge Acquisition owns how a usable Explorer Reading becomes graph knowledge.
+Knowledge Acquisition is an application/domain boundary rather than a source client, relevance selector, settlement owner, or transport scheduler. Callers own why a particular observation or reconciliation is useful now; Knowledge Acquisition owns how a usable Explorer Reading becomes graph knowledge.
 
 ## Terms
 
@@ -18,11 +18,11 @@ An Explorer Reading is source evidence, not `ChartedGraph` identity. A later Rea
 
 ## Boundary
 
-Product/current-view callers own relevance. Constellation exposes positions whose missing graph-bearing Explorer knowledge can still affect constrained composition through its Reading frontier. The current-view refinement planner may turn frontier positions into run-owned Explorer acquisition/reconciliation tasks. Knowledge Acquisition fulfills reconciliation when asked; it does not consume the frontier, call Constellation progress callbacks, or decide when the Nodus has settled.
+Product/current-view callers own relevance. Constellation exposes positions whose missing graph-bearing Explorer knowledge can still affect constrained composition through its Reading frontier. Current-view planning may turn an admitted frontier need into Explorer acquisition/reconciliation work. Knowledge Acquisition fulfills reconciliation when asked; it does not consume the frontier, call Constellation progress callbacks, or decide whether the Constellation is [Settled](../glossary.md#settled).
 
 Provider acquisition and graph reconciliation are separate operations. A source provider may produce a usable Explorer Reading without growing the graph. Knowledge Acquisition may then reconcile that Reading deliberately. This permits Rail and Evidence to consume a fresh provider-current observation immediately while graph growth remains owned here.
 
-When reconciliation settles, [Current view](../architecture/current-view.md) may recompute the entire Nodus from facts now available. Knowledge Acquisition does not push graph changes to Rail/Constellation and does not maintain a source-to-consumer event graph.
+When reconciliation completes, [Current view](../architecture/current-view.md) may recompute the Nodus from facts now available. If that reconciliation was admitted as a structural obligation, completion alone is not enough for settlement: the active Constellation remains Settling until the relevant result is incorporated. Knowledge Acquisition does not push graph changes to Rail/Constellation and does not maintain a source-to-consumer event graph.
 
 Source clients own endpoint-specific access, authentication behavior, request parameters, parsing/source validation, facet freshness, stale fallback, provider-current retention, and successful source absence. They expose usable source observations; they do not own Chessview graph-growth policy.
 
@@ -47,21 +47,21 @@ Source clients own endpoint-specific access, authentication behavior, request pa
 - Reconciliation is retryable rather than one transaction spanning every edge/target in a Reading. If persistence fails after some valid updates land, those durable updates remain and a later reconciliation may safely resume.
 - Repeated reconciliation converges against actual graph state. Already-established relationships need no rewrite; admissible missing relationships remain retryable.
 - Acquisition and visibility remain separate. Knowledge Acquisition does not inspect current presentation-space capacity to decide which relationships a requested Reading may admit or retain.
-- Missing optional engine evidence does not create a Knowledge Acquisition obligation merely because it could alter selection if it existed.
+- Missing optional engine evidence does not create a Knowledge Acquisition or structural-settlement obligation merely because it could alter selection if it existed.
 - Explicit Move materialization establishes graph knowledge independently of automatic Explorer acquisition or Constellation selection.
 
 ## Supplementary lookahead
 
-Supplementary lookahead is Constellation-directed and weaker than current-view settlement work.
+Supplementary lookahead is Constellation-directed and outside structural settlement.
 
 - Constellation owns which positions it nominates and their ordering.
-- Lookahead nomination does not make a position visible, keep the current Nodus unsettled, or require graph reconciliation.
+- Lookahead nomination does not make a position visible, make the active Constellation Settling, or require graph reconciliation.
 - An obsolete nomination that has not started does no source work.
 - Once a supplementary warm starts, Knowledge Acquisition gives it a bounded background lifetime so reusable source data may finish into cache even if the old view changes.
 - Later foreground demand for the same position/facet may join the same shared producer and promote its transport urgency rather than duplicate retrieval.
 - Warming a graph-bearing source facet does not itself reconcile that observation into `ChartedGraph`; a later deliberate reconciliation may consume the warmed observation.
 - Knowledge Acquisition does not recursively crawl from warmed results or invent a second relevance ranking.
-- Supplementary lookahead does not keep Weather/current Nodus settlement pending.
+- Supplementary lookahead does not keep Weather/current Nodus structurally unsettled.
 
 ## Verification
 
@@ -77,8 +77,8 @@ Deterministic tests should cover:
 - repeated reconciliation performing no unnecessary Graph Edge rewrite while still retrying missing admitted relationships;
 - later Explorer omission/frequency change leaving known topology durable;
 - acquisition learning more outgoing relationships than the current Constellation displays;
-- Constellation Reading frontier being fulfilled by external run-owned work rather than a Knowledge-Acquisition-owned composition loop;
-- settled acquisition/reconciliation becoming visible through whole-Nodus recomposition rather than direct consumer notification;
+- Constellation Reading-frontier needs being fulfilled by externally coordinated acquisition rather than a Knowledge-Acquisition-owned composition loop;
+- a completed structural reconciliation remaining unsettled until whole-Nodus recomposition incorporates its result;
 - explicitly materialized moves remaining durable independently of automatic Constellation eligibility;
 - optional engine evidence remaining unnecessary for structural settlement;
 - bounded supplementary warming remaining separate from graph reconciliation and current Nodus settlement;

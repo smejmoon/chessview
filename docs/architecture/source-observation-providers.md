@@ -26,11 +26,11 @@ An acquisition participant asks the provider to ensure usable source data exists
 
 Reading available state is passive. A consumer may inspect provider-current or durable observations without starting a request, keeping a request alive, or affecting request priority. Current-view projections use this passive path: Rail, Constellation composition, and Evidence derive from facts already available rather than opening their own hydration lifecycles.
 
-Current-view synchronization does **not** require providers to route notifications to consumers. Run-owned acquisition/refinement is known to `NodusController`; when such work settles, current-view settlement recomputes projections from provider-current/durable facts. There is no requirement for a generic provider subscription API or source-to-consumer event bus.
+Current-view synchronization does **not** require providers to route notifications to consumers. The current-view boundary already coordinates work it requested and may recompute projections when relevant work completes. Mere provider activity, run ownership, or task completion does not define whether the active Constellation is [Settling or Settled](../glossary.md#settled); that follows the Constellation's admitted structural obligations and incorporation state. There is no requirement for a generic provider subscription API or source-to-consumer event bus.
 
 For Explorer, a fresh validated Reading becomes provider-current before best-effort cache persistence. That Reading remains usable in the current application lifetime when persistence fails, and repeated `ensure()` may reuse the fresh unpersisted observation rather than duplicate retrieval. Once successfully persisted, provider-current state remains useful to current projections but does not become a shadow durable cache that bypasses normal `ensure()` freshness/source semantics.
 
-Masters and LichessEval may likewise retain a fresh usable provider-current observation so current-view settlement can consume it even when local persistence fails. Exact retention/freshness/absence semantics remain source-specific.
+Masters and LichessEval may likewise retain a fresh usable provider-current observation so current-view projections can consume it even when local persistence fails. Their acquisition is not structural merely because the observation may later enrich Evidence or Rail. Exact retention/freshness/absence semantics remain source-specific.
 
 Passive available state does not decide graph admission, Constellation selection, Rail inventory policy, Evidence meaning, or current-view relevance. Each owning component decides what a usable observation means in its domain.
 

@@ -21,9 +21,17 @@ A Constellation is a projection of Chessview's [`ChartedGraph`](charted-graph.md
 - Distinct immediate Root or first-level Line families remain distinct until selected paths genuinely converge on the same canonical position.
 - Canonical transpositions are represented once while preserving every selected visible relationship and family membership reaching the convergence.
 - Current source evidence is authoritative for evidence-dependent composition. If Explorer evidence is absent, the Graph Edge remains known while Prevalence and related evidence are unknown; Constellation must not recover source statistics from Graph Edge persistence.
-- Optional engine evidence may influence selection when already available, but missing engine evidence does not trigger acquisition from composition.
-- As trustworthy facts arrive, current-view settlement may add, remove, or rearrange visible positions and relationships. The previously accepted Constellation remains current and interactive until a recomputed replacement is accepted.
+- Optional engine evidence may influence selection when already admitted to the composition, but missing engine evidence does not trigger acquisition from composition.
+- As admitted structural facts are incorporated, composition may add, remove, or rearrange visible positions and relationships. The previously accepted Constellation remains current and interactive until a recomputed replacement is accepted.
 - Candidates and Constellation structure belong to the current Nodus run. Recenter/history restoration rebuilds them from durable graph knowledge plus currently available source facts rather than carrying a frozen Candidate set forward.
+
+## Settlement
+
+A Constellation applies the glossary meaning of [Settled](../glossary.md#settled) to its **shape**. It is Settled when Chessview has finished deciding the shape of the current view with respect to its admitted structural obligations: no unresolved admitted obligation can still change constrained composition, and every completed relevant structural result has been incorporated. Repeating composition from the same admitted facts would then produce the same shape.
+
+The Reading frontier is how Constellation identifies missing Explorer knowledge that may participate in structural settlement. A frontier obligation participates only while another Reading can still change constrained composition. A completed structural Reading or reconciliation remains relevant to settlement until recomposition has incorporated its result.
+
+Missing cloud evaluation is not a structural obligation. Engine evidence already admitted to a composition may affect selection, but supplementary engine acquisition does not keep or retroactively make an otherwise Settled Constellation unsettled. Supplementary Masters, Evidence, Rail, and lookahead work likewise do not determine Constellation settlement.
 
 ## Reading frontier
 
@@ -33,11 +41,11 @@ Constellation identifies where missing graph-bearing Explorer knowledge can stil
 - When a currently selected Line position lacks an Explorer Reading and another Reading can still change the constrained composition, that position is in the frontier.
 - Root composition may likewise expose source positions whose missing Explorer evidence prevents known non-explicit incoming relationships from becoming ordinary Candidates.
 - Selection membership and missing acquisition are separate facts. A position belongs in the frontier only while its missing Reading can still affect the constrained result.
-- A full visible-space budget does not by itself mean composition is settled; another selected-position Reading may still change which structure deserves that space.
+- A full visible-space budget does not by itself mean composition is Settled; another selected-position Reading may still change which structure deserves that space.
 - Conversely, Constellation does not expand through unselected Candidates merely to spend an acquisition budget.
-- Once another Explorer Reading cannot change the constrained composition, the position leaves the frontier.
-- The current-view refinement planner may nominate frontier positions for Explorer acquisition/reconciliation. When that run-owned work settles, the entire current Nodus is recomposed from facts now available rather than calling a Constellation-owned progress callback.
-- A trustworthy provisional Constellation remains visible and navigable while its frontier is non-empty; [Current view](../architecture/current-view.md) and [Weather](weather.md) own settlement presentation.
+- Once another Explorer Reading cannot change the constrained composition, the position leaves the frontier and no longer participates in structural settlement.
+- Current-view planning may nominate frontier positions for Explorer acquisition/reconciliation. When such a structural result completes, the current Nodus is recomposed from facts now available; the Constellation is not Settled until that completed result has been incorporated.
+- A trustworthy provisional Constellation remains visible and navigable while it is Settling; [Current view](../architecture/current-view.md) coordinates incorporation and [Weather](weather.md) presents settlement state.
 
 Acquisition granularity, transport, cache policy, and Edge Admission are not part of the Constellation contract.
 
@@ -45,10 +53,10 @@ Acquisition granularity, transport, cache policy, and Edge Admission are not par
 
 After accepting a composition, Constellation may nominate a bounded set of canonical positions that are locally relevant to that structure and plausible near-term navigation targets.
 
-Lookahead is deliberately weaker than Reading-frontier refinement:
+Lookahead is deliberately outside structural settlement:
 
 - a nomination does not make a position visible;
-- it does not mark the current Nodus unsettled;
+- it does not make the current Constellation Settling;
 - it does not require graph reconciliation now;
 - it does not recursively expand through warmed results;
 - it does not create graph identity or source-cache policy.
@@ -74,15 +82,17 @@ Deterministic tests should cover:
 - visible relationships carrying current-view family/depth/selection state without becoming persisted graph state;
 - composition consuming selected Candidate objects in selection order without independently re-running automatic eligibility or same-source ranking;
 - composition performing no source acquisition or graph reconciliation side effects;
-- missing center Explorer evidence producing a refinement frontier without making local composition fail;
-- selected descendant positions entering/leaving the frontier according to whether another Reading can still change the constrained result;
+- missing center Explorer evidence producing a Reading frontier without making local composition fail;
+- selected descendant positions entering/leaving the Reading frontier according to whether another Reading can still change the constrained result;
+- a Reading-frontier obligation keeping the Constellation Settling only while another Reading can change constrained composition;
+- a completed structural Reading/reconciliation not counting as Settled until recomposition incorporates it;
 - stale but usable local Explorer evidence remaining composable without composition initiating refresh;
 - Explorer failure being unable to suppress already-known graph/navigation facts;
 - Rail inventory and Line count remaining independent of presentation-space constraints;
-- a trustworthy provisional Constellation remaining available while its Reading frontier is non-empty;
+- a trustworthy provisional Constellation remaining available while it is Settling;
 - a narrow useful Line deepening without an independent fixed opening-depth cap;
-- missing optional engine evidence neither triggering acquisition nor invalidating structure;
-- run-owned frontier work settling by whole-Nodus recomposition rather than Constellation progress callbacks;
+- missing optional engine evidence neither triggering acquisition nor creating a structural settlement obligation;
+- late supplementary engine evidence not reopening an otherwise Settled Constellation by itself;
 - accepted compositions producing only bounded locally relevant supplementary lookahead nominations;
 - Recenter/history restoration rebuilding view-local Candidates from durable graph knowledge and current evidence;
 - distinct immediate Root/Line families remaining distinct before genuine convergence;

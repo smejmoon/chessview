@@ -22,6 +22,16 @@ A downstream continuation from the Nodus through one or more legal Moves.
 
 The coherent current-view subgraph selected around the Nodus. A Constellation is a projection of `ChartedGraph`: positions may be known without belonging to the current Constellation.
 
+## Settled
+
+An object is **Settled** when it has reached a fixed point with respect to the obligations admitted by its contract: no unresolved admitted obligation can still change it, and no completed relevant result remains to be incorporated. Repeating its derivation from the same admitted facts would therefore produce the same result.
+
+Settled does not mean all related work is finished. Supplementary work may continue, and a newly admitted relevant obligation may make the object Settling again. The fixed point is the invariant that makes Settled precise; it is not a separate product state.
+
+## Settling
+
+An object is **Settling** while it is not Settled because an admitted obligation can still change it or because a completed relevant result still has to be incorporated.
+
 ## Candidate
 
 Current-view selection state for one known Graph Edge combined with currently available evidence. A Candidate may carry Prevalence, human-result or engine evidence, eligibility, Salience, and local ordering needed for one composition. A Candidate is not persisted `ChartedGraph` state.
@@ -32,7 +42,7 @@ The supporting control and evidence surface beside the spatial map.
 
 ## Weather
 
-The current view's structural lifecycle/readiness state and the user-facing status derived from it.
+The presentation of the current view's structural settlement/readiness state.
 
 ## Recenter
 

@@ -21,11 +21,11 @@ The visible Constellation adapts to the available presentation space and the sha
 
 Chessview shows the best trustworthy current view it can establish instead of waiting for every useful refinement to finish.
 
-When unresolved information can still materially change the Constellation, the current trustworthy view remains visible and navigable while Weather shows that refinement is still in progress. Accepted refinements may add, remove, or rearrange visible boards and relationships without first blanking the usable view.
+While an admitted structural obligation can still change the active Constellation, or a completed structural result still has to be incorporated, the trustworthy current view remains visible and navigable while Weather shows that the Constellation is [Settling](glossary.md#settling). Incorporating those results may add, remove, or rearrange visible boards and relationships without first blanking the usable view.
 
-If further refinement ends without usable information, the unresolved dependency settles as unknown rather than being converted into positive or negative chess evidence. A trustworthy view already established from available knowledge remains usable. The product becomes globally degraded only when Chessview cannot establish trustworthy current structure at all.
+If source acquisition ends without usable information, that absence remains unknown rather than being converted into positive or negative chess evidence. A trustworthy view already established from available knowledge remains usable. The product becomes globally degraded only when Chessview cannot establish trustworthy current structure at all.
 
-Work that can only enrich an already established view — for example supplementary evidence or presentation detail — may continue after structural settlement and must not keep Weather unsettled by itself.
+Work that can only enrich an already established view — for example supplementary engine or Masters evidence or presentation detail — may continue after the active Constellation is [Settled](glossary.md#settled) and must not keep or make Weather unsettled by itself.
 
 ## Evidence experience
 
@@ -39,11 +39,11 @@ Evidence should make the map easier to understand without overstating what Chess
 
 ## Weather
 
-Weather communicates structural settlement of the current view rather than general network activity.
+Weather presents structural settlement of the current view; it does not define what Settled means.
 
-- `Updating…` means unresolved structural work can still materially change the Constellation. The trustworthy current view may remain visible and interactive.
-- Normal `Ready` / subtle check means the current structural view has settled successfully, including a legitimate empty or absent result where appropriate. Supplementary enrichment may still continue.
-- A degraded or unavailable state means Chessview could not establish trustworthy current structure. Failure of optional or further refinement does not replace an already trustworthy view with a global failure state.
+- `Updating…` means the active Constellation is Settling: an admitted structural obligation can still change its shape, or a completed structural result still has to be incorporated. The trustworthy current view may remain visible and interactive.
+- Normal `Ready` / subtle check means the active Constellation is Settled, including a legitimate empty or absent result where appropriate. Supplementary enrichment may still continue.
+- A degraded or unavailable state means Chessview could not establish trustworthy current structure. Failure of supplementary work does not replace an already trustworthy view with a global failure state.
 
 ## Product-wide invariants
 

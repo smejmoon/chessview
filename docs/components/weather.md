@@ -2,21 +2,22 @@
 
 ## Purpose
 
-Own the current view's structural lifecycle/readiness semantics and the user-facing status derived from them.
+Own presentation of the current view's structural settlement/readiness state.
 
-Weather describes whether the current view is still settling, successfully established, or terminally degraded. It does not own graph composition or supplementary evidence meaning.
+Weather observes and presents whether the active Constellation is [Settling](../glossary.md#settling), [Settled](../glossary.md#settled), or structurally unavailable. It does not define settlement, graph composition, or supplementary evidence meaning.
 
 ## Requirements
 
-- Weather follows structural settlement for the current view generation; a trustworthy published Constellation may remain visible and navigable while that settlement is still in progress.
-- `Updating…` means unresolved structural work can still materially change the published Constellation or its structural associations. It does not mean that the currently shown trustworthy structure must be withheld or disabled.
-- Normal `Ready` / subtle check means the critical visible structure has settled successfully, including legitimate empty or absent structure where applicable.
-- A structural failure produces a degraded/unavailable state when it prevents Chessview from establishing trustworthy current structure. Failure to obtain further refinement for an already trustworthy published view does not by itself invalidate that view.
-- Supplementary evidence may continue hydrating after structural readiness and must not reopen or downgrade a successfully established Weather state.
+- Weather follows structural settlement of the active Constellation for the current view generation; a trustworthy published Constellation may remain visible and navigable while it is Settling.
+- `Updating…` means the active Constellation is Settling because an admitted structural obligation can still change its shape or because a completed structural result still has to be incorporated. It does not mean that the currently shown trustworthy structure must be withheld or disabled.
+- Normal `Ready` / subtle check means the active Constellation is Settled, including legitimate empty or absent structure where applicable.
+- A completed structural result must be incorporated into the active Constellation before Weather may present it as Settled.
+- A structural failure produces a degraded/unavailable state when it prevents Chessview from establishing trustworthy current structure. A structural obligation whose outcome has been resolved as unavailable no longer keeps the view Settling if no remaining admitted structural obligation can change the Constellation.
+- Generic asynchronous, run-owned, or provider activity does not by itself make Weather `Updating…`. Only work participating in structural settlement of the active Constellation does.
+- Supplementary engine, Masters, Rail, Evidence, inactive-sibling, and lookahead work may continue after structural settlement and must not reopen or downgrade a successfully established Weather state by itself.
 - Supplementary failures remain local to their evidence surfaces and do not by themselves change global Weather.
 - Readiness is scoped to the current view generation. Completion from obsolete work must not settle a newer view.
-- Background work that cannot alter the current Constellation does not block Weather.
-- Ongoing structural refinement must remain perceptible. Presentation may delay, debounce, or coalesce transient status and recomposition updates to avoid distracting fidgeting, but must not present an unsettled view as settled merely to suppress motion.
+- Ongoing structural Settling must remain perceptible. Presentation may delay, debounce, or coalesce transient status and recomposition updates to avoid distracting fidgeting, but must not present an unsettled active Constellation as Settled merely to suppress motion.
 - The normal acknowledgement stays subtle: delayed `Updating…`, a brief `Ready`, then a persistent low-emphasis settled check.
 - Presentation failure must fail closed to a degraded/unavailable surface rather than leaving stale success feedback visible.
 
@@ -24,14 +25,16 @@ Weather describes whether the current view is still settling, successfully estab
 
 Deterministic/browser contract tests should cover:
 
-- a trustworthy provisional Constellation remaining visible and navigable while structural work is still `Updating…`;
-- structural refinement republishing the current view without requiring the prior trustworthy result to disappear;
-- critical structural work moving Weather through loading to successful settlement;
+- a trustworthy provisional Constellation remaining visible and navigable while it is `Updating…`;
+- structural recomposition republishing the current view without requiring the prior trustworthy result to disappear;
+- admitted structural obligations moving Weather through `Updating…` to successful settlement;
+- a completed structural result keeping Weather `Updating…` until that result is incorporated;
 - legitimate empty structure settling successfully;
 - failure to establish any trustworthy current structure producing a degraded/unavailable state;
-- failed further refinement preserving an already trustworthy published view while reaching a terminal unsettled dependency outcome;
-- supplementary evidence arriving, failing, or completing late without reopening successful Weather;
+- an unavailable structural outcome ceasing to block settlement once incorporated and no remaining admitted structural obligation can change the Constellation;
+- supplementary engine/Masters evidence arriving, failing, or completing late without reopening successful Weather;
+- generic run-owned or inactive-sibling work not driving Weather when it cannot change the active Constellation;
 - obsolete generation completion being unable to settle the current view;
 - fast cached structural work avoiding a distracting `Updating…` flash while still acknowledging successful settlement;
-- coalesced/debounced refinement avoiding unnecessary visual fidgeting without concealing that the view is still settling;
+- coalesced/debounced structural recomposition avoiding unnecessary visual fidgeting without concealing that the active Constellation is still Settling;
 - presentation failure replacing stale success feedback with a degraded/unavailable state.

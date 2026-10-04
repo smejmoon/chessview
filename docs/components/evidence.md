@@ -12,19 +12,19 @@ Source clients own whether source data is fit to expose. In particular, [`Liches
 
 Evidence derivation is a projection over facts already available for the current Nodus. It may read provider-current observations and durable cached observations, but it does not initiate Explorer, cloud-evaluation, or Masters acquisition and does not subscribe to source notifications.
 
-Run-owned source work is planned outside Evidence. When that work settles, [Current view](../architecture/current-view.md) recomputes the Nodus and Evidence derives replacement immutable signals from the facts now available. Missing facts remain unknown while work is pending or unavailable; an established Evidence value remains usable until a replacement is accepted.
+Source work is planned outside Evidence. When relevant facts become available and the current-view boundary republishes Evidence, Evidence derives replacement immutable signals from those facts. Missing facts remain unknown while work is pending or unavailable; an established Evidence value remains usable until a replacement is accepted.
 
-This separation prevents transport or hydration state from becoming chess meaning. Provider persistence failure may still leave a fresh provider-current observation usable by the next settlement pass.
+Evidence may become richer before, during, or after structural [settlement](../glossary.md#settled). That enrichment does not itself say whether the active Constellation is Settling or Settled. This separation prevents transport or hydration state from becoming chess meaning. Provider persistence failure may still leave a fresh provider-current observation usable by a later Evidence derivation.
 
 ## Product criticality
 
 Evidence is not structural or supplementary solely because of its source. Criticality follows how the current view uses it.
 
-Rated Explorer is graph-bearing when another Reading can still change constrained Constellation structure; Constellation expresses that need through its Reading frontier. Prevalence and human-result evidence from an already available Reading may immediately affect selection.
+Rated Explorer is graph-bearing when another Reading can still change constrained Constellation structure; Constellation expresses that admitted structural need through its Reading frontier. Prevalence and human-result evidence from a Reading incorporated into composition may immediately affect selection.
 
-Cloud evaluation does not become a structural prerequisite merely because engine evidence can influence ranking. When no usable engine value is currently available, the engine signal remains unknown. Current-view refinement may still nominate cloud evaluation for richer Rail/Evidence output; its failure does not invalidate established structure.
+Missing cloud evaluation is not a structural obligation merely because engine evidence can influence ranking. When no usable engine value is admitted to the current composition, the engine signal remains unknown. Engine evidence already admitted to a composition may affect selection; supplementary cloud-evaluation acquisition may still make Evidence or Rail richer, but its completion does not by itself reopen an otherwise Settled Constellation.
 
-Masters is a separate comparison population and likewise refines evidence when usable. Unavailable evidence remains unknown rather than negative chess evidence. Provider operational issues remain in provider operational channels; they are not encoded as unfavorable result, no mismatch, or zero Prevalence.
+Masters is a separate comparison population and likewise provides supplementary evidence when usable. Unavailable evidence remains unknown rather than negative chess evidence. Provider operational issues remain in provider operational channels; they are not encoded as unfavorable result, no mismatch, or zero Prevalence.
 
 ## Engine evidence
 
@@ -38,7 +38,7 @@ Masters is a separate comparison population and likewise refines evidence when u
   - `1.0+`: bad.
 - Missing engine source data remains unavailable/unknown rather than being interpreted as strong, dubious, or bad.
 
-Constellation selection may consume already-available engine quality as an independent rescue signal for rare candidates. That consumer owns the consequence for eligibility/ranking; Evidence does not request engine acquisition on its behalf.
+Constellation selection may consume engine quality already admitted to the composition as an independent rescue signal for rare candidates. That consumer owns the consequence for eligibility/ranking; Evidence does not request engine acquisition on its behalf.
 
 ## Human evidence
 
@@ -80,13 +80,14 @@ Deterministic tests should cover:
 - the 0.5 / 1.0 pawn quality thresholds;
 - unavailable engine source data remaining distinct from strong, dubious, or bad quality;
 - Evidence derivation performing no source acquisition side effect;
-- newly available source facts appearing after current-view settlement recomputes Evidence;
+- newly available source facts appearing in later Evidence derivations without generic source completion defining structural settlement;
 - missing optional engine/Masters data remaining unknown without invalidating established structure;
+- late supplementary engine/Masters evidence enriching Evidence without reopening an otherwise Settled Constellation;
 - human-result quality preserving favorable, unfavorable, and unknown/insufficient states independently from Prevalence;
 - human-result mismatch direction and sample gating;
 - Root rarity thresholds and evidence gating;
 - rated Explorer Prevalence remaining local to its source position;
 - provider-current fresh observations remaining usable for Evidence even if local persistence failed;
-- source failure or late completion leaving established Nodus/Evidence usable while provider operational state remains separate.
+- source failure or late supplementary completion leaving established Nodus/Evidence usable while provider operational state remains separate.
 
 `LichessEval` verification separately owns minimum source depth, authoritative absence versus provider issues, stale fallback, persistence failure, and request lifetime.

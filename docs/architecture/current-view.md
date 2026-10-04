@@ -2,17 +2,17 @@
 
 Own the application boundary that decides which asynchronous domain results are allowed to become part of the current Nodus-centered view.
 
-This architecture coordinates product components without owning their product meaning. [Nodus](../components/nodus.md) owns Recenter semantics, [Constellation](../components/constellation.md) owns visible-subgraph composition and structural settlement of its shape, [Evidence](../components/evidence.md) owns evidence meaning, [Rail](../components/rail.md) owns the supporting control/evidence surface, [Weather](../components/weather.md) presents structural settlement/readiness, and [Interface](../components/interface.md) owns two-dimensional presentation.
+This architecture coordinates product components without owning their product meaning. [Nodus](../components/nodus.md) owns Recenter semantics and current-Nodus refinement demand, [Constellation](../components/constellation.md) owns visible-subgraph composition and admission of structural obligations that can still change its shape, [Evidence](../components/evidence.md) owns evidence meaning, [Rail](../components/rail.md) owns the supporting control/evidence surface, [Weather](../components/weather.md) presents structural settlement/readiness, and [Interface](../components/interface.md) owns two-dimensional presentation.
 
 ## Settlement coordination
 
 [Settled](../glossary.md#settled) is a domain property, not a synonym for task completion. The current-view boundary coordinates asynchronous work and incorporation so the active Constellation can reach its contractual fixed point; it does not define settlement from controller activity.
 
-Structure, Rail, and Evidence derive the best values they can from facts already available; they do not own independent hydration loops, progress callbacks, or provider subscriptions. Source-specific planning outside those projections may nominate opaque keyed work for the current run. Run ownership, a pending task, or a provider request is not by itself a structural settlement obligation.
+Structure, Rail, and Evidence derive the best values they can from facts already available; they do not own independent hydration loops, progress callbacks, or provider subscriptions. Nodus derives current-Nodus refinement demand from those projections and other position-centered interests. The current-view boundary translates that demand into opaque keyed work for the current run. Run ownership, a pending task, or a provider request is not by itself a structural settlement obligation.
 
-Only an admitted obligation capable of changing the active Constellation participates in structural settlement. A completed structural result remains part of that settlement obligation until the current-view boundary has recomputed and accepted the active Constellation with that result incorporated. Supplementary work may still cause Evidence or Rail to become richer, but it does not keep or retroactively make an otherwise Settled active Constellation unsettled.
+Only an obligation admitted by the active Constellation as capable of changing its shape participates in structural settlement. Nodus preserves that structural provenance when combining demand. A completed structural result remains part of that settlement obligation until the current-view boundary has recomputed and accepted the active Constellation with that result incorporated. Supplementary work may still cause Evidence or Rail to become richer, but it does not keep or retroactively make an otherwise Settled active Constellation unsettled.
 
-The controller may coordinate structural and supplementary work without learning source payload semantics. The planner must preserve the domain distinction between work that can still change the active Constellation and work that is merely useful; the controller must not infer structural criticality from a source name, task key, or mere run ownership.
+The controller may coordinate structural and supplementary work without learning source payload semantics. Nodus demand must preserve the domain distinction between Constellation-admitted structural need and merely useful enrichment; the controller must not infer structural criticality from a source name, task key, provider type, or mere run ownership.
 
 Settlement never downgrades an established trustworthy value to loading. While the active Constellation is Settling, structure, Rail, and Evidence remain usable at their last accepted values. When the active Constellation is Settled, supplementary work may continue without changing Weather.
 
@@ -22,8 +22,9 @@ Settlement never downgrades an established trustworthy value to loading. While t
 - `NodusController` is the sole owner allowed to make an asynchronous domain result current. Internal revision identity and publication decisions stay private to that boundary.
 - One Nodus-centered run carries sibling Root and Line Constellation projections. The active Root/Line mode selects which sibling presentation consumes; changing mode alone does not replace the Nodus, discard the other projection, restart acquisition, or redefine Nodus-level Rail values. Structural settlement follows the newly active Constellation.
 - Structure, Rail, and Evidence contributors are projections over current facts. They may read provider `current`/durable values and durable graph state, but they do not start source acquisition or subscribe to source notifications as part of composition.
-- Source-specific planning may nominate work such as Explorer acquisition/reconciliation, cloud evaluation, Masters retrieval, or Root enrichment. A nomination participates in structural settlement only when the active Constellation contract admits it as capable of changing current shape.
+- Nodus refinement demand may request work such as Explorer acquisition/reconciliation, cloud evaluation, Masters retrieval, or Root enrichment. Constellation Reading-frontier demand carries structural provenance because Constellation admitted it as capable of changing current shape; other useful Nodus demand remains supplementary unless a Constellation contract admits it structurally.
 - Acquisition demanded by the active Root/Line projection may receive foreground current-view priority. Useful acquisition for the inactive sibling may continue in the background, but inactive-sibling work does not by itself keep the active Nodus structurally Settling. Dynamic participation priority may follow the live active mode without creating a second producer identity.
+- Current-view execution maps Nodus demand onto provider/source operations and keyed work. That mapping owns deduplication and execution mechanics, not the domain decision that the work is relevant or structural.
 - When relevant facts become available, recomposition may deliberately be broader than exact invalidation. The controller may recompute both sibling projections, Rail, and Evidence because avoiding source-to-consumer routing is more valuable than minimizing every pure derivation.
 - Same-turn or otherwise overlapping structural completions may be coalesced behind one recomputation, but Weather must not claim Settled while a completed relevant structural result still awaits incorporation. If recomputation yields the same published snapshot, no presentation update is required.
 - An accepted Constellation projection may nominate bounded supplementary lookahead. Lookahead remains outside structural settlement; its completion may improve later navigation but does not keep the active Nodus unsettled.
@@ -53,6 +54,9 @@ Constellation lookahead separately keeps its existing bounded detached-warm sema
 
 Deterministic/browser contract tests should cover:
 
+- Nodus deriving current-Nodus refinement demand while current-view execution only maps that demand to work;
+- Constellation Reading-frontier admission retaining structural provenance through Nodus demand into current-view coordination;
+- provider/task identity being unable to manufacture structural criticality;
 - a trustworthy current Nodus being published and remaining interactive while its active Constellation is Settling;
 - structural settlement following obligations that can change the active Constellation rather than generic run-owned task activity;
 - a completed structural result remaining unsettled until recomputation incorporates it;

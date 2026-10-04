@@ -11,6 +11,7 @@
     "src/position-graph.ts",
     "src/move-materialization.ts",
     "src/nodus-controller.ts",
+    "src/nodus-refinement.ts",
     "src/constellation-lookahead.ts",
     "src/constellation-selection.ts",
     "src/visible-graph.ts",

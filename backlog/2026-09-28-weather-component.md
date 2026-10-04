@@ -12,7 +12,7 @@ The outcome does not require a separate Weather module if the existing presenter
 
 `docs/components/weather.md` now defines Weather as an observer/presenter of the active Constellation's structural settlement, not the owner of that settlement. `docs/glossary.md` defines Settled independently from asynchronous task completion.
 
-The remaining domain mechanics are intentionally tracked elsewhere: `2026-10-04-constellation-structural-obligations.md` owns which work participates in settlement, and `2026-10-04-settlement-incorporation-barrier.md` owns when a completed structural obligation is discharged. Weather should consume their resulting state rather than duplicate either rule.
+The active accepted Constellation now publishes structural settlement directly from its Reading frontier, and current-view selects the active sibling's state instead of deriving Weather truth from generic refinement counts. The remaining settlement-ordering edge cases are tracked by `2026-10-04-settlement-incorporation-barrier.md`; Weather should consume structural truth rather than duplicate it.
 
 The current presentation delay/acknowledgement behavior is useful UX machinery, but it must sit downstream of correct structural truth.
 
@@ -30,7 +30,7 @@ Do not encode provider names, task keys, controller revision tokens, or generic 
 
 # Unsettled:
 
-Choose the smallest Weather input/state interface once structural settlement truth is corrected. It should distinguish at least usable-but-settling, settled, and unavailable/degraded without exposing execution bookkeeping.
+Choose the smallest Weather input/state interface now that structural settlement truth comes from the active Constellation. It should distinguish at least usable-but-settling, settled, and unavailable/degraded without exposing execution bookkeeping.
 
 Keep or adjust the current delay/Ready/check timing only after verifying the resulting UX. Anti-fidgeting may debounce presentation, but it must never display Settled while the supplied structural state is unsettled.
 
@@ -51,4 +51,4 @@ Weather contains presentation policy only; structural admission and incorporatio
 
 # Sync:
 
-After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If the completion condition is satisfied, run Backlog Close. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.
+After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.

@@ -8,9 +8,8 @@ import './debug.css';
 import { canonicalPosition } from './graph.js';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { debugLog } from './debug.js';
-import { loadExplorerReading } from './explorer.js';
 import {
-  reconcileExplorerReading,
+  acquireExplorerReading,
   warmExplorerReading,
 } from './knowledge-acquisition.ts';
 import { loadMasters } from './masters.js';
@@ -95,19 +94,10 @@ async function tasksForCurrentNodus({ center, structures, signal }): Promise<rea
   );
 
   for (const target of demand.explorer) {
-    let acquisition: ReturnType<typeof loadExplorerReading> | null = null;
-    const reading = () => {
-      acquisition ??= loadExplorerReading(target.position, {
-        signal,
-        priority: refinementPriority(target),
-      });
-      return acquisition;
-    };
-    add(`explorer:${target.position}`, reading);
-    add(`explorer-reconcile:${target.position}`, async () => {
-      const explorer = await reading();
-      return reconcileExplorerReading(target.position, explorer);
-    });
+    add(`explorer:${target.position}`, () => acquireExplorerReading(target.position, {
+      signal,
+      priority: refinementPriority(target),
+    }));
   }
 
   for (const target of demand.cloudEval) {

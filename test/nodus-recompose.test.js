@@ -29,13 +29,15 @@ test('same-run recomposition can admit structural work after presentation constr
     canonicalize: (value) => String(value),
     structure: async ({ center, mode }) => {
       compositions[mode] += 1;
+      const readingFrontier = mode === 'lines' && roomy && !incorporated ? ['B'] : [];
       return {
         composition: {
           center,
           direction: mode,
           nodes: roomy ? [{ key: 'B' }] : [],
         },
-        readingFrontier: mode === 'lines' && roomy && !incorporated ? ['B'] : [],
+        readingFrontier,
+        settling: readingFrontier.length > 0,
         marker: `${mode}:${roomy}:${incorporated}`,
       };
     },

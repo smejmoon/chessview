@@ -2,7 +2,7 @@
 
 Keep current-Nodus refinement participation live when structure or active mode changes, instead of freezing the first demand metadata attached to a stable task key.
 
-A source operation may keep one stable producer identity, but the current run's participation in that producer must reflect the latest modes, structural provenance, and foreground/background relevance. Recomposition or sibling selection must be able to promote, demote, add, or remove participation without manufacturing duplicate provider work.
+A source operation may keep one stable producer identity, but the current run's participation in that producer must reflect the latest modes and foreground/background relevance. Recomposition or sibling selection must be able to promote, demote, add, or remove participation without manufacturing duplicate provider work.
 
 # Because:
 
@@ -18,7 +18,7 @@ Producer identity and participant demand are different lifetimes. Reuse one prov
 
 Mode switching inside one Nodus run should be enough to change foreground/background participation when the target belongs to only one sibling. It must not require duplicate tasks or a replacement Nodus run.
 
-Recomposition may change `modes` and, after `2026-10-04-constellation-structural-obligations.md`, structural provenance. A stable key must not make the first plan permanently authoritative.
+Recomposition may change `modes` and relevance. Structural settlement is now independently owned by the accepted active Constellation and must not be represented as task participation metadata.
 
 This outcome does not define structural settlement or the provider's queue implementation. It only ensures the execution layer receives current participation metadata.
 
@@ -35,7 +35,6 @@ Deterministic tests prove that:
 - switching Root/Line mode updates provider urgency for a shared position without starting duplicate source work;
 - recomposition that adds a mode to an existing target updates that target's participation;
 - recomposition that removes the active mode can demote or detach current-view participation as appropriate;
-- later structural provenance is not ignored merely because the same provider key was planned earlier as supplementary;
 - obsolete/replacement runs cannot mutate the new run's participation;
 - stable producer identity remains reusable while current-view demand stays live.
 
@@ -43,4 +42,4 @@ No run-long first-seen task record is the sole source of current priority/releva
 
 # Sync:
 
-After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If the completion condition is satisfied, run Backlog Close. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.
+After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.

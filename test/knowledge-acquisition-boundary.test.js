@@ -27,6 +27,12 @@ function reading(moves = [{ uci: 'e2e4', white: 60, draws: 0, black: 0 }]) {
   return { white: 100, draws: 0, black: 0, moves };
 }
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((res) => { resolve = res; });
+  return { promise, resolve };
+}
+
 test('Explorer does not cache or expose a malformed Reading', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
@@ -66,6 +72,40 @@ test('Explorer does not treat malformed cached data as a fresh Reading', async (
   assert.deepEqual((await getNode(center)).explorer, fresh);
 });
 
+test('structural readiness waits for graph reconciliation after a Reading becomes source-current', async () => {
+  const explorer = reading();
+  const entered = deferred();
+  const release = deferred();
+  const stored = {};
+  const acquisition = createKnowledgeAcquisition({
+    loadExplorer: async () => explorer,
+    currentExplorer: () => explorer,
+    readCachedExplorer: async () => null,
+    graph: {
+      outgoing: async () => [],
+      ensureEdge: async (edge) => {
+        entered.resolve();
+        await release.promise;
+        return edge;
+      },
+    },
+    repository: {
+      get: async () => stored,
+      merge: async (_key, fields) => { Object.assign(stored, fields); },
+    },
+  });
+
+  const pending = acquisition.acquireExplorerReading(center);
+  await entered.promise;
+  assert.equal(await acquisition.reconciledExplorerReadingAvailable(center), false);
+
+  release.resolve();
+  await pending;
+
+  assert.equal(await acquisition.reconciledExplorerReadingAvailable(center), true);
+  assert.equal(typeof stored.explorerReconciledSignature, 'string');
+});
+
 test('Knowledge Acquisition skips an uninterpretable move but admits other legal topology', async () => {
   const ensured = [];
   const merged = [];
@@ -92,7 +132,8 @@ test('Knowledge Acquisition skips an uninterpretable move but admits other legal
   assert.equal('games' in ensured[0], false);
   assert.equal('share' in ensured[0], false);
   assert.equal('updatedAt' in ensured[0], false);
-  assert.equal(merged.length, 1);
+  assert.equal(merged.filter(([key]) => key !== center).length, 1);
+  assert.equal(typeof merged.find(([key]) => key === center)?.[1].explorerReconciledSignature, 'string');
 });
 
 test('ChartedGraph Edge Admission uses source sample sufficiency without a move-share cutoff', async () => {
@@ -197,7 +238,9 @@ test('known Explorer relationships repair target records without rewriting graph
   await acquisition.acquireExplorerReading(center);
 
   assert.equal(edgeEnsures, 0);
-  assert.deepEqual(merged, [[resolved.target, { fen: resolved.fen }]]);
+  assert.deepEqual(merged[0], [resolved.target, { fen: resolved.fen }]);
+  assert.equal(merged[1][0], center);
+  assert.equal(typeof merged[1][1].explorerReconciledSignature, 'string');
 });
 
 test('Explorer rejects move counts outside the source sample', async () => {

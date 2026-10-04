@@ -3,7 +3,11 @@ import {
   SUPPLEMENTARY_EXPLORER_WARM_TIMEOUT_MS,
 } from './config.ts';
 import { debugLog } from './debug.js';
-import { loadExplorerReading, readCachedExplorerReading } from './explorer.js';
+import {
+  currentExplorerReading,
+  loadExplorerReading,
+  readCachedExplorerReading,
+} from './explorer.js';
 import {
   canonicalPosition,
   resolveMove,
@@ -49,9 +53,16 @@ type LoadExplorer = (
   options?: ExplorerLoadOptions,
 ) => Promise<ExplorerReading | null>;
 
+type CurrentExplorer = (key: string) => ExplorerReading | null;
 type ReadCachedExplorer = (key: string) => Promise<ExplorerReading | null>;
 
+type KnowledgeRecord = Readonly<{
+  explorerReconciledSignature?: string;
+  [field: string]: unknown;
+}>;
+
 type KnowledgeRepository = Readonly<{
+  get?(position: string): Promise<KnowledgeRecord | null>;
   merge(position: string, fields?: Readonly<Record<string, unknown>>): Promise<unknown>;
 }>;
 
@@ -60,6 +71,7 @@ type DebugLevel = 'info' | 'warn' | 'error';
 
 export type KnowledgeAcquisitionOptions = Readonly<{
   loadExplorer?: LoadExplorer;
+  currentExplorer?: CurrentExplorer;
   readCachedExplorer?: ReadCachedExplorer;
   graph?: Pick<PositionGraph, 'outgoing' | 'ensureEdge'>;
   repository?: KnowledgeRepository;
@@ -86,18 +98,57 @@ function relationshipKey(uci: string, target: string): string {
   return `${uci}\u0000${target}`;
 }
 
+function explorerGraphSignature(explorer: ExplorerReading): string {
+  return JSON.stringify([
+    explorer.white,
+    explorer.draws,
+    explorer.black,
+    explorer.moves.map((move) => [move.uci, move.white, move.draws, move.black]),
+  ]);
+}
+
 function log(event: string, detail: unknown = null, level: DebugLevel = 'info'): void {
   Reflect.apply(debugLog, undefined, [event, detail, level]);
 }
 
 export function createKnowledgeAcquisition({
   loadExplorer = loadExplorerReading as LoadExplorer,
+  currentExplorer = currentExplorerReading as CurrentExplorer,
   readCachedExplorer = readCachedExplorerReading as ReadCachedExplorer,
   graph = positionGraph,
   repository = positionRepository,
   warmTimeoutMs = SUPPLEMENTARY_EXPLORER_WARM_TIMEOUT_MS,
   createTimeoutSignal = (ms: number) => AbortSignal.timeout(ms),
 }: KnowledgeAcquisitionOptions = {}) {
+  const reconciledSignatures = new Map<string, string>();
+
+  async function markExplorerReadingReconciled(
+    canonical: string,
+    explorer: ExplorerReading,
+  ): Promise<void> {
+    const signature = explorerGraphSignature(explorer);
+    reconciledSignatures.set(canonical, signature);
+    try {
+      await repository.merge(canonical, { explorerReconciledSignature: signature });
+    } catch (error: unknown) {
+      log('Explorer reconciliation marker persistence failed', {
+        position: canonical,
+        error: errorMessage(error),
+      }, 'warn');
+    }
+  }
+
+  async function reconciledExplorerReadingAvailable(key: string): Promise<boolean> {
+    const canonical = canonicalPosition(key);
+    const explorer = currentExplorer(canonical) ?? await readCachedExplorer(canonical);
+    if (!explorer) return false;
+    const signature = explorerGraphSignature(explorer);
+    if (reconciledSignatures.get(canonical) === signature) return true;
+    if (typeof repository.get !== 'function') return false;
+    const stored = await repository.get(canonical);
+    return stored?.explorerReconciledSignature === signature;
+  }
+
   async function reconcileExplorerReading(
     canonical: string,
     explorer: ExplorerReading,
@@ -139,6 +190,7 @@ export function createKnowledgeAcquisition({
       edges.push(stored);
     }
 
+    await markExplorerReadingReconciled(canonical, explorer);
     return edges;
   }
 
@@ -191,6 +243,7 @@ export function createKnowledgeAcquisition({
     acquireExplorerReading,
     reconcileExplorerReading,
     reconcileCachedExplorerReading,
+    reconciledExplorerReadingAvailable,
     warmExplorerReading,
   });
 }
@@ -199,5 +252,6 @@ export const {
   acquireExplorerReading,
   reconcileExplorerReading,
   reconcileCachedExplorerReading,
+  reconciledExplorerReadingAvailable,
   warmExplorerReading,
 } = createKnowledgeAcquisition();

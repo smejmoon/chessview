@@ -14,6 +14,7 @@ import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge } from './position-graph.ts';
 import { positionRepository } from './position-repository.js';
+import { reconciledExplorerReadingAvailable } from './knowledge-acquisition.ts';
 import { createEvidenceReader } from './evidence-source.ts';
 import {
   rankCrossSourceCandidates,
@@ -29,7 +30,7 @@ const ROOT_LABEL_MAX_PLIES = 6;
 type CandidateSource = Readonly<{
   outgoing(source: string): Promise<readonly SelectionCandidate[]>;
   incoming(target: string): Promise<readonly SelectionCandidate[]>;
-  hasReading(source: string): Promise<boolean>;
+  hasReconciledReading(source: string): Promise<boolean>;
   missingReadings(): readonly string[];
 }>;
 type PositionRecord = {
@@ -76,16 +77,26 @@ function immutable<T>(value: T): T {
 function createCandidateSource(signal?: AbortSignal): CandidateSource {
   const evidence = createEvidenceReader({ signal });
   const missing = new Set<string>();
+  const reconciliationReads = new Map<string, Promise<boolean>>();
+
+  function reconciledReadingFor(source: string): Promise<boolean> {
+    const existing = reconciliationReads.get(source);
+    if (existing) return existing;
+    const pending = reconciledExplorerReadingAvailable(source);
+    reconciliationReads.set(source, pending);
+    return pending;
+  }
 
   async function candidate(edge: GraphEdge): Promise<SelectionCandidate | null> {
-    const readingAvailable = await evidence.ratedReadingAvailable(edge.source);
+    const [readingAvailable, reconciledReading] = await Promise.all([
+      evidence.ratedReadingAvailable(edge.source),
+      reconciledReadingFor(edge.source),
+    ]);
     throwIfAborted(signal);
-    if (!readingAvailable) {
-      // Explicit materialization is navigation knowledge, not a demand for
-      // automatic source acquisition in Root composition.
-      if (!edge.explicit) missing.add(edge.source);
-      return null;
+    if (!reconciledReading && !edge.explicit) {
+      missing.add(edge.source);
     }
+    if (!readingAvailable) return null;
 
     const moveEvidence = await evidence.move(edge, { comparisons: false });
     throwIfAborted(signal);
@@ -115,14 +126,14 @@ function createCandidateSource(signal?: AbortSignal): CandidateSource {
     return rankCrossSourceCandidates(candidates);
   }
 
-  async function hasReading(source: string): Promise<boolean> {
-    return evidence.ratedReadingAvailable(source);
+  async function hasReconciledReading(source: string): Promise<boolean> {
+    return reconciledReadingFor(source);
   }
 
   return Object.freeze({
     outgoing,
     incoming,
-    hasReading,
+    hasReconciledReading,
     missingReadings: () => Object.freeze([...missing]),
   });
 }
@@ -134,17 +145,17 @@ async function composeKnownLineGraph(
   signal?: AbortSignal,
 ): Promise<LineCompositionPlan> {
   const outgoingBySource = new Map<string, readonly SelectionCandidate[]>();
-  const readingKnown = new Map<string, boolean>();
+  const readingReconciled = new Map<string, boolean>();
 
   async function inspect(source: string): Promise<void> {
     if (outgoingBySource.has(source)) return;
-    const [candidates, hasReading] = await Promise.all([
+    const [candidates, hasReconciledReading] = await Promise.all([
       candidateSource.outgoing(source),
-      candidateSource.hasReading(source),
+      candidateSource.hasReconciledReading(source),
     ]);
     throwIfAborted(signal);
     outgoingBySource.set(source, candidates);
-    readingKnown.set(source, hasReading);
+    readingReconciled.set(source, hasReconciledReading);
   }
 
   await inspect(center);
@@ -162,7 +173,7 @@ async function composeKnownLineGraph(
 
   const unresolvedReadings = new Set(plan.composition.nodes
     .map((node) => node.key)
-    .filter((key) => readingKnown.get(key) === false && legalDestinations(key).size > 0));
+    .filter((key) => readingReconciled.get(key) === false && legalDestinations(key).size > 0));
   const legalTargetsBySource = new Map<string, ReadonlySet<string>>([...unresolvedReadings]
     .map((key) => [key, legalMoveTargets(key) as ReadonlySet<string>]));
   plan = composeLineNeighborhood({
@@ -173,7 +184,7 @@ async function composeKnownLineGraph(
     max: capacity,
   });
 
-  if (readingKnown.get(center) === false && legalDestinations(center).size > 0) {
+  if (readingReconciled.get(center) === false && legalDestinations(center).size > 0) {
     plan = {
       ...plan,
       readingFrontier: [center, ...plan.readingFrontier.filter((key) => key !== center)],
@@ -292,6 +303,7 @@ export async function composeNodusStructure({
     centerNode: records.get(center) ?? { key: center, fen: toPlayableFen(center) },
     positions,
     readingFrontier,
+    settling: readingFrontier.length > 0,
     rootRows: mode === 'roots' ? await rootRows(composition, signal) : [],
   });
 }

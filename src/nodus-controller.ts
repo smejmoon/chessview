@@ -132,7 +132,6 @@ type Run = {
   evidenceTails: Record<ViewMode, Promise<boolean>>;
   railTail: Promise<boolean>;
   refinementKeys: Set<string>;
-  refinementPending: number;
   settleTail: Promise<unknown>;
   settleQueued: boolean;
   settleNeeded: boolean;
@@ -204,6 +203,10 @@ function sameValue(left: unknown, right: unknown): boolean {
     return leftKeys.every((key) => Object.hasOwn(right, key) && sameValue(left[key], right[key]));
   }
   return false;
+}
+
+function structureSettling(value: unknown): boolean {
+  return isPlainRecord(value) && value.settling === true;
 }
 
 function lifecycle(status: LifecycleStatus, value: unknown = null, error: unknown = null): Lifecycle {
@@ -376,6 +379,7 @@ export class NodusController {
     const next = normalizeMode(mode);
     if (next === this.#state.mode) return false;
     this.#state.mode = next;
+    this.#syncSettlingFromActiveStructure();
     this.#preferences.setView?.(next);
     this.#routeLedger.replace?.(this.#route());
     this.#log('view mode changed', { mode: next, center: this.#state.center });
@@ -417,7 +421,7 @@ export class NodusController {
     await this.#settleProjection(run, activeMode);
     if (!this.#isCurrent(run)) return false;
 
-    this.#state.settling = run.refinementPending > 0;
+    this.#syncSettlingFromActiveStructure();
     await this.#presentCurrent('update');
 
     void this.#settleProjection(run, otherMode(activeMode));
@@ -457,6 +461,11 @@ export class NodusController {
     return this.#state.mode === mode;
   }
 
+  #syncSettlingFromActiveStructure(): void {
+    const structure = this.#state.projections[this.#state.mode].structure;
+    this.#state.settling = structure.status === 'ready' && structureSettling(structure.value);
+  }
+
   async #commitRecenter(position: unknown): Promise<boolean> {
     const next = this.#canonicalize(position);
     if (next === this.#state.center) return false;
@@ -487,7 +496,6 @@ export class NodusController {
       evidenceTails: tails(),
       railTail: Promise.resolve(false),
       refinementKeys: new Set(),
-      refinementPending: 0,
       settleTail: Promise.resolve(),
       settleQueued: false,
       settleNeeded: false,
@@ -524,7 +532,7 @@ export class NodusController {
 
     await this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
-    this.#state.settling = run.refinementPending > 0;
+    this.#syncSettlingFromActiveStructure();
     run.settlementReady = true;
     await this.#presentCurrent('update');
     this.#refreshLookahead(run, activeMode);
@@ -626,12 +634,14 @@ export class NodusController {
       }
       projectionState.structure = lifecycle('failed', null, structureError);
       projectionState.evidence = lifecycle('idle');
+      if (this.#isActiveMode(mode)) this.#syncSettlingFromActiveStructure();
       this.#log('Nodus structure failed', { mode, error: errorMessage(structureError) });
       if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
       return false;
     }
     if (!this.#isCurrent(run)) return false;
     projectionState.structure = lifecycle('ready', value);
+    if (this.#isActiveMode(mode)) this.#syncSettlingFromActiveStructure();
     if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
     return true;
   }
@@ -727,8 +737,6 @@ export class NodusController {
       if (!task || typeof task.key !== 'string' || !task.key || typeof task.run !== 'function') continue;
       if (run.refinementKeys.has(task.key)) continue;
       run.refinementKeys.add(task.key);
-      run.refinementPending += 1;
-      this.#state.settling = true;
 
       void Promise.resolve()
         .then(() => task.run())
@@ -737,9 +745,7 @@ export class NodusController {
           this.#log('Nodus refinement unavailable', { key: task.key, error: errorMessage(error) });
         })
         .finally(() => {
-          run.refinementPending = Math.max(0, run.refinementPending - 1);
           if (!this.#isCurrent(run)) return;
-          this.#state.settling = true;
           this.#queueSettlement(run);
         });
     }
@@ -794,7 +800,7 @@ export class NodusController {
 
     await this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
-    this.#state.settling = run.refinementPending > 0;
+    this.#syncSettlingFromActiveStructure();
 
     const after = this.snapshot;
     if (!sameValue(beforeStructure, after.structure.value)) this.#refreshLookahead(run, this.#state.mode);
@@ -820,7 +826,10 @@ export class NodusController {
     if (!this.#isCurrent(run)) return;
     await this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
-    if (this.#isActiveMode(mode)) this.#refreshLookahead(run, mode);
+    if (this.#isActiveMode(mode)) {
+      this.#syncSettlingFromActiveStructure();
+      this.#refreshLookahead(run, mode);
+    }
     const after = this.snapshot;
     if (!sameValue(before, after)) await this.#presentCurrent('update');
   }

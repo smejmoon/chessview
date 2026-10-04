@@ -50,7 +50,7 @@ function fixture(overrides = {}) {
     preferences,
     structure: async ({ center, mode }) => {
       calls.push(['structure', center, mode]);
-      return { composition: { center, direction: mode }, marker: `${center}:${mode}` };
+      return { composition: { center, direction: mode }, marker: `${center}:${mode}`, settling: false };
     },
     evidence: async ({ center, mode, structure }) => {
       calls.push(['evidence', center, mode, structure]);
@@ -93,6 +93,33 @@ test('commands update one immutable current view while RouteLedger and preferenc
   assert.equal(Object.hasOwn(controller.snapshot, 'view'), false);
 });
 
+test('active sibling Constellation owns settlement across mode switches without starting another run', async () => {
+  const structureCalls = { roots: 0, lines: 0 };
+  const { controller } = fixture({
+    structure: async ({ center, mode }) => {
+      structureCalls[mode] += 1;
+      return {
+        composition: { center, direction: mode },
+        settling: mode === 'lines',
+        marker: `${center}:${mode}`,
+      };
+    },
+  });
+
+  await controller.start();
+  await flush(24);
+  assert.deepEqual(structureCalls, { roots: 1, lines: 1 });
+  assert.equal(controller.snapshot.settling, false);
+
+  await controller.setMode('lines');
+  assert.equal(controller.snapshot.settling, true);
+  assert.deepEqual(structureCalls, { roots: 1, lines: 1 });
+
+  await controller.setMode('roots');
+  assert.equal(controller.snapshot.settling, false);
+  assert.deepEqual(structureCalls, { roots: 1, lines: 1 });
+});
+
 test('new view lifecycles use presenter.start while redraw and accepted results use presenter.update', async () => {
   const { controller, publications } = fixture();
   await controller.start();
@@ -133,7 +160,7 @@ test('superseded structure results never become current or present after a newer
   const { controller, publications } = fixture({
     structure: async ({ center, mode }) => {
       if (center === 'A') await first.promise;
-      return { composition: { center, direction: mode }, marker: center };
+      return { composition: { center, direction: mode }, marker: center, settling: false };
     },
   });
 
@@ -158,7 +185,7 @@ test('contributors return immutable values and receive no controller publication
   const { controller, publications } = fixture({
     structure: async (input) => {
       structureInput = input;
-      return { composition: { center: input.center, direction: input.mode } };
+      return { composition: { center: input.center, direction: input.mode }, settling: false };
     },
     evidence: async (input) => {
       evidenceInput = input;
@@ -191,21 +218,22 @@ test('contributors return immutable values and receive no controller publication
   assert.equal(Object.hasOwn(publications[0].actions, 'transition'), false);
 });
 
-test('run-owned refinement settles by recomputing the current Nodus without downgrading ready structure', async () => {
+test('generic refinement recomputes the current Nodus without controlling structural settlement', async () => {
   const work = deferred();
   let fact = 0;
   const { controller, publications } = fixture({
     structure: async ({ center, mode }) => ({
       composition: { center, direction: mode },
       marker: `${center}:${mode}:${fact}`,
+      settling: false,
     }),
-    refine: () => [{ key: 'fact', run: () => work.promise }],
+    refine: () => [{ key: 'explorer:provider-looking-key', run: () => work.promise }],
   });
 
   await controller.start();
   assert.equal(controller.snapshot.structure.status, 'ready');
   assert.equal(controller.snapshot.structure.value.marker, 'A:roots:0');
-  assert.equal(controller.snapshot.settling, true);
+  assert.equal(controller.snapshot.settling, false);
 
   fact = 1;
   work.resolve();
@@ -220,14 +248,18 @@ test('run-owned refinement settles by recomputing the current Nodus without down
   );
 });
 
-test('same-turn refinement completions coalesce into one Nodus recomposition', async () => {
+test('same-turn refinement completions coalesce into one Nodus recomposition without making generic work structural', async () => {
   const first = deferred();
   const second = deferred();
   const compositions = { roots: 0, lines: 0 };
   const { controller } = fixture({
     structure: async ({ center, mode }) => {
       compositions[mode] += 1;
-      return { composition: { center, direction: mode }, marker: `${mode}:${compositions[mode]}` };
+      return {
+        composition: { center, direction: mode },
+        marker: `${mode}:${compositions[mode]}`,
+        settling: false,
+      };
     },
     refine: () => [
       { key: 'first', run: () => first.promise },
@@ -237,6 +269,7 @@ test('same-turn refinement completions coalesce into one Nodus recomposition', a
 
   await controller.start();
   assert.deepEqual(compositions, { roots: 1, lines: 1 });
+  assert.equal(controller.snapshot.settling, false);
   first.resolve();
   second.resolve();
   await flush(24);
@@ -245,7 +278,7 @@ test('same-turn refinement completions coalesce into one Nodus recomposition', a
   assert.equal(controller.snapshot.settling, false);
 });
 
-test('refinement failure leaves the established Nodus usable and only ends settling', async () => {
+test('supplementary refinement failure leaves the established Nodus usable and structurally settled', async () => {
   const work = deferred();
   const { controller } = fixture({
     rail: async () => ({ rootsCount: 1, lines: [] }),
@@ -255,7 +288,7 @@ test('refinement failure leaves the established Nodus usable and only ends settl
   await controller.start();
   assert.equal(controller.snapshot.structure.status, 'ready');
   assert.equal(controller.snapshot.rail.status, 'ready');
-  assert.equal(controller.snapshot.settling, true);
+  assert.equal(controller.snapshot.settling, false);
 
   work.reject(new Error('source unavailable'));
   await flush(24);
@@ -270,7 +303,7 @@ test('critical local structure failure is terminal for that view and refresh can
   const { controller } = fixture({
     structure: async ({ center, mode }) => {
       if (fail) throw new Error('structure unavailable');
-      return { composition: { center, direction: mode } };
+      return { composition: { center, direction: mode }, settling: false };
     },
   });
   await controller.start();
@@ -297,7 +330,7 @@ test('redraw presents without recomputing while refresh recomputes both sibling 
   const { controller, calls, publications } = fixture({
     structure: async ({ center, mode }) => {
       structureCalls[mode] += 1;
-      return { composition: { center, direction: mode } };
+      return { composition: { center, direction: mode }, settling: false };
     },
   });
   await controller.start();
@@ -318,7 +351,7 @@ test('explicit refresh keeps the established snapshot visible while replacement 
   const { controller, publications } = fixture({
     structure: async ({ center, mode }) => {
       if (hold) await hold.promise;
-      return { composition: { center, direction: mode }, marker: `${mode}:${revision}` };
+      return { composition: { center, direction: mode }, marker: `${mode}:${revision}`, settling: false };
     },
   });
 
@@ -339,17 +372,21 @@ test('explicit refresh keeps the established snapshot visible while replacement 
   assert.equal(controller.snapshot.structure.value.marker, 'roots:1');
 });
 
-test('obsolete refinement completion cannot settle a replacement Nodus', async () => {
+test('obsolete refinement completion cannot mutate a replacement Nodus', async () => {
   const oldWork = deferred();
   const { controller } = fixture({
-    structure: async ({ center, mode }) => ({ composition: { center, direction: mode }, marker: center }),
+    structure: async ({ center, mode }) => ({
+      composition: { center, direction: mode },
+      marker: center,
+      settling: false,
+    }),
     refine: ({ center }) => center === 'A'
       ? [{ key: 'old', run: () => oldWork.promise }]
       : [],
   });
 
   await controller.start();
-  assert.equal(controller.snapshot.settling, true);
+  assert.equal(controller.snapshot.settling, false);
   await controller.recenter({ target: 'b' });
   assert.equal(controller.snapshot.center, 'B');
   assert.equal(controller.snapshot.settling, false);

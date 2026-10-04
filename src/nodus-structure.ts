@@ -14,11 +14,10 @@ import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge } from './position-graph.ts';
 import { positionRepository } from './position-repository.js';
-import { rootTranspositionEnricher } from './root-enrichment.js';
 import {
-  acquireExplorerReading,
-  reconcileCachedExplorerReading,
-} from './knowledge-acquisition.js';
+  currentExplorerReading,
+  readCachedExplorerReading,
+} from './explorer.js';
 import { humanResultQuality, moveEvaluation, moveFrequency } from './evidence.js';
 import { lichessEval } from './lichess-eval.js';
 import {
@@ -32,12 +31,11 @@ const START = canonicalPosition(START_FEN);
 const ROOT_PATH_SEARCH_MAX_DEPTH = 32;
 const ROOT_LABEL_MAX_PLIES = 6;
 
-type LoadPriority = 'foreground' | 'background';
-type Priority = LoadPriority | (() => LoadPriority);
 type CandidateSource = Readonly<{
   outgoing(source: string): Promise<readonly SelectionCandidate[]>;
   incoming(target: string): Promise<readonly SelectionCandidate[]>;
   hasExplorer(source: string): Promise<boolean>;
+  missingExplorer(): readonly string[];
 }>;
 type PositionRecord = {
   key: string;
@@ -57,7 +55,6 @@ export type ComposeNodusStructureOptions = Readonly<{
   mode: NodusMode;
   max: number;
   signal?: AbortSignal;
-  priority?: Priority;
 }>;
 
 function abortError(): Error {
@@ -81,44 +78,37 @@ function immutable<T>(value: T): T {
   return value;
 }
 
-function createCandidateSource(
-  signal?: AbortSignal,
-  { hydrateExplorer = true, priority = 'foreground' }: {
-    hydrateExplorer?: boolean;
-    priority?: Priority;
-  } = {},
-): CandidateSource {
-  const explorerLoads = new Map<string, Promise<unknown>>();
+function createCandidateSource(signal?: AbortSignal): CandidateSource {
+  const explorerReads = new Map<string, Promise<unknown | null>>();
+  const missing = new Set<string>();
 
-  function explorerFor(source: string): Promise<unknown> {
-    const existing = explorerLoads.get(source);
+  function explorerFor(source: string): Promise<unknown | null> {
+    const existing = explorerReads.get(source);
     if (existing) return existing;
     const pending = (async () => {
       throwIfAborted(signal);
-      const explorer = hydrateExplorer
-        ? await acquireExplorerReading(source, { signal, priority })
-        : await reconcileCachedExplorerReading(source);
+      const explorer = currentExplorerReading(source) ?? await readCachedExplorerReading(source);
       throwIfAborted(signal);
       return explorer;
     })();
-    explorerLoads.set(source, pending);
+    explorerReads.set(source, pending);
     return pending;
   }
 
   async function candidate(
     edge: GraphEdge,
-    sourceExplorer: unknown | undefined = undefined,
+    sourceExplorer: unknown | null | undefined = undefined,
   ): Promise<SelectionCandidate | null> {
-    // Explicit materialization is a navigation property, not Candidate admission.
-    // When the caller already has current source evidence, an explicit edge may
-    // become an ordinary Candidate from that evidence. For incoming explicit-only
-    // relationships, consult cached evidence without starting Explorer acquisition.
     const explorer = sourceExplorer !== undefined
       ? sourceExplorer
-      : edge.explicit
-        ? await reconcileCachedExplorerReading(edge.source)
-        : await explorerFor(edge.source);
+      : await explorerFor(edge.source);
     throwIfAborted(signal);
+    if (!explorer) {
+      // Explicit materialization is navigation knowledge, not a demand for
+      // automatic source acquisition in Root composition.
+      if (!edge.explicit) missing.add(edge.source);
+      return null;
+    }
 
     const frequency = moveFrequency(explorer, edge);
     if (!frequency) return null;
@@ -158,7 +148,12 @@ function createCandidateSource(
     return Boolean(await explorerFor(source));
   }
 
-  return Object.freeze({ outgoing, incoming, hasExplorer });
+  return Object.freeze({
+    outgoing,
+    incoming,
+    hasExplorer,
+    missingExplorer: () => Object.freeze([...missing]),
+  });
 }
 
 async function composeKnownLineGraph(
@@ -207,6 +202,12 @@ async function composeKnownLineGraph(
     max: capacity,
   });
 
+  if (readingKnown.get(center) === false && legalDestinations(center).size > 0) {
+    plan = {
+      ...plan,
+      readingFrontier: [center, ...plan.readingFrontier.filter((key) => key !== center)],
+    };
+  }
   return plan;
 }
 
@@ -283,20 +284,17 @@ export async function composeNodusStructure({
   mode,
   max,
   signal,
-  priority = 'foreground',
 }: ComposeNodusStructureOptions) {
   throwIfAborted(signal);
   const capacity = Math.max(1, Number.isFinite(max) ? Math.floor(max) : 1);
-  if (mode === 'roots') await rootTranspositionEnricher.ensure(center, { signal });
-  else await acquireExplorerReading(center, { signal, priority });
-  throwIfAborted(signal);
-
-  const candidateSource = createCandidateSource(signal, { hydrateExplorer: mode === 'roots', priority });
+  const candidateSource = createCandidateSource(signal);
   let selected: VisibleComposition;
   let readingFrontier: string[] = [];
+
   if (mode === 'roots') {
     const incomingByTarget = await collectIncomingGraph(center, capacity, candidateSource, signal);
     selected = chooseRootNeighborhood({ center, incomingByTarget, max: capacity });
+    readingFrontier = [...candidateSource.missingExplorer()];
   } else {
     const line = await composeKnownLineGraph(center, capacity, candidateSource, signal);
     selected = line.composition;

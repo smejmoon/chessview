@@ -33,7 +33,6 @@ export type ExplorerReading = Readonly<{
 }>;
 
 export type ExplorerLoadOptions = Readonly<{
-  force?: boolean;
   signal?: AbortSignal;
   priority?: AcquisitionPriorityInput;
 }>;

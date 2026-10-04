@@ -16,7 +16,7 @@ Selection may use:
 
 - one known Graph Edge;
 - rated Lichess Explorer Prevalence at that Move's immediate source position;
-- engine-quality evidence already available to the current composition;
+- engine-quality evidence already admitted to the current composition;
 - human-result evidence supplied by rated Explorer Readings.
 
 [Evidence](evidence.md) owns the meaning, calculation, and unknown/unavailable state of quality, human-result, and Prevalence signals. Selection consumes those signals without redefining them.
@@ -25,9 +25,11 @@ Candidate-local eligibility, Salience, ranking order, or other current-view anno
 
 ## Acquisition boundary
 
-Selection is not an engine-acquisition frontier. It may consume usable engine evidence already available through `LichessEval.available()`, but it does not start cloud-evaluation acquisition solely because an unknown engine result could change eligibility, Salience, or constrained membership. Missing engine evidence remains unknown and does not keep the Constellation structurally unsettled.
+Selection is not an engine-acquisition frontier. Engine evidence already admitted to a composition may affect eligibility, Salience, or constrained membership, but selection does not start cloud-evaluation acquisition solely because an unknown engine result could change those decisions. Missing engine evidence remains unknown and does not create a structural settlement obligation.
 
-Rated Explorer acquisition is different because an Explorer Reading is also graph-bearing knowledge. Constellation may request another Reading when additional outgoing graph knowledge can still change constrained composition. Human-result and Prevalence evidence arriving with that Reading may affect selection, but optional cloud evaluation remains outside structural settlement.
+A supplementary cloud-evaluation completion does not by itself reopen or recompose an otherwise [Settled](../glossary.md#settled) Constellation. If composition is later required for an independently admitted structural reason, engine evidence then available may be admitted to that new composition and affect selection.
+
+Rated Explorer acquisition is different because an Explorer Reading is also graph-bearing knowledge. Constellation may admit another Reading as a structural obligation while additional outgoing graph knowledge can still change constrained composition. Human-result and Prevalence evidence arriving with that Reading may affect selection, but optional cloud evaluation remains outside structural settlement.
 
 Evidence already obtained from Lichess is treated as the current source snapshot for selection. The snapshot may be partial: usable Explorer Prevalence may exist while optional engine evidence is unavailable. Missing optional evidence changes no ordering by itself and does not trigger compensating acquisition or remembered ranking state.
 
@@ -72,11 +74,12 @@ Deterministic tests should cover:
 
 - a Candidate retaining an unchanged Graph Edge while carrying current evidence/selection state separately;
 - a frequent bad Move remaining eligible and retaining its Prevalence priority rather than receiving an ordinary negative demotion;
-- a rare Move remaining significant when already-available engine evidence rescues it;
+- a rare Move remaining significant when engine evidence already admitted to the composition rescues it;
 - a rare Move remaining significant when favorable human results rescue it without engine rescue;
 - unknown, failed, or insufficient rescue evidence not being treated as bad/unfavorable evidence;
 - selection not starting cloud-evaluation acquisition merely because unknown engine evidence could alter ranking or constrained membership;
-- missing engine evidence not creating a structural settlement dependency or changing the Prevalence baseline;
+- missing engine evidence not creating a structural settlement obligation or changing the Prevalence baseline;
+- late supplementary cloud evaluation not reopening or recomposing a Settled Constellation by itself;
 - a rare Candidate with known negative evidence and no positive rescue being omitted before otherwise comparable Candidates;
 - same-source Salience starting from Prevalence while clear positive evidence can promote a Candidate by at most one local sibling place among ordinary Candidates;
 - multiple positive promotions remaining local without cascading a Candidate more than one sibling place;

@@ -27,7 +27,6 @@ globalThis.history = { state: null, replaceState() {} };
 const { clearGraph, getOutgoing, putEdges, putNode } = await import('../src/db.js');
 const { loadExplorerReading } = await import('../src/explorer.js');
 const { acquireExplorerReading: loadExplorer } = await import('../src/knowledge-acquisition.js');
-const { discoverSelectedLines } = await import('../src/constellation-discovery.js');
 const { composeNodusStructure } = await import('../src/nodus-structure.js');
 
 const center = canonicalPosition(START_FEN);
@@ -44,24 +43,26 @@ function cachedStartExplorer() {
   };
 }
 
-async function putFreshStartExplorer(explorer = cachedStartExplorer()) {
+async function putExplorer(position, explorer, fetchedAt = Date.now()) {
   await putNode({
-    key: center,
-    fen: START_FEN,
+    key: position.key ?? position,
+    fen: position.fen ?? START_FEN,
     explorer,
-    explorerFetchedAt: Date.now(),
+    explorerFetchedAt: fetchedAt,
     games: explorer.white + explorer.draws + explorer.black,
   });
 }
 
+async function putFreshStartExplorer(explorer = cachedStartExplorer()) {
+  await putExplorer({ key: center, fen: START_FEN }, explorer);
+}
+
 async function putStaleStartExplorer(explorer = cachedStartExplorer()) {
-  await putNode({
-    key: center,
-    fen: START_FEN,
+  await putExplorer(
+    { key: center, fen: START_FEN },
     explorer,
-    explorerFetchedAt: Date.now() - EXPLORER_TTL_MS - 1,
-    games: explorer.white + explorer.draws + explorer.black,
-  });
+    Date.now() - EXPLORER_TTL_MS - 1,
+  );
 }
 
 function positionAfter(sequence) {
@@ -81,17 +82,6 @@ function explorerWithMoves(moves, total = 100) {
   };
 }
 
-async function putFreshExplorer(position, moves, total = 100) {
-  const explorer = explorerWithMoves(moves, total);
-  await putNode({
-    key: position.key,
-    fen: position.fen,
-    explorer,
-    explorerFetchedAt: Date.now(),
-    games: total,
-  });
-}
-
 function assertCanonicalStoredShape(edge) {
   assert.equal('games' in edge, false);
   assert.equal('share' in edge, false);
@@ -104,106 +94,54 @@ test('401 clears the stored Lichess access token', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'expired-token');
   globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => 'unauthorized' });
-  await assert.rejects(loadExplorerReading(center, { force: true }), (error) => error?.status === 401);
+  await assert.rejects(loadExplorerReading(center), (error) => error?.status === 401);
   assert.equal(localStorage.getItem('chessview.lichess.accessToken'), null);
 });
 
-test('Explorer source delivery caches a usable Reading without owning Edge Admission', async () => {
+test('Explorer provider admits a usable Reading without owning Edge Admission', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
-  const explorer = {
-    white: 1000,
-    draws: 0,
-    black: 0,
-    moves: [{ uci: 'e2e4', white: 600, draws: 0, black: 0 }],
-  };
+  const explorer = explorerWithMoves([['e2e4', 60]], 100);
   let networkCalls = 0;
   globalThis.fetch = async () => {
     networkCalls += 1;
     return { ok: true, status: 200, json: async () => explorer, text: async () => '' };
   };
 
-  assert.deepEqual(await loadExplorerReading(center, { force: true }), explorer);
+  assert.deepEqual(await loadExplorerReading(center), explorer);
   assert.deepEqual(await loadExplorerReading(center), explorer);
   assert.equal(networkCalls, 1);
   assert.deepEqual(await getOutgoing(center), []);
 });
 
-test('selected Line acquisition reads only positions exposed by the structural Reading frontier', async () => {
-  await clearGraph();
-  const e4 = positionAfter(['e4']);
-  const d4 = positionAfter(['d4']);
-  await putFreshExplorer(e4, [['e7e5', 60]]);
-  await putFreshExplorer(d4, [['d7d5', 70]]);
-
-  let networkCalls = 0;
-  globalThis.fetch = async () => {
-    networkCalls += 1;
-    throw new Error('fresh Explorer cache should avoid network');
-  };
-
-  const structure = {
-    composition: { nodes: [{ key: e4.key }, { key: d4.key }] },
-    readingFrontier: [e4.key],
-  };
-  await discoverSelectedLines(center, structure, async () => ({ ...structure, readingFrontier: [] }));
-
-  assert.equal(networkCalls, 0);
-  assert.deepEqual((await getOutgoing(e4.key)).map((edge) => edge.uci), ['e7e5']);
-  assert.deepEqual(await getOutgoing(d4.key), []);
-});
-
-test('selected Line acquisition stops when recomposition clears the structural Reading frontier', async () => {
-  await clearGraph();
-  const e4 = positionAfter(['e4']);
-  await putFreshExplorer(e4, []);
-  let progressCalls = 0;
-  const structure = {
-    composition: { nodes: [{ key: e4.key }] },
-    readingFrontier: [e4.key],
-  };
-  await discoverSelectedLines(center, structure, async () => {
-    progressCalls += 1;
-    return { composition: { nodes: [{ key: e4.key }] }, readingFrontier: [] };
-  });
-  assert.equal(progressCalls, 1);
-});
-
-test('fresh cached Explorer Reading leaves known explicit topology unchanged without network', async () => {
+test('Knowledge Acquisition alone reconciles a fresh cached Explorer Reading into graph topology', async () => {
   await clearGraph();
   await putFreshStartExplorer();
-  const resolved = resolveMove(center, { uci: 'e2e4' });
-  const known = {
-    id: '', source: center, target: resolved.target, uci: resolved.uci, san: resolved.san,
-    explicit: true,
-  };
-  known.id = edgeId(known);
-  await putEdges([known]);
-
   let networkCalls = 0;
   globalThis.fetch = async () => { networkCalls += 1; throw new Error('fresh cache should avoid network'); };
-  await loadExplorer(center);
 
-  const stored = (await getOutgoing(center)).find((edge) => edge.uci === 'e2e4');
+  const before = await composeNodusStructure({ center, mode: 'lines', max: 3 });
   assert.equal(networkCalls, 0);
-  assert.ok(stored);
-  assert.equal(stored.explicit, true);
-  assertCanonicalStoredShape(stored);
+  assert.deepEqual(await getOutgoing(center), []);
+  assert.deepEqual(before.composition.relationships, []);
+
+  await loadExplorer(center);
+  const stored = await getOutgoing(center);
+  assert.equal(networkCalls, 0);
+  assert.deepEqual(stored.map((edge) => edge.uci).sort(), ['d2d4', 'e2e4']);
+
+  const after = await composeNodusStructure({ center, mode: 'lines', max: 1 });
+  assert.deepEqual(after.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
 });
 
-test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal move without persisting its evidence', async () => {
+test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal move without persisting evidence on the edge', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
   const rare = resolveMove(center, { uci: 'a2a3' });
-  const explorer = {
-    white: 1000,
-    draws: 0,
-    black: 0,
-    moves: [{ uci: 'a2a3', white: 1, draws: 0, black: 0 }],
-  };
+  const explorer = explorerWithMoves([['a2a3', 1]], 1000);
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => explorer, text: async () => '' });
 
-  await loadExplorer(center, { force: true });
+  await loadExplorer(center);
 
   const stored = (await getOutgoing(center)).find((edge) => edge.uci === 'a2a3');
   assert.ok(stored);
@@ -211,7 +149,7 @@ test('sufficiently sampled Explorer Reading Edge Admits a rare returned legal mo
   assertCanonicalStoredShape(stored);
 });
 
-test('insufficient Explorer Reading leaves known topology unchanged and does not Edge Admit an unknown one', async () => {
+test('insufficient Explorer Reading leaves known topology unchanged and does not Edge Admit an unknown move', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
   const e4 = resolveMove(center, { uci: 'e2e4' });
@@ -232,7 +170,7 @@ test('insufficient Explorer Reading leaves known topology unchanged and does not
   };
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => explorer, text: async () => '' });
 
-  await loadExplorer(center, { force: true });
+  await loadExplorer(center);
 
   const edges = await getOutgoing(center);
   const stored = edges.find((edge) => edge.uci === 'e2e4');
@@ -241,82 +179,75 @@ test('insufficient Explorer Reading leaves known topology unchanged and does not
   assert.equal(edges.some((edge) => edge.target === c4.target), false);
 });
 
-test('composition reconciles a fresh cached Explorer Reading before reading outgoing edges', async () => {
+test('composition exposes missing center Explorer as refinement frontier without starting network work', async () => {
   await clearGraph();
-  await putFreshStartExplorer();
+  const isolated = positionAfter(['a3']);
   let networkCalls = 0;
-  globalThis.fetch = async () => { networkCalls += 1; throw new Error('fresh cache should avoid network'); };
+  globalThis.fetch = async () => { networkCalls += 1; throw new Error('composition must not fetch'); };
 
-  const structure = await composeNodusStructure({ center, mode: 'lines', max: 1 });
+  const structure = await composeNodusStructure({ center: isolated.key, mode: 'lines', max: 3 });
 
   assert.equal(networkCalls, 0);
-  assert.deepEqual((await getOutgoing(center)).map((edge) => edge.uci).sort(), ['d2d4', 'e2e4']);
-  assert.deepEqual(structure.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
-  assert.deepEqual(structure.readingFrontier, []);
+  assert.deepEqual(structure.composition.relationships, []);
+  assert.deepEqual(structure.readingFrontier, [isolated.key]);
 });
 
-test('composition reconciles a selected descendant cached Reading before treating it as known', async () => {
+test('composition exposes only selected descendant positions whose Explorer facts are still missing', async () => {
   await clearGraph();
   await putFreshStartExplorer();
+  await loadExplorer(center);
   const e4 = positionAfter(['e4']);
-  const e5 = positionAfter(['e4', 'e5']);
-  await putFreshExplorer(e4, [['e7e5', 60]]);
-  let networkCalls = 0;
-  globalThis.fetch = async () => { networkCalls += 1; throw new Error('fresh cache should avoid network'); };
+  const d4 = positionAfter(['d4']);
+  await putExplorer(e4, explorerWithMoves([['e7e5', 60]]));
 
   const structure = await composeNodusStructure({ center, mode: 'lines', max: 3 });
 
-  assert.equal(networkCalls, 0);
-  assert.deepEqual((await getOutgoing(e4.key)).map((edge) => edge.uci), ['e7e5']);
-  assert.ok(structure.composition.nodes.some((node) => node.key === e5.key));
+  assert.ok(structure.composition.nodes.some((node) => node.key === e4.key));
+  assert.ok(structure.composition.nodes.some((node) => node.key === d4.key));
+  assert.ok(structure.readingFrontier.includes(d4.key));
+  assert.equal(structure.readingFrontier.includes(center), false);
 });
 
-test('composition exposes unresolved Reading frontier only while selected Lines can still grow', async () => {
-  await clearGraph();
-  await putFreshStartExplorer();
-  const e4 = positionAfter(['e4']);
-  const d4 = positionAfter(['d4']);
-  let networkCalls = 0;
-  globalThis.fetch = async () => { networkCalls += 1; throw new Error('no Explorer request is expected'); };
-
-  const open = await composeNodusStructure({ center, mode: 'lines', max: 3 });
-  assert.deepEqual(open.readingFrontier.slice().sort(), [d4.key, e4.key].sort());
-
-  const settled = await composeNodusStructure({ center, mode: 'lines', max: 1 });
-  assert.equal(settled.composition.nodes.length, 1);
-  assert.deepEqual(settled.readingFrontier, []);
-
-  let progressCalls = 0;
-  await discoverSelectedLines(center, settled, async () => {
-    progressCalls += 1;
-    return settled;
-  });
-  assert.equal(progressCalls, 0);
-  assert.equal(networkCalls, 0);
-});
-
-test('composition can use and reconcile a stale Explorer Reading when refresh fails', async () => {
+test('stale cached Explorer remains usable structural evidence without composition attempting refresh', async () => {
   await clearGraph();
   await putStaleStartExplorer();
-  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
+  const e4 = resolveMove(center, { uci: 'e2e4' });
+  const edge = { id: '', source: center, target: e4.target, uci: e4.uci, san: e4.san, explicit: false };
+  edge.id = edgeId(edge);
+  await putEdges([edge]);
   let networkCalls = 0;
-  globalThis.fetch = async () => { networkCalls += 1; throw new Error('offline'); };
+  globalThis.fetch = async () => { networkCalls += 1; throw new Error('composition must not refresh'); };
 
   const structure = await composeNodusStructure({ center, mode: 'lines', max: 1 });
 
-  assert.equal(networkCalls, 1);
-  assert.ok((await getOutgoing(center)).some((edge) => edge.uci === 'e2e4'));
+  assert.equal(networkCalls, 0);
   assert.deepEqual(structure.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
 });
 
-test('composition propagates structural Explorer failure when no cached Reading exists', async () => {
+test('Explorer source failure cannot make known graph structure fail during composition', async () => {
   await clearGraph();
-  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
+  const isolated = positionAfter(['h3']);
+  const next = resolveMove(isolated.key, { uci: 'a7a6' });
+  const edge = {
+    id: '',
+    source: isolated.key,
+    target: next.target,
+    uci: next.uci,
+    san: next.san,
+    explicit: true,
+  };
+  edge.id = edgeId(edge);
+  await putEdges([edge]);
   globalThis.fetch = async () => { throw new Error('offline without cache'); };
-  await assert.rejects(composeNodusStructure({ center, mode: 'lines', max: 1 }), /offline without cache/);
+
+  const structure = await composeNodusStructure({ center: isolated.key, mode: 'lines', max: 1 });
+
+  assert.equal(structure.composition.relationships.length, 0);
+  assert.deepEqual(structure.readingFrontier, [isolated.key]);
+  assert.ok((await getOutgoing(isolated.key)).some((stored) => stored.uci === 'a7a6'));
 });
 
-test('Explorer Reading refresh grows admitted topology without rewriting or retracting known edges', async () => {
+test('Explorer refresh grows admitted topology without rewriting or retracting known edges', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'test-token');
 
@@ -338,7 +269,7 @@ test('Explorer Reading refresh grows admitted topology without rewriting or retr
     ],
   };
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => refreshedExplorer, text: async () => '' });
-  await loadExplorer(center, { force: true });
+  await loadExplorer(center);
 
   const edges = await getOutgoing(center);
   const byUci = new Map(edges.map((edge) => [edge.uci, edge]));

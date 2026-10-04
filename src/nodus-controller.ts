@@ -19,6 +19,7 @@ export type NodusSnapshot = Readonly<{
   structure: Lifecycle;
   evidence: Lifecycle;
   rail: Lifecycle;
+  settling: boolean;
 }>;
 
 export type RecenterRequest =
@@ -50,21 +51,18 @@ export type EvidenceInput = Readonly<{
 export type RailInput = Readonly<{
   center: string;
   signal: AbortSignal;
-  onProgress: (value: unknown) => Promise<boolean>;
 }>;
 
-export type DiscoveryInput = Readonly<{
+export type RefinementTask = Readonly<{
+  key: string;
+  run(): unknown | Promise<unknown>;
+}>;
+
+export type RefinementInput = Readonly<{
   center: string;
-  mode: ViewMode;
-  structure: unknown;
+  structures: Readonly<Record<ViewMode, unknown | null>>;
   signal: AbortSignal;
-  onProgress: () => Promise<unknown | null>;
 }>;
-
-export type DiscoveryResult = Readonly<{
-  error?: unknown;
-  criticalFailure?: boolean;
-}> | null;
 
 export type LookaheadInput = Readonly<{
   center: string;
@@ -74,7 +72,7 @@ export type LookaheadInput = Readonly<{
 }>;
 
 type Contributor<Input> = (input: Input) => unknown | Promise<unknown>;
-type DiscoveryContributor = (input: DiscoveryInput) => DiscoveryResult | Promise<DiscoveryResult>;
+type RefinementPlanner = (input: RefinementInput) => readonly RefinementTask[] | Promise<readonly RefinementTask[]>;
 type LookaheadContributor = (input: LookaheadInput) => unknown | Promise<unknown>;
 type MaterializeMove = (input: MaterializeMoveInput) => Promise<MaterializeMoveResult | null>;
 type Log = (message: string, detail?: unknown) => void;
@@ -103,7 +101,7 @@ export type NodusControllerOptions = {
   structure: Contributor<StructureInput>;
   evidence?: Contributor<EvidenceInput> | null;
   rail?: Contributor<RailInput> | null;
-  discover?: DiscoveryContributor | null;
+  refine?: RefinementPlanner | null;
   lookahead?: LookaheadContributor | null;
   materializeMove?: MaterializeMove | null;
   presenter: Presenter;
@@ -122,14 +120,22 @@ type ControllerState = {
   navDepth: number;
   projections: Record<ViewMode, ProjectionState>;
   rail: Lifecycle;
+  settling: boolean;
 };
 
 type Run = {
   revision: number;
   abortController: AbortController;
-  composeTails: Record<ViewMode, Promise<unknown>>;
-  railTail: Promise<unknown>;
   lookaheadController: AbortController | null;
+  structureTails: Record<ViewMode, Promise<boolean>>;
+  evidenceTails: Record<ViewMode, Promise<boolean>>;
+  railTail: Promise<boolean>;
+  refinementKeys: Set<string>;
+  refinementPending: number;
+  settleTail: Promise<unknown>;
+  settleQueued: boolean;
+  settleNeeded: boolean;
+  settlementReady: boolean;
 };
 
 type RestoreRoute = {
@@ -140,6 +146,10 @@ type RestoreRoute = {
 };
 
 const MODES: readonly ViewMode[] = Object.freeze(['roots', 'lines']);
+
+function otherMode(mode: ViewMode): ViewMode {
+  return mode === 'roots' ? 'lines' : 'roots';
+}
 
 function normalizeMode(mode: unknown): ViewMode {
   return mode === 'roots' ? 'roots' : 'lines';
@@ -179,6 +189,22 @@ function immutable(value: unknown): unknown {
   return value;
 }
 
+function sameValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((value, index) => sameValue(value, right[index]));
+  }
+  if (isPlainRecord(left) || isPlainRecord(right)) {
+    if (!isPlainRecord(left) || !isPlainRecord(right)) return false;
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    if (leftKeys.length !== rightKeys.length) return false;
+    return leftKeys.every((key) => Object.hasOwn(right, key) && sameValue(left[key], right[key]));
+  }
+  return false;
+}
+
 function lifecycle(status: LifecycleStatus, value: unknown = null, error: unknown = null): Lifecycle {
   return Object.freeze({ status, value: immutable(value), error: errorMessage(error) });
 }
@@ -197,10 +223,16 @@ function projections(): Record<ViewMode, ProjectionState> {
   };
 }
 
+function tails(): Record<ViewMode, Promise<boolean>> {
+  return {
+    roots: Promise.resolve(false),
+    lines: Promise.resolve(false),
+  };
+}
+
 export class NodusController {
   #actions: NodusActions;
   #canonicalize: (value: unknown) => string;
-  #discover: DiscoveryContributor | null;
   #disposed = false;
   #evidence: Contributor<EvidenceInput> | null;
   #log: Log;
@@ -209,6 +241,7 @@ export class NodusController {
   #preferences: Preferences;
   #presenter: Presenter;
   #rail: Contributor<RailInput> | null;
+  #refine: RefinementPlanner | null;
   #revision = 0;
   #routeLedger: Partial<RouteLedger>;
   #run: Run | null = null;
@@ -224,7 +257,7 @@ export class NodusController {
     structure,
     evidence = null,
     rail = null,
-    discover = null,
+    refine = null,
     lookahead = null,
     materializeMove = null,
     presenter,
@@ -241,7 +274,7 @@ export class NodusController {
     this.#structure = structure;
     this.#evidence = evidence;
     this.#rail = rail;
-    this.#discover = discover;
+    this.#refine = refine;
     this.#lookahead = lookahead;
     this.#materializeMove = materializeMove;
     this.#presenter = presenter;
@@ -253,6 +286,7 @@ export class NodusController {
       navDepth: normalizeDepth(initial?.navDepth),
       projections: projections(),
       rail: lifecycle('idle'),
+      settling: false,
     };
     this.#actions = Object.freeze({
       recenter: (request: RecenterRequest) => this.recenter(request),
@@ -274,6 +308,7 @@ export class NodusController {
       structure: active.structure,
       evidence: active.evidence,
       rail: this.#state.rail,
+      settling: this.#state.settling,
     });
   }
 
@@ -426,56 +461,70 @@ export class NodusController {
     const run: Run = {
       revision: this.#revision,
       abortController: new AbortController(),
-      composeTails: { roots: Promise.resolve(), lines: Promise.resolve() },
-      railTail: Promise.resolve(),
       lookaheadController: null,
+      structureTails: tails(),
+      evidenceTails: tails(),
+      railTail: Promise.resolve(false),
+      refinementKeys: new Set(),
+      refinementPending: 0,
+      settleTail: Promise.resolve(),
+      settleQueued: false,
+      settleNeeded: false,
+      settlementReady: false,
     };
     this.#run = run;
-    this.#state.projections = {
-      roots: { structure: lifecycle('loading'), evidence: lifecycle('idle') },
-      lines: { structure: lifecycle('loading'), evidence: lifecycle('idle') },
-    };
-    this.#state.rail = typeof this.#rail === 'function' ? lifecycle('loading') : lifecycle('idle');
+
+    const preserveEstablished = reason === 'refresh';
+    if (!preserveEstablished) {
+      this.#state.projections = {
+        roots: { structure: lifecycle('loading'), evidence: lifecycle('idle') },
+        lines: { structure: lifecycle('loading'), evidence: lifecycle('idle') },
+      };
+      this.#state.rail = typeof this.#rail === 'function' ? lifecycle('loading') : lifecycle('idle');
+    }
+    this.#state.settling = preserveEstablished;
     this.#log('Nodus view started', { revision: run.revision, center: this.#state.center, mode: this.#state.mode, reason });
     await this.#presentCurrent('start');
 
-    if (typeof this.#rail === 'function') void this.#queueRail(run);
-    const activeMode = this.#state.mode;
-    for (const mode of MODES) {
-      if (mode !== activeMode) void this.#runProjection(run, mode);
+    if (typeof this.#rail === 'function') {
+      void this.#queueRail(run, { preserveEstablished, publish: true });
     }
-    await this.#runProjection(run, activeMode);
+
+    const activeMode = this.#state.mode;
+    const activeReady = await this.#queueStructure(run, activeMode, {
+      preserveEstablished,
+      publish: true,
+    });
+    if (!this.#isCurrent(run)) return;
+
+    if (activeReady && typeof this.#evidence === 'function') {
+      void this.#queueEvidence(run, activeMode, { preserveEstablished, publish: true });
+    }
+
+    await this.#planRefinements(run);
+    if (!this.#isCurrent(run)) return;
+    this.#state.settling = run.refinementPending > 0;
+    run.settlementReady = true;
+    await this.#presentCurrent('update');
+    this.#refreshLookahead(run, activeMode);
+
+    void this.#prepareProjection(run, otherMode(activeMode), preserveEstablished);
+    if (run.settleNeeded) this.#queueSettlement(run);
   }
 
-  async #runProjection(run: Run, mode: ViewMode): Promise<boolean> {
-    if (!this.#isCurrent(run)) return false;
-    const hasDiscovery = mode === 'lines' && typeof this.#discover === 'function';
-    const composed = await this.#queueComposition(run, mode, { status: hasDiscovery ? 'loading' : 'ready' });
-    if (!composed || !this.#isCurrent(run)) return false;
-    if (mode === 'roots' && typeof this.#rail === 'function') void this.#queueRail(run);
-    if (hasDiscovery) void this.#runDiscovery(run, mode);
-    else void this.#hydrateEvidence(run, mode);
-    return true;
-  }
-
-  #queueComposition(
-    run: Run,
-    mode: ViewMode,
-    options: { status?: LifecycleStatus; error?: unknown } = {},
-  ): Promise<boolean> {
-    const tail = run.composeTails[mode]
-      .catch(() => false)
-      .then(() => this.#composeMode(run, mode, options));
-    run.composeTails[mode] = tail;
-    return tail;
-  }
-
-  #queueRail(run: Run): Promise<boolean> {
-    const tail = run.railTail
-      .catch(() => false)
-      .then(() => this.#hydrateRail(run));
-    run.railTail = tail;
-    return tail;
+  async #prepareProjection(run: Run, mode: ViewMode, preserveEstablished: boolean): Promise<void> {
+    if (!this.#isCurrent(run)) return;
+    const before = this.snapshot;
+    const ready = await this.#queueStructure(run, mode, { preserveEstablished, publish: true });
+    if (!this.#isCurrent(run)) return;
+    if (ready && typeof this.#evidence === 'function') {
+      void this.#queueEvidence(run, mode, { preserveEstablished, publish: true });
+    }
+    await this.#planRefinements(run);
+    if (!this.#isCurrent(run)) return;
+    if (this.#isActiveMode(mode)) this.#refreshLookahead(run, mode);
+    const after = this.snapshot;
+    if (!sameValue(before, after)) await this.#presentCurrent('update');
   }
 
   #refreshLookahead(run: Run, mode: ViewMode): void {
@@ -499,118 +548,259 @@ export class NodusController {
     });
   }
 
+  #queueStructure(
+    run: Run,
+    mode: ViewMode,
+    options: { preserveEstablished?: boolean; publish?: boolean } = {},
+  ): Promise<boolean> {
+    const tail = run.structureTails[mode]
+      .catch(() => false)
+      .then(() => this.#composeMode(run, mode, options));
+    run.structureTails[mode] = tail;
+    return tail;
+  }
+
+  #queueEvidence(
+    run: Run,
+    mode: ViewMode,
+    options: { preserveEstablished?: boolean; publish?: boolean } = {},
+  ): Promise<boolean> {
+    const tail = run.evidenceTails[mode]
+      .catch(() => false)
+      .then(() => this.#deriveEvidence(run, mode, options));
+    run.evidenceTails[mode] = tail;
+    return tail;
+  }
+
+  #queueRail(
+    run: Run,
+    options: { preserveEstablished?: boolean; publish?: boolean } = {},
+  ): Promise<boolean> {
+    const tail = run.railTail
+      .catch(() => false)
+      .then(() => this.#deriveRail(run, options));
+    run.railTail = tail;
+    return tail;
+  }
+
   async #composeMode(
     run: Run,
     mode: ViewMode,
-    { status = 'ready', error = null }: { status?: LifecycleStatus; error?: unknown } = {},
+    { preserveEstablished = false, publish = true }: { preserveEstablished?: boolean; publish?: boolean } = {},
   ): Promise<boolean> {
     if (!this.#isCurrent(run)) return false;
+    const projectionState = this.#state.projections[mode];
+    const previous = projectionState.structure;
     let value: unknown;
     try {
       value = await this.#structure(Object.freeze({ center: this.#state.center, mode, signal: run.abortController.signal }));
     } catch (structureError: unknown) {
       if (!this.#isCurrent(run) || isObsoleteWork(structureError, run.abortController.signal)) return false;
-      const projectionState = this.#state.projections[mode];
+      if (preserveEstablished && previous.status === 'ready') {
+        this.#log('Nodus structure refinement failed; keeping established structure', {
+          mode,
+          error: errorMessage(structureError),
+        });
+        return false;
+      }
       projectionState.structure = lifecycle('failed', null, structureError);
       projectionState.evidence = lifecycle('idle');
       this.#log('Nodus structure failed', { mode, error: errorMessage(structureError) });
-      if (this.#isActiveMode(mode)) {
-        this.#refreshLookahead(run, mode);
-        await this.#presentCurrent('update');
-      }
+      if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
       return false;
     }
     if (!this.#isCurrent(run)) return false;
-    this.#state.projections[mode].structure = lifecycle(status, value, error);
-    if (this.#isActiveMode(mode)) {
-      if (status === 'ready' || status === 'failed') this.#refreshLookahead(run, mode);
-      await this.#presentCurrent('update');
-    }
+    projectionState.structure = lifecycle('ready', value);
+    if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
     return true;
   }
 
-  async #runDiscovery(run: Run, mode: ViewMode): Promise<void> {
-    if (!this.#isCurrent(run) || typeof this.#discover !== 'function') return;
-    let result: DiscoveryResult = null;
-    try {
-      result = await this.#discover(Object.freeze({
-        center: this.#state.center,
-        mode,
-        structure: this.#state.projections[mode].structure.value,
-        signal: run.abortController.signal,
-        onProgress: async () => {
-          if (!this.#isCurrent(run)) return null;
-          const composed = await this.#queueComposition(run, mode, { status: 'loading' });
-          return composed && this.#isCurrent(run)
-            ? this.#state.projections[mode].structure.value
-            : null;
-        },
-      }));
-    } catch (error: unknown) {
-      if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return;
-      result = { error, criticalFailure: true };
-    }
-    if (!this.#isCurrent(run)) return;
-
-    const status: LifecycleStatus = result?.criticalFailure ? 'failed' : 'ready';
-    const composed = await this.#queueComposition(run, mode, { status, error: result?.error ?? null });
-    if (!composed || !this.#isCurrent(run)) return;
-    if (status === 'ready') void this.#hydrateEvidence(run, mode);
-  }
-
-  async #hydrateEvidence(run: Run, mode: ViewMode): Promise<void> {
-    if (!this.#isCurrent(run) || typeof this.#evidence !== 'function') return;
+  async #deriveEvidence(
+    run: Run,
+    mode: ViewMode,
+    { preserveEstablished = false, publish = true }: { preserveEstablished?: boolean; publish?: boolean } = {},
+  ): Promise<boolean> {
+    if (!this.#isCurrent(run) || typeof this.#evidence !== 'function') return false;
     const projectionState = this.#state.projections[mode];
-    projectionState.evidence = lifecycle('loading');
-    if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
-    let value: unknown;
+    if (projectionState.structure.status !== 'ready') return false;
+    const previous = projectionState.evidence;
     try {
-      value = await this.#evidence(Object.freeze({
+      const value = await this.#evidence(Object.freeze({
         center: this.#state.center,
         mode,
         structure: projectionState.structure.value,
         signal: run.abortController.signal,
       }));
-    } catch (error: unknown) {
-      if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return;
-      projectionState.evidence = lifecycle('failed', null, error);
-      this.#log('Nodus evidence failed', { mode, error: errorMessage(error) });
-      if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
-      return;
-    }
-    if (!this.#isCurrent(run)) return;
-    projectionState.evidence = lifecycle('ready', value);
-    if (this.#isActiveMode(mode)) await this.#presentCurrent('update');
-  }
-
-  async #hydrateRail(run: Run): Promise<boolean> {
-    if (!this.#isCurrent(run) || typeof this.#rail !== 'function') return false;
-    let value: unknown;
-    try {
-      value = await this.#rail(Object.freeze({
-        center: this.#state.center,
-        signal: run.abortController.signal,
-        onProgress: async (nextValue: unknown) => {
-          if (!this.#isCurrent(run)) return false;
-          this.#state.rail = lifecycle('ready', nextValue);
-          await this.#presentCurrent('update');
-          return this.#isCurrent(run);
-        },
-      }));
+      if (!this.#isCurrent(run)) return false;
+      projectionState.evidence = lifecycle('ready', value);
+      if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
+      return true;
     } catch (error: unknown) {
       if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return false;
-      if (this.#state.rail.status === 'ready') {
-        this.#log('supplementary Rail evidence failed', error);
+      if (preserveEstablished && previous.status === 'ready') {
+        this.#log('Nodus evidence refinement failed; keeping established evidence', {
+          mode,
+          error: errorMessage(error),
+        });
+        return false;
+      }
+      projectionState.evidence = lifecycle('failed', null, error);
+      this.#log('Nodus evidence failed', { mode, error: errorMessage(error) });
+      if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
+      return false;
+    }
+  }
+
+  async #deriveRail(
+    run: Run,
+    { preserveEstablished = false, publish = true }: { preserveEstablished?: boolean; publish?: boolean } = {},
+  ): Promise<boolean> {
+    if (!this.#isCurrent(run) || typeof this.#rail !== 'function') return false;
+    const previous = this.#state.rail;
+    try {
+      const value = await this.#rail(Object.freeze({
+        center: this.#state.center,
+        signal: run.abortController.signal,
+      }));
+      if (!this.#isCurrent(run)) return false;
+      this.#state.rail = lifecycle('ready', value);
+      if (publish) await this.#presentCurrent('update');
+      return true;
+    } catch (error: unknown) {
+      if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return false;
+      if (preserveEstablished && previous.status === 'ready') {
+        this.#log('Nodus Rail refinement failed; keeping established Rail', error);
         return false;
       }
       this.#state.rail = lifecycle('failed', null, error);
       this.#log('Nodus Rail failed', error);
-      await this.#presentCurrent('update');
+      if (publish) await this.#presentCurrent('update');
       return false;
     }
-    if (!this.#isCurrent(run)) return false;
-    this.#state.rail = lifecycle('ready', value);
-    await this.#presentCurrent('update');
-    return true;
+  }
+
+  async #planRefinements(run: Run): Promise<void> {
+    if (!this.#isCurrent(run) || typeof this.#refine !== 'function') return;
+    let tasks: readonly RefinementTask[];
+    try {
+      tasks = await this.#refine(Object.freeze({
+        center: this.#state.center,
+        structures: Object.freeze({
+          roots: this.#state.projections.roots.structure.status === 'ready'
+            ? this.#state.projections.roots.structure.value
+            : null,
+          lines: this.#state.projections.lines.structure.status === 'ready'
+            ? this.#state.projections.lines.structure.value
+            : null,
+        }),
+        signal: run.abortController.signal,
+      }));
+    } catch (error: unknown) {
+      if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return;
+      this.#log('Nodus refinement planning failed', { error: errorMessage(error) });
+      return;
+    }
+    if (!this.#isCurrent(run)) return;
+
+    for (const task of tasks ?? []) {
+      if (!task || typeof task.key !== 'string' || !task.key || typeof task.run !== 'function') continue;
+      if (run.refinementKeys.has(task.key)) continue;
+      run.refinementKeys.add(task.key);
+      run.refinementPending += 1;
+      this.#state.settling = true;
+
+      void Promise.resolve()
+        .then(() => task.run())
+        .catch((error: unknown) => {
+          if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return;
+          this.#log('Nodus refinement unavailable', { key: task.key, error: errorMessage(error) });
+        })
+        .finally(() => {
+          run.refinementPending = Math.max(0, run.refinementPending - 1);
+          if (!this.#isCurrent(run)) return;
+          this.#state.settling = true;
+          this.#queueSettlement(run);
+        });
+    }
+  }
+
+  #queueSettlement(run: Run): void {
+    if (!this.#isCurrent(run)) return;
+    if (!run.settlementReady) {
+      run.settleNeeded = true;
+      return;
+    }
+    if (run.settleQueued) return;
+    run.settleQueued = true;
+    run.settleTail = run.settleTail
+      .catch(() => false)
+      .then(async () => {
+        await Promise.resolve();
+        run.settleQueued = false;
+        run.settleNeeded = false;
+        await this.#settle(run);
+      });
+  }
+
+  async #settle(run: Run): Promise<void> {
+    if (!this.#isCurrent(run)) return;
+    const activeMode = this.#state.mode;
+    const before = this.snapshot;
+    const beforeStructure = before.structure.value;
+
+    await this.#queueStructure(run, activeMode, {
+      preserveEstablished: true,
+      publish: false,
+    });
+    if (!this.#isCurrent(run)) return;
+
+    const projectionState = this.#state.projections[activeMode];
+    const refinements: Promise<boolean>[] = [];
+    if (projectionState.structure.status === 'ready' && typeof this.#evidence === 'function') {
+      refinements.push(this.#queueEvidence(run, activeMode, {
+        preserveEstablished: true,
+        publish: false,
+      }));
+    }
+    if (typeof this.#rail === 'function') {
+      refinements.push(this.#queueRail(run, {
+        preserveEstablished: true,
+        publish: false,
+      }));
+    }
+    await Promise.all(refinements);
+    if (!this.#isCurrent(run)) return;
+
+    await this.#planRefinements(run);
+    if (!this.#isCurrent(run)) return;
+    this.#state.settling = run.refinementPending > 0;
+
+    const after = this.snapshot;
+    if (!sameValue(beforeStructure, after.structure.value)) this.#refreshLookahead(run, this.#state.mode);
+    if (!sameValue(before, after)) await this.#presentCurrent('update');
+
+    void this.#settleProjection(run, otherMode(activeMode));
+  }
+
+  async #settleProjection(run: Run, mode: ViewMode): Promise<void> {
+    if (!this.#isCurrent(run)) return;
+    const before = this.snapshot;
+    const ready = await this.#queueStructure(run, mode, {
+      preserveEstablished: true,
+      publish: false,
+    });
+    if (!this.#isCurrent(run)) return;
+    if (ready && typeof this.#evidence === 'function') {
+      await this.#queueEvidence(run, mode, {
+        preserveEstablished: true,
+        publish: false,
+      });
+    }
+    if (!this.#isCurrent(run)) return;
+    await this.#planRefinements(run);
+    if (!this.#isCurrent(run)) return;
+    if (this.#isActiveMode(mode)) this.#refreshLookahead(run, mode);
+    const after = this.snapshot;
+    if (!sameValue(before, after)) await this.#presentCurrent('update');
   }
 }

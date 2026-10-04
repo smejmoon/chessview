@@ -18,7 +18,7 @@ Do not make generic task failure structural. Only a Reading already admitted by 
 
 An unavailable outcome must be scoped so replacement Nodus runs can try again according to normal source policy. It must not become durable graph or Evidence state merely to suppress reacquisition.
 
-`2026-10-04-settlement-incorporation-barrier.md` separately verifies successful-completion incorporation races. This outcome need not invent a generic incorporation epoch mechanism unless the unavailable case proves one necessary.
+Successful-completion incorporation races are owned by `docs/architecture/current-view.md` §Settlement coordination: coordinated completion dirties settlement for another recomposition while Constellation's Reading frontier prevents a still-relevant unincorporated result from being mistaken for Settled. This outcome need not invent a generic incorporation epoch mechanism unless the unavailable case proves one necessary.
 
 # Unsettled:
 

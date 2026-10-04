@@ -32,6 +32,8 @@ A Constellation applies the glossary meaning of [Settled](../glossary.md#settled
 
 The Reading frontier is how Constellation identifies and admits missing rated Explorer knowledge that may participate in structural settlement. Constellation learns whether a usable rated Reading is currently available by asking Evidence; it does not inspect Explorer transport/cache state itself. A frontier obligation participates only while another Reading can still change constrained composition. A completed structural Reading or reconciliation remains relevant to settlement until recomposition has incorporated its result. Nodus may carry that obligation alongside other current-Nodus refinement demand, but the structural admission belongs to Constellation.
 
+Constellation determines settlement from the facts visible to each composition. If a structural completion was not visible to an in-flight composition and its obligation remains relevant to that composition, the Reading frontier remains open and the result remains Settling. If the new composition makes the obligation irrelevant to constrained shape, it need not wait for that result. [Current view](../architecture/current-view.md) responds to coordinated completion by requesting another recomposition; it does not override Constellation's settlement judgment or invalidate an otherwise trustworthy in-flight composition.
+
 Missing cloud evaluation is not a structural obligation. Engine Evidence already available to composition may affect selection, but supplementary engine acquisition does not keep or retroactively make an otherwise Settled Constellation unsettled. Supplementary Masters, Evidence presentation, Rail, and lookahead work likewise do not determine Constellation settlement.
 
 ## Reading frontier
@@ -91,7 +93,7 @@ Deterministic tests should cover:
 - selected descendant positions entering/leaving the Reading frontier according to whether another Reading can still change the constrained result;
 - a Reading-frontier obligation keeping the Constellation Settling only while another Reading can change constrained composition;
 - Nodus preserving Reading-frontier structural provenance when combining current-Nodus refinement demand;
-- a completed structural Reading/reconciliation not counting as Settled until recomposition incorporates it;
+- a completed structural Reading/reconciliation not counting as Settled until recomposition incorporates it or makes its obligation irrelevant;
 - stale but usable local Evidence remaining composable without composition initiating refresh;
 - Explorer failure being unable to suppress already-known graph/navigation facts;
 - Rail inventory and Line count remaining independent of presentation-space constraints;

@@ -16,6 +16,8 @@ The controller may coordinate structural and supplementary work without learning
 
 Settlement never downgrades an established trustworthy value to loading. While the active Constellation is Settling, accepted structure and Rail remain usable; presentation may continue using previously accepted Evidence decoration until a replacement decoration is available. When the active Constellation is Settled, supplementary work may continue without changing Weather.
 
+When coordinated refinement finishes, current-view requests recomposition. A completion that arrives while recomposition is running marks settlement dirty so another pass follows; overlapping completions may coalesce. The in-flight recomposition remains eligible to publish if it is trustworthy. If a completed structural result was not visible to that composition and its obligation remains relevant, the Constellation's Reading frontier remains open and the published replacement remains Settling. A later pass may clear settlement only after the structural result is incorporated or the obligation is no longer relevant to the new shape.
+
 ## Publication boundary
 
 - Current-view commands enter `NodusController`; projection contributors return values; the controller publishes immutable current-view values; presentation consumes them.
@@ -27,7 +29,7 @@ Settlement never downgrades an established trustworthy value to loading. While t
 - Acquisition demanded by the active Root/Line projection may receive foreground current-view priority. Useful acquisition for the inactive sibling may continue in the background, but inactive-sibling work does not by itself keep the active Nodus structurally Settling. Dynamic participation priority may follow the live active mode without creating a second producer identity.
 - Current-view execution maps Nodus demand onto provider/source operations and keyed work. That mapping owns deduplication and execution mechanics, not the domain decision that the work is relevant or structural.
 - When relevant facts become available, recomposition may deliberately be broader than exact invalidation. The controller may recompute both sibling projections and Rail; presentation Evidence decoration may also be rebuilt from independent Evidence reads. Avoiding fragile source-to-consumer routing is more valuable than minimizing every pure derivation.
-- Same-turn or otherwise overlapping structural completions may be coalesced behind one recomputation, but Weather must not claim Settled while a completed relevant structural result still awaits incorporation. If recomputation yields the same published snapshot, no presentation update is required.
+- Same-turn or otherwise overlapping refinement completions may be coalesced. A completion during recomposition causes another pass after the current one rather than invalidating a trustworthy in-flight result. Intermediate replacements may publish, but Weather must not claim Settled while a completed relevant structural result still awaits incorporation. If recomposition yields the same published snapshot, no presentation update is required.
 - An accepted Constellation projection may nominate bounded supplementary lookahead. Lookahead remains outside structural settlement; its completion may improve later navigation but does not keep the active Nodus unsettled.
 - Missing cloud evaluation is outside structural settlement. Engine Evidence already available when composition is derived may affect selection, but supplementary cloud-evaluation acquisition does not keep or reopen an otherwise Settled active Constellation by itself.
 - Rail inventory and tab counts are Nodus-level current-view values, independent of active Constellation mode and presentation-space capacity. Rail is recomputed from available graph/source facts and requested Evidence rather than owning hydration itself.
@@ -63,8 +65,9 @@ Deterministic/browser contract tests should cover:
 - presentation joining Evidence to visible relationship identity outside the Evidence component;
 - a trustworthy current Nodus being published and remaining interactive while its active Constellation is Settling;
 - structural settlement following obligations that can change the active Constellation rather than generic run-owned task activity;
-- a completed structural result remaining unsettled until recomputation incorporates it;
-- overlapping structural completions being coalesced without publishing Settled before every completed relevant result is incorporated;
+- a completed structural result remaining unsettled until recomputation incorporates it or makes the obligation irrelevant;
+- overlapping refinement completions being coalesced without creating a false Settled interval;
+- a refinement completion arriving during recomposition causing another pass while an intermediate replacement that did not incorporate a still-relevant obligation remains Settling;
 - supplementary engine/Masters work continuing or completing after settlement without reopening structural Weather;
 - unchanged recomputation producing no redundant current-view publication;
 - supplementary failure preserving established trustworthy values without becoming a structural failure;

@@ -132,9 +132,8 @@ type Run = {
   evidenceTails: Record<ViewMode, Promise<boolean>>;
   railTail: Promise<boolean>;
   refinementKeys: Set<string>;
-  settleTail: Promise<unknown>;
-  settleQueued: boolean;
-  settleNeeded: boolean;
+  settlementDirty: boolean;
+  settlementDraining: boolean;
   settlementReady: boolean;
 };
 
@@ -496,9 +495,8 @@ export class NodusController {
       evidenceTails: tails(),
       railTail: Promise.resolve(false),
       refinementKeys: new Set(),
-      settleTail: Promise.resolve(),
-      settleQueued: false,
-      settleNeeded: false,
+      settlementDirty: false,
+      settlementDraining: false,
       settlementReady: false,
     };
     this.#run = run;
@@ -538,7 +536,7 @@ export class NodusController {
     this.#refreshLookahead(run, activeMode);
 
     void this.#prepareProjection(run, otherMode(activeMode), preserveEstablished);
-    if (run.settleNeeded) this.#queueSettlement(run);
+    if (run.settlementDirty) this.#queueSettlement(run);
   }
 
   async #prepareProjection(run: Run, mode: ViewMode, preserveEstablished: boolean): Promise<void> {
@@ -753,20 +751,28 @@ export class NodusController {
 
   #queueSettlement(run: Run): void {
     if (!this.#isCurrent(run)) return;
-    if (!run.settlementReady) {
-      run.settleNeeded = true;
-      return;
-    }
-    if (run.settleQueued) return;
-    run.settleQueued = true;
-    run.settleTail = run.settleTail
-      .catch(() => false)
-      .then(async () => {
-        await Promise.resolve();
-        run.settleQueued = false;
-        run.settleNeeded = false;
+    run.settlementDirty = true;
+    if (!run.settlementReady || run.settlementDraining) return;
+    run.settlementDraining = true;
+    void this.#drainSettlement(run).catch((error: unknown) => {
+      if (!this.#isCurrent(run)) return;
+      this.#log('Nodus settlement failed', { error: errorMessage(error) });
+    });
+  }
+
+  async #drainSettlement(run: Run): Promise<void> {
+    try {
+      await Promise.resolve();
+      while (this.#isCurrent(run) && run.settlementReady && run.settlementDirty) {
+        run.settlementDirty = false;
         await this.#settle(run);
-      });
+      }
+    } finally {
+      run.settlementDraining = false;
+      if (this.#isCurrent(run) && run.settlementReady && run.settlementDirty) {
+        this.#queueSettlement(run);
+      }
+    }
   }
 
   async #settle(run: Run): Promise<void> {

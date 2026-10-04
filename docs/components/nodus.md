@@ -24,7 +24,7 @@ A Nodus is structurally [Settled](../glossary.md#settled) exactly when its activ
 
 Generic asynchronous or run-owned work is not sufficient to make a Nodus Settling. Only admitted obligations capable of changing the active Constellation participate in structural settlement. Work confined to supplementary Evidence/Rail enrichment or to an inactive sibling projection does not keep the active Nodus structurally unsettled.
 
-A completed structural result must be incorporated into the active Constellation before the Nodus may be called structurally Settled. Supplementary engine or Masters work may continue after settlement, and its completion does not by itself reopen structural settlement. A newly admitted structural obligation may make the active Constellation, and therefore the Nodus, Settling again.
+A completed structural result must be incorporated into the active Constellation before the Nodus may be called structurally Settled while that obligation remains relevant. Completion requests another current-view recomposition. An in-flight replacement that did not observe the completed result may still be accepted if it is trustworthy, but its active Constellation remains Settling whenever the unresolved obligation remains in its Reading frontier. A later recomposition may settle after incorporating the result or establishing that the obligation is no longer relevant to constrained shape. Supplementary engine or Masters work may continue after settlement, and its completion does not by itself reopen structural settlement. A newly admitted structural obligation may make the active Constellation, and therefore the Nodus, Settling again.
 
 Failure of supplementary work reduces what can be learned from that work; it does not erase an already trustworthy Nodus. Only inability to establish required trustworthy state for a newly selected Nodus may make that new state unavailable.
 
@@ -58,7 +58,8 @@ Deterministic/browser contract tests should cover:
 - active-projection relevance changing demand priority without creating a second producer identity or changing structural provenance;
 - a trustworthy Nodus remaining interactive while its active Constellation is Settling;
 - structural settlement following the active Constellation rather than generic run-owned activity;
-- a completed structural result leaving the Nodus Settling until that result is incorporated;
+- a completed structural result leaving the Nodus Settling until that result is incorporated or its structural obligation becomes irrelevant;
+- a refinement completion during recomposition causing another recomposition while any intermediate active Constellation that still carries the obligation remains Settling;
 - supplementary engine/Masters enrichment continuing after structural settlement without reopening it;
 - refinement failure preserving an already trustworthy Nodus when the failed work is supplementary;
 - explicit refresh preserving the established same-Nodus snapshot during replacement derivation;

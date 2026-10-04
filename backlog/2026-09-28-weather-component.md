@@ -12,7 +12,7 @@ The outcome does not require a separate Weather module if the existing presenter
 
 `docs/components/weather.md` now defines Weather as an observer/presenter of the active Constellation's structural settlement, not the owner of that settlement. `docs/glossary.md` defines Settled independently from asynchronous task completion.
 
-The active accepted Constellation now publishes structural settlement directly from its Reading frontier, and current-view selects the active sibling's state instead of deriving Weather truth from generic refinement counts. The remaining settlement-ordering edge cases are tracked by `2026-10-04-settlement-incorporation-barrier.md`; Weather should consume structural truth rather than duplicate it.
+The active accepted Constellation publishes structural settlement directly from its Reading frontier, current-view selects the active sibling's state instead of deriving Weather truth from generic refinement counts, and completion-triggered recomposition keeps draining while newer coordinated results arrive. An in-flight Constellation that did not observe a still-relevant structural completion retains its Reading-frontier obligation and therefore remains Settling until a later pass incorporates the result. Weather should consume that structural truth rather than duplicate it.
 
 The current presentation delay/acknowledgement behavior is useful UX machinery, but it must sit downstream of correct structural truth.
 

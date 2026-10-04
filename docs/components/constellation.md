@@ -4,42 +4,43 @@
 
 Own the coherent current-view subgraph around the Nodus: which known canonical positions and relationships are represented, how selected branches compete for limited visible space, and which nearby positions are worth bounded supplementary lookahead.
 
-A Constellation is a projection of Chessview's [`ChartedGraph`](charted-graph.md), not `ChartedGraph` itself and not its two-dimensional rendering. It combines durable Graph Edges with current evidence to form view-local Candidates. Eligibility, Salience, family/depth membership, and other composition annotations remain current-view state rather than Graph Edge state.
+A Constellation is a projection of Chessview's [`ChartedGraph`](charted-graph.md), not `ChartedGraph` itself and not its two-dimensional rendering. It combines durable Graph Edges with current [Evidence](evidence.md) to form view-local Candidates. Eligibility, Salience, family/depth membership, and other composition annotations remain current-view state rather than Graph Edge state.
 
 [Constellation selection](constellation-selection.md) owns automatic eligibility and same-source Salience. Constellation consumes selected Candidate objects in their selection order and owns coherent cross-branch allocation. Navigability is broader than Candidate membership: an explicitly materialized Graph Edge may remain navigable without belonging to the current Constellation.
 
 ## Composition
 
 - The graph Chessview knows may be larger than the current Constellation. Omitting a known position from a view never removes it from `ChartedGraph`.
-- Composition derives only from graph/source/evidence facts currently available. It does not start Explorer, engine, Masters, Root enrichment, or graph-reconciliation work.
-- A Candidate refers to one known Graph Edge plus the current evidence and selection state needed for this composition. Current Explorer Prevalence, human-result evidence, engine evidence, eligibility, Salience, local ordering, family membership, and depth are not persisted back onto the Graph Edge.
+- Composition derives from durable graph facts plus Evidence currently available for relevant canonical positions and Graph Edges. It requests Evidence through the Evidence boundary rather than calculating evidence semantics or reading engine/Explorer/Masters clients directly.
+- Evidence requests during composition are reads only. Constellation does not start Explorer, engine, Masters, Root enrichment, or graph-reconciliation work.
+- A Candidate refers to one known Graph Edge plus the current Evidence and selection state needed for this composition. Prevalence, human-result Evidence, engine Evidence, eligibility, Salience, local ordering, family membership, and depth are not persisted back onto the Graph Edge.
 - A Graph Edge does not become a Candidate merely because it is `explicit`. Explicit materialization preserves navigation behavior independently; usable current Prevalence may separately make that same Graph Edge an ordinary Candidate.
-- A visible relationship is the Constellation-local representation of a selected Candidate. It refers to durable Graph Edge identity while carrying only current-view structure needed by composition; it is not a persisted second graph.
+- A visible relationship is the Constellation-local representation of a selected Candidate. It refers to durable Graph Edge identity while carrying only current-view structure needed by composition; it is not a persisted second graph and does not own a duplicate Evidence record.
 - Constellation allocates already-selected Candidates across branches in same-source order. It may merge, omit, deepen, or truncate structure to preserve coherence and fit available space, but it does not re-run provider acquisition.
-- Prevalence from different source positions is local evidence, not one globally comparable score. Constellation owns the cross-branch choices needed to preserve a coherent view.
+- Prevalence from different source positions is local Evidence, not one globally comparable score. Constellation owns the cross-branch choices needed to preserve a coherent view.
 - Broad positions should retain meaningful alternatives instead of allowing one branch to consume the whole view; narrow Lines may deepen when that is the best use of available space.
 - Distinct immediate Root or first-level Line families remain distinct until selected paths genuinely converge on the same canonical position.
 - Canonical transpositions are represented once while preserving every selected visible relationship and family membership reaching the convergence.
-- Current source evidence is authoritative for evidence-dependent composition. If Explorer evidence is absent, the Graph Edge remains known while Prevalence and related evidence are unknown; Constellation must not recover source statistics from Graph Edge persistence.
-- Optional engine evidence may influence selection when already admitted to the composition, but missing engine evidence does not trigger acquisition from composition.
+- Evidence is authoritative for evidence-dependent composition. If rated Reading Evidence is unavailable, the Graph Edge remains known while Prevalence and related signals are unknown; Constellation must not recover source statistics from Graph Edge persistence.
+- Optional engine Evidence may influence selection when currently available, but missing engine Evidence does not trigger acquisition from composition.
 - As admitted structural facts are incorporated, composition may add, remove, or rearrange visible positions and relationships. The previously accepted Constellation remains current and interactive until a recomputed replacement is accepted.
-- Candidates and Constellation structure belong to the current Nodus run. Recenter/history restoration rebuilds them from durable graph knowledge plus currently available source facts rather than carrying a frozen Candidate set forward.
+- Candidates and Constellation structure belong to the current Nodus run. Recenter/history restoration rebuilds them from durable graph knowledge plus currently available Evidence rather than carrying a frozen Candidate set forward.
 
 ## Settlement
 
 A Constellation applies the glossary meaning of [Settled](../glossary.md#settled) to its **shape**. It is Settled when Chessview has finished deciding the shape of the current view with respect to its admitted structural obligations: no unresolved admitted obligation can still change constrained composition, and every completed relevant structural result has been incorporated. Repeating composition from the same admitted facts would then produce the same shape.
 
-The Reading frontier is how Constellation identifies and admits missing Explorer knowledge that may participate in structural settlement. A frontier obligation participates only while another Reading can still change constrained composition. A completed structural Reading or reconciliation remains relevant to settlement until recomposition has incorporated its result. Nodus may carry that obligation alongside other current-Nodus refinement demand, but the structural admission belongs to Constellation.
+The Reading frontier is how Constellation identifies and admits missing rated Explorer knowledge that may participate in structural settlement. Constellation learns whether a usable rated Reading is currently available by asking Evidence; it does not inspect Explorer transport/cache state itself. A frontier obligation participates only while another Reading can still change constrained composition. A completed structural Reading or reconciliation remains relevant to settlement until recomposition has incorporated its result. Nodus may carry that obligation alongside other current-Nodus refinement demand, but the structural admission belongs to Constellation.
 
-Missing cloud evaluation is not a structural obligation. Engine evidence already admitted to a composition may affect selection, but supplementary engine acquisition does not keep or retroactively make an otherwise Settled Constellation unsettled. Supplementary Masters, Evidence, Rail, and lookahead work likewise do not determine Constellation settlement.
+Missing cloud evaluation is not a structural obligation. Engine Evidence already available to composition may affect selection, but supplementary engine acquisition does not keep or retroactively make an otherwise Settled Constellation unsettled. Supplementary Masters, Evidence presentation, Rail, and lookahead work likewise do not determine Constellation settlement.
 
 ## Reading frontier
 
 Constellation identifies where missing graph-bearing Explorer knowledge can still change the constrained composition. It exposes those positions as a **Reading frontier**; it does not consume that frontier itself.
 
-- If the Nodus itself lacks usable Explorer evidence and another Reading can establish automatic Line Candidates, the Nodus may be in the frontier even before any selected Line exists.
-- When a currently selected Line position lacks an Explorer Reading and another Reading can still change the constrained composition, that position is in the frontier.
-- Root composition may likewise expose source positions whose missing Explorer evidence prevents known non-explicit incoming relationships from becoming ordinary Candidates.
+- If the Nodus itself lacks usable rated Reading Evidence and another Reading can establish automatic Line Candidates, the Nodus may be in the frontier even before any selected Line exists.
+- When a currently selected Line position lacks a usable rated Reading and another Reading can still change the constrained composition, that position is in the frontier.
+- Root composition may likewise expose source positions whose missing rated Reading prevents known non-explicit incoming relationships from becoming ordinary Candidates.
 - Selection membership and missing acquisition are separate facts. A position belongs in the frontier only while its missing Reading can still affect the constrained result.
 - A full visible-space budget does not by itself mean composition is Settled; another selected-position Reading may still change which structure deserves that space.
 - Conversely, Constellation does not expand through unselected Candidates merely to spend an acquisition budget.
@@ -67,7 +68,7 @@ Lookahead relevance belongs here because Constellation owns coherent locality ar
 
 Constellation optimizes for a coherent, understandable structure rather than maximum coverage.
 
-The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count or opening-depth cap. Presentation may supply capacity constraints, but two-dimensional coordinates, board sizes, connector paths, colors, and labels remain presentation concerns.
+The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count or opening-depth cap. Presentation may supply capacity constraints, but two-dimensional coordinates, board sizes, connector paths, colors, labels, and the joining of Evidence onto visible relationship IDs remain presentation concerns.
 
 A material change to those effective constraints invalidates the previous composition as the fixed point for the new inputs and requires same-Nodus recomposition. That recomposition may expose or remove Reading-frontier obligations; if no admitted structural obligation remains, the new shape may be Settled immediately. A presentation-only relayout that leaves the effective composition constraints unchanged does not recompose Constellation.
 
@@ -78,28 +79,30 @@ Rail inventory and counts are independent of Constellation capacity. Presentatio
 Deterministic tests should cover:
 
 - durable known graph state being larger than the selected Constellation;
-- Candidates combining Graph Edges with current evidence without mutating persisted Graph Edges;
+- Constellation requesting position/Graph Edge Evidence without Evidence depending on Constellation structure;
+- Constellation composition importing neither Evidence arithmetic nor Explorer/engine/Masters provider clients for Candidate evidence;
+- Candidates combining Graph Edges with current Evidence without mutating persisted Graph Edges;
 - explicit-only Graph Edges remaining durable/navigable without being manufactured into evidence-free Candidates;
 - an explicit Graph Edge with usable current Prevalence participating through the ordinary Candidate path;
-- visible relationships carrying current-view family/depth/selection state without becoming persisted graph state;
+- visible relationships carrying current-view family/depth/selection state without becoming persisted graph or duplicate Evidence state;
 - composition consuming selected Candidate objects in selection order without independently re-running automatic eligibility or same-source ranking;
 - composition performing no source acquisition or graph reconciliation side effects;
-- missing center Explorer evidence producing a Reading frontier without making local composition fail;
+- missing center rated Reading Evidence producing a Reading frontier without making local composition fail;
 - selected descendant positions entering/leaving the Reading frontier according to whether another Reading can still change the constrained result;
 - a Reading-frontier obligation keeping the Constellation Settling only while another Reading can change constrained composition;
 - Nodus preserving Reading-frontier structural provenance when combining current-Nodus refinement demand;
 - a completed structural Reading/reconciliation not counting as Settled until recomposition incorporates it;
-- stale but usable local Explorer evidence remaining composable without composition initiating refresh;
+- stale but usable local Evidence remaining composable without composition initiating refresh;
 - Explorer failure being unable to suppress already-known graph/navigation facts;
 - Rail inventory and Line count remaining independent of presentation-space constraints;
 - a material presentation-constraint change recomposing the same-Nodus Constellation and being able to expose a new Reading-frontier obligation;
 - a presentation-only relayout leaving Constellation composition and settlement unchanged;
 - a trustworthy provisional Constellation remaining available while it is Settling;
 - a narrow useful Line deepening without an independent fixed opening-depth cap;
-- missing optional engine evidence neither triggering acquisition nor creating a structural settlement obligation;
+- missing optional engine Evidence neither triggering acquisition nor creating a structural settlement obligation;
 - late supplementary engine evidence not reopening an otherwise Settled Constellation by itself;
 - accepted compositions producing only bounded locally relevant supplementary lookahead nominations;
-- Recenter/history restoration rebuilding view-local Candidates from durable graph knowledge and current evidence;
+- Recenter/history restoration rebuilding view-local Candidates from durable graph knowledge and current Evidence;
 - distinct immediate Root/Line families remaining distinct before genuine convergence;
 - canonical transpositions appearing once while retaining every selected relationship/family membership;
 - cross-branch allocation preserving coherence without treating unrelated source-local Prevalence as one global rank.

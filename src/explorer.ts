@@ -60,12 +60,50 @@ type ExplorerRepository = Readonly<{
   ): Promise<T>;
 }>;
 
+type ExplorerResponse = Readonly<{
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+  text(): Promise<string>;
+}>;
+
+type ExplorerRequest = (
+  url: URL,
+  options: Readonly<{
+    signal: AbortSignal;
+    priority: () => LoadPriority;
+    headers: Readonly<Record<string, string>>;
+  }>,
+) => Promise<ExplorerResponse>;
+
 type ErrorLike = Readonly<{
   name?: string;
   message?: string;
 }>;
 
-const repository = positionRepository as unknown as ExplorerRepository;
+type DebugLevel = 'info' | 'warn' | 'error';
+type Log = (message: string, detail?: unknown, level?: DebugLevel) => void;
+
+export type ExplorerObservation = Readonly<{
+  position: string;
+  reading: ParsedExplorerReading;
+}>;
+
+export type ExplorerObservationListener = (observation: ExplorerObservation) => void;
+
+export type ExplorerProviderOptions = Readonly<{
+  repository?: ExplorerRepository;
+  request?: ExplorerRequest;
+  cooldownUntil?: () => number;
+  now?: () => number;
+  log?: Log;
+}>;
+
+type AdmittedExplorer = Readonly<{
+  reading: ParsedExplorerReading;
+  fetchedAt: number;
+  persisted: boolean;
+}>;
 
 function explorerUrl(key: string): URL {
   const url = new URL(ENDPOINT);
@@ -122,103 +160,213 @@ function cachedExplorerReading(record: PositionRecord | null | undefined): Parse
   }
 }
 
-export async function readCachedExplorerReading(key: string): Promise<ParsedExplorerReading | null> {
-  const cached = await repository.get(canonicalPosition(key));
-  return cachedExplorerReading(cached);
-}
-
 function errorLike(error: unknown): ErrorLike {
   return error && typeof error === 'object' ? error as ErrorLike : {};
 }
 
-function recoverExplorerRefresh(
-  error: unknown,
-  canonical: string,
-  cachedExplorer: ParsedExplorerReading | null,
-  signal: AbortSignal,
-): ParsedExplorerReading {
-  const details = errorLike(error);
-  if (isObsoleteWork(error, signal)) throw error;
-  if (cachedExplorer) {
-    debugLog('Explorer refresh failed; using stale Reading', {
+export function createExplorerProvider({
+  repository = positionRepository as unknown as ExplorerRepository,
+  request = (url, options) => lichessSession.authorizedRequest(url, options) as Promise<ExplorerResponse>,
+  cooldownUntil = () => lichessGateway.cooldownUntil,
+  now = () => Date.now(),
+  log = debugLog,
+}: ExplorerProviderOptions = {}) {
+  const latest = new Map<string, AdmittedExplorer>();
+  const listeners = new Set<ExplorerObservationListener>();
+
+  function report(message: string, detail?: unknown, level: DebugLevel = 'info'): void {
+    Reflect.apply(log, undefined, [message, detail, level]);
+  }
+
+  function notify(position: string, reading: ParsedExplorerReading): void {
+    const observation = Object.freeze({ position, reading });
+    for (const listener of [...listeners]) {
+      try {
+        listener(observation);
+      } catch (error: unknown) {
+        report('Explorer observation listener failed', {
+          position,
+          error: errorLike(error).message ?? String(error),
+        }, 'error');
+      }
+    }
+  }
+
+  function admit(
+    canonical: string,
+    reading: ParsedExplorerReading,
+    fetchedAt: number,
+    {
+      fresh = false,
+      persisted = true,
+    }: Readonly<{ fresh?: boolean; persisted?: boolean }> = {},
+  ): ParsedExplorerReading {
+    const existing = latest.get(canonical);
+    if (!fresh && existing?.fetchedAt === fetchedAt) return existing.reading;
+    latest.set(canonical, Object.freeze({ reading, fetchedAt, persisted }));
+    notify(canonical, reading);
+    return reading;
+  }
+
+  function markPersisted(canonical: string, reading: ParsedExplorerReading, fetchedAt: number): void {
+    const admitted = latest.get(canonical);
+    if (!admitted || admitted.reading !== reading || admitted.fetchedAt !== fetchedAt) return;
+    latest.set(canonical, Object.freeze({ ...admitted, persisted: true }));
+  }
+
+  async function readCached(key: string): Promise<ParsedExplorerReading | null> {
+    const canonical = canonicalPosition(key);
+    return cachedExplorerReading(await repository.get(canonical));
+  }
+
+  function current(key: string): ParsedExplorerReading | null {
+    return latest.get(canonicalPosition(key))?.reading ?? null;
+  }
+
+  function subscribe(listener: ExplorerObservationListener): () => void {
+    if (typeof listener !== 'function') throw new TypeError('Explorer observation listener must be a function');
+    listeners.add(listener);
+    return () => { listeners.delete(listener); };
+  }
+
+  function recoverRefresh(
+    error: unknown,
+    canonical: string,
+    cachedExplorer: ParsedExplorerReading | null,
+    cachedFetchedAt: number,
+    signal: AbortSignal,
+  ): ParsedExplorerReading {
+    const details = errorLike(error);
+    if (isObsoleteWork(error, signal)) throw error;
+    if (cachedExplorer) {
+      report('Explorer refresh failed; using stale Reading', {
+        position: canonical,
+        error: details.message ?? String(error),
+        games: totalGames(cachedExplorer),
+      }, 'warn');
+      return admit(canonical, cachedExplorer, cachedFetchedAt);
+    }
+    report('explorer refresh failed', {
       position: canonical,
       error: details.message ?? String(error),
-      games: totalGames(cachedExplorer),
-    }, 'warn');
-    return cachedExplorer;
+    }, 'error');
+    throw error;
   }
-  debugLog('explorer refresh failed', {
-    position: canonical,
-    error: details.message ?? String(error),
-  }, 'error');
-  throw error;
-}
 
-export function loadExplorerReading(
-  key: string,
-  { force = false, signal, priority = 'foreground' }: LoadOptions = {},
-): Promise<ParsedExplorerReading> {
-  const canonical = canonicalPosition(key);
-  const facet = force ? 'explorer:force' : 'explorer';
-  return repository.load(
-    canonical,
-    facet,
-    async ({ signal: requestSignal, priority: requestPriority }): Promise<ParsedExplorerReading> => {
-      const cached = await repository.get(canonical);
-      const cachedExplorer = cachedExplorerReading(cached);
-      const fresh = Boolean(
-        cachedExplorer
-        && Date.now() - (cached?.explorerFetchedAt ?? 0) < EXPLORER_TTL_MS,
-      );
-      if (!force && fresh && cachedExplorer) {
-        debugLog('Explorer Reading cache hit', {
-          position: canonical,
-          games: totalGames(cachedExplorer),
-        });
-        return cachedExplorer;
-      }
+  async function persist(
+    canonical: string,
+    explorer: ParsedExplorerReading,
+    cached: PositionRecord | null,
+    fetchedAt: number,
+  ): Promise<boolean> {
+    try {
+      await repository.merge(canonical, {
+        fen: cached?.fen ?? toPlayableFen(canonical),
+        opening: explorer.opening ?? cached?.opening ?? null,
+        explorer,
+        explorerFetchedAt: fetchedAt,
+        games: totalGames(explorer),
+      });
+      report('Explorer Reading stored', { position: canonical, games: totalGames(explorer) });
+      return true;
+    } catch (error: unknown) {
+      const details = errorLike(error);
+      report('Explorer Reading persistence failed', {
+        position: canonical,
+        error: details.message ?? String(error),
+        games: totalGames(explorer),
+      }, 'error');
+      return false;
+    }
+  }
 
-      try {
-        const url = explorerUrl(canonical);
-        debugLog('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
-
-        const response = await lichessSession.authorizedRequest(url, {
-          signal: requestSignal,
-          priority: requestPriority,
-          headers: { Accept: 'application/json' },
-        });
-
-        debugLog('explorer response', { position: canonical, status: response.status, ok: response.ok });
-        if (!response.ok) {
-          let body = '';
-          try { body = (await response.text()).slice(0, 500); } catch {}
-          debugLog('explorer HTTP error', { position: canonical, status: response.status, body }, 'error');
-          if (response.status === 401) {
-            throw httpError(401, 'Lichess authorization expired. Reload to sign in again.');
-          }
-          if (response.status === 429) {
-            const retryAfterMs = Math.max(0, lichessGateway.cooldownUntil - Date.now());
-            debugLog('explorer cooldown started', { retryAfterMs }, 'warn');
-            throw httpError(429, 'Lichess explorer is rate-limited. Requests are paused for one minute.');
-          }
-          throw httpError(response.status, `Lichess explorer returned ${response.status}`);
+  function ensure(
+    key: string,
+    { force = false, signal, priority = 'foreground' }: LoadOptions = {},
+  ): Promise<ParsedExplorerReading> {
+    const canonical = canonicalPosition(key);
+    const facet = force ? 'explorer:force' : 'explorer';
+    return repository.load(
+      canonical,
+      facet,
+      async ({ signal: requestSignal, priority: requestPriority }): Promise<ParsedExplorerReading> => {
+        const cached = await repository.get(canonical);
+        const cachedExplorer = cachedExplorerReading(cached);
+        const cachedFetchedAt = cached?.explorerFetchedAt ?? 0;
+        const freshCached = Boolean(
+          cachedExplorer
+          && now() - cachedFetchedAt < EXPLORER_TTL_MS,
+        );
+        if (!force && freshCached && cachedExplorer) {
+          report('Explorer Reading cache hit', {
+            position: canonical,
+            games: totalGames(cachedExplorer),
+          });
+          return admit(canonical, cachedExplorer, cachedFetchedAt);
         }
 
-        const explorer = parseExplorerReading(await response.json());
-        await repository.merge(canonical, {
-          fen: cached?.fen ?? toPlayableFen(canonical),
-          opening: explorer.opening ?? cached?.opening ?? null,
-          explorer,
-          explorerFetchedAt: Date.now(),
-          games: totalGames(explorer),
-        });
+        const admitted = latest.get(canonical);
+        if (
+          !force
+          && admitted
+          && !admitted.persisted
+          && now() - admitted.fetchedAt < EXPLORER_TTL_MS
+        ) {
+          report('Explorer Reading live hit', {
+            position: canonical,
+            games: totalGames(admitted.reading),
+          });
+          return admitted.reading;
+        }
 
-        debugLog('Explorer Reading stored', { position: canonical, games: totalGames(explorer) });
-        return explorer;
-      } catch (error: unknown) {
-        return recoverExplorerRefresh(error, canonical, cachedExplorer, requestSignal);
-      }
-    },
-    { signal, priority },
-  );
+        let explorer: ParsedExplorerReading;
+        try {
+          const url = explorerUrl(canonical);
+          report('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
+
+          const response = await request(url, {
+            signal: requestSignal,
+            priority: requestPriority,
+            headers: { Accept: 'application/json' },
+          });
+
+          report('explorer response', { position: canonical, status: response.status, ok: response.ok });
+          if (!response.ok) {
+            let body = '';
+            try { body = (await response.text()).slice(0, 500); } catch {}
+            report('explorer HTTP error', { position: canonical, status: response.status, body }, 'error');
+            if (response.status === 401) {
+              throw httpError(401, 'Lichess authorization expired. Reload to sign in again.');
+            }
+            if (response.status === 429) {
+              const retryAfterMs = Math.max(0, cooldownUntil() - now());
+              report('explorer cooldown started', { retryAfterMs }, 'warn');
+              throw httpError(429, 'Lichess explorer is rate-limited. Requests are paused for one minute.');
+            }
+            throw httpError(response.status, `Lichess explorer returned ${response.status}`);
+          }
+
+          explorer = parseExplorerReading(await response.json());
+        } catch (error: unknown) {
+          return recoverRefresh(error, canonical, cachedExplorer, cachedFetchedAt, requestSignal);
+        }
+
+        const fetchedAt = now();
+        const usable = admit(canonical, explorer, fetchedAt, { fresh: true, persisted: false });
+        if (await persist(canonical, usable, cached, fetchedAt)) {
+          markPersisted(canonical, usable, fetchedAt);
+        }
+        return usable;
+      },
+      { signal, priority },
+    );
+  }
+
+  return Object.freeze({ ensure, current, subscribe, readCached });
 }
+
+export const explorerProvider = createExplorerProvider();
+export const loadExplorerReading = explorerProvider.ensure;
+export const currentExplorerReading = explorerProvider.current;
+export const subscribeExplorerReadings = explorerProvider.subscribe;
+export const readCachedExplorerReading = explorerProvider.readCached;

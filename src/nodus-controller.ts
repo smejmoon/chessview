@@ -50,6 +50,7 @@ export type EvidenceInput = Readonly<{
 export type RailInput = Readonly<{
   center: string;
   signal: AbortSignal;
+  onProgress: (value: unknown) => Promise<boolean>;
 }>;
 
 export type DiscoveryInput = Readonly<{
@@ -589,9 +590,19 @@ export class NodusController {
       value = await this.#rail(Object.freeze({
         center: this.#state.center,
         signal: run.abortController.signal,
+        onProgress: async (nextValue: unknown) => {
+          if (!this.#isCurrent(run)) return false;
+          this.#state.rail = lifecycle('ready', nextValue);
+          await this.#presentCurrent('update');
+          return this.#isCurrent(run);
+        },
       }));
     } catch (error: unknown) {
       if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return false;
+      if (this.#state.rail.status === 'ready') {
+        this.#log('supplementary Rail evidence failed', error);
+        return false;
+      }
       this.#state.rail = lifecycle('failed', null, error);
       this.#log('Nodus Rail failed', error);
       await this.#presentCurrent('update');

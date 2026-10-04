@@ -145,11 +145,12 @@ export function createEvidenceReader({
     { comparisons = true }: MoveEvidenceOptions = {},
   ): Promise<MoveEvidence> {
     throwIfObsolete(signal, 'Evidence read became obsolete');
-    const [explorer, sourceEval, targetEval] = await Promise.all([
+    const [explorer, sourceEval] = await Promise.all([
       explorerFor(edge.source),
       evalFor(edge.source),
-      evalFor(edge.target),
     ]);
+    throwIfObsolete(signal, 'Evidence read became obsolete');
+    const targetEval = sourceEval ? await evalFor(edge.target) : null;
     throwIfObsolete(signal, 'Evidence read became obsolete');
 
     const frequency = moveFrequency(explorer, edge) as FrequencyEvidence | null;

@@ -14,12 +14,7 @@ import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge } from './position-graph.ts';
 import { positionRepository } from './position-repository.js';
-import {
-  currentExplorerReading,
-  readCachedExplorerReading,
-} from './explorer.js';
-import { humanResultQuality, moveEvaluation, moveFrequency } from './evidence.js';
-import { lichessEval } from './lichess-eval.js';
+import { createEvidenceReader } from './evidence-source.ts';
 import {
   rankCrossSourceCandidates,
   rankSameSourceCandidates,
@@ -34,8 +29,8 @@ const ROOT_LABEL_MAX_PLIES = 6;
 type CandidateSource = Readonly<{
   outgoing(source: string): Promise<readonly SelectionCandidate[]>;
   incoming(target: string): Promise<readonly SelectionCandidate[]>;
-  hasExplorer(source: string): Promise<boolean>;
-  missingExplorer(): readonly string[];
+  hasReading(source: string): Promise<boolean>;
+  missingReadings(): readonly string[];
 }>;
 type PositionRecord = {
   key: string;
@@ -79,59 +74,35 @@ function immutable<T>(value: T): T {
 }
 
 function createCandidateSource(signal?: AbortSignal): CandidateSource {
-  const explorerReads = new Map<string, Promise<unknown | null>>();
+  const evidence = createEvidenceReader({ signal });
   const missing = new Set<string>();
 
-  function explorerFor(source: string): Promise<unknown | null> {
-    const existing = explorerReads.get(source);
-    if (existing) return existing;
-    const pending = (async () => {
-      throwIfAborted(signal);
-      const explorer = currentExplorerReading(source) ?? await readCachedExplorerReading(source);
-      throwIfAborted(signal);
-      return explorer;
-    })();
-    explorerReads.set(source, pending);
-    return pending;
-  }
-
-  async function candidate(
-    edge: GraphEdge,
-    sourceExplorer: unknown | null | undefined = undefined,
-  ): Promise<SelectionCandidate | null> {
-    const explorer = sourceExplorer !== undefined
-      ? sourceExplorer
-      : await explorerFor(edge.source);
+  async function candidate(edge: GraphEdge): Promise<SelectionCandidate | null> {
+    const readingAvailable = await evidence.ratedReadingAvailable(edge.source);
     throwIfAborted(signal);
-    if (!explorer) {
+    if (!readingAvailable) {
       // Explicit materialization is navigation knowledge, not a demand for
       // automatic source acquisition in Root composition.
       if (!edge.explicit) missing.add(edge.source);
       return null;
     }
 
-    const frequency = moveFrequency(explorer, edge);
-    if (!frequency) return null;
-
-    const [sourceEval, targetEval] = await Promise.all([
-      lichessEval.available(edge.source),
-      lichessEval.available(edge.target),
-    ]);
+    const moveEvidence = await evidence.move(edge, { comparisons: false });
     throwIfAborted(signal);
+    if (!moveEvidence.frequency) return null;
+
     return selectionCandidate({
       edge,
-      frequency,
-      engineQuality: moveEvaluation(edge.source, edge, sourceEval, targetEval),
-      humanResult: humanResultQuality(explorer, edge, edge.source),
+      frequency: moveEvidence.frequency,
+      engineQuality: moveEvidence.moveEval,
+      humanResult: moveEvidence.humanResult,
     });
   }
 
   async function outgoing(source: string): Promise<readonly SelectionCandidate[]> {
-    const explorer = await explorerFor(source);
-    throwIfAborted(signal);
     const edges = await positionGraph.outgoing(source);
     throwIfAborted(signal);
-    const candidates = (await Promise.all(edges.map((edge) => candidate(edge, explorer))))
+    const candidates = (await Promise.all(edges.map((edge) => candidate(edge))))
       .filter((item): item is SelectionCandidate => item != null);
     return rankSameSourceCandidates(candidates);
   }
@@ -144,15 +115,15 @@ function createCandidateSource(signal?: AbortSignal): CandidateSource {
     return rankCrossSourceCandidates(candidates);
   }
 
-  async function hasExplorer(source: string): Promise<boolean> {
-    return Boolean(await explorerFor(source));
+  async function hasReading(source: string): Promise<boolean> {
+    return evidence.ratedReadingAvailable(source);
   }
 
   return Object.freeze({
     outgoing,
     incoming,
-    hasExplorer,
-    missingExplorer: () => Object.freeze([...missing]),
+    hasReading,
+    missingReadings: () => Object.freeze([...missing]),
   });
 }
 
@@ -167,13 +138,13 @@ async function composeKnownLineGraph(
 
   async function inspect(source: string): Promise<void> {
     if (outgoingBySource.has(source)) return;
-    const [candidates, hasExplorer] = await Promise.all([
+    const [candidates, hasReading] = await Promise.all([
       candidateSource.outgoing(source),
-      candidateSource.hasExplorer(source),
+      candidateSource.hasReading(source),
     ]);
     throwIfAborted(signal);
     outgoingBySource.set(source, candidates);
-    readingKnown.set(source, hasExplorer);
+    readingKnown.set(source, hasReading);
   }
 
   await inspect(center);
@@ -294,7 +265,7 @@ export async function composeNodusStructure({
   if (mode === 'roots') {
     const incomingByTarget = await collectIncomingGraph(center, capacity, candidateSource, signal);
     selected = chooseRootNeighborhood({ center, incomingByTarget, max: capacity });
-    readingFrontier = [...candidateSource.missingExplorer()];
+    readingFrontier = [...candidateSource.missingReadings()];
   } else {
     const line = await composeKnownLineGraph(center, capacity, candidateSource, signal);
     selected = line.composition;

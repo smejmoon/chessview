@@ -4,12 +4,7 @@ import {
   stableEdgeOrder,
 } from './graph.js';
 import { debugLog } from './debug.js';
-import {
-  humanMismatch,
-  humanResultQuality,
-  moveEvaluation,
-  moveFrequency,
-} from './evidence.js';
+import { createEvidenceReader } from './evidence-source.ts';
 import {
   currentExplorerReading,
   readCachedExplorerReading,
@@ -68,12 +63,10 @@ function immutable<T>(value: T): T {
   return value;
 }
 
-function sourceLine(
+async function sourceLine(
   center: string,
-  explorer: ExplorerReading | null,
   move: DecoratedExplorerMove,
-  sourceEval: unknown,
-  masters: unknown,
+  evidence: ReturnType<typeof createEvidenceReader>,
 ) {
   let resolved;
   try {
@@ -82,7 +75,7 @@ function sourceLine(
     debugLog('ignored Rail Explorer move', {
       position: center,
       uci: move.uci,
-      error: error?.message ?? String(error),
+      error: error instanceof Error ? error.message : String(error),
     }, 'warn');
     return null;
   }
@@ -95,49 +88,50 @@ function sourceLine(
     games: move.games,
     share: move.share,
   };
-  const frequency = moveFrequency(explorer, edge);
-  const moveEval = moveEvaluation(center, edge, sourceEval);
-  const humanResult = humanResultQuality(explorer, edge, center);
+  const signals = await evidence.move(edge);
   return immutable({
     edge,
-    frequency,
-    moveEval,
-    humanResult,
-    mastersMismatch: humanMismatch(masters, edge, center, moveEval),
-    lichessMismatch: humanMismatch(explorer, edge, center, moveEval),
+    frequency: signals.frequency,
+    moveEval: signals.moveEval,
+    humanResult: signals.humanResult,
+    mastersMismatch: signals.mastersMismatch,
+    lichessMismatch: signals.lichessMismatch,
     source: 'lichess' as const,
   });
 }
 
-function explicitLine(center: string, edge: GraphEdge, sourceEval: unknown, masters: unknown) {
-  const moveEval = moveEvaluation(center, edge, sourceEval);
+async function explicitLine(
+  edge: GraphEdge,
+  evidence: ReturnType<typeof createEvidenceReader>,
+) {
+  const signals = await evidence.move(edge);
   return immutable({
     edge,
-    frequency: null,
-    moveEval,
-    humanResult: null,
-    mastersMismatch: humanMismatch(masters, edge, center, moveEval),
-    lichessMismatch: null,
+    frequency: signals.frequency,
+    moveEval: signals.moveEval,
+    humanResult: signals.humanResult,
+    mastersMismatch: signals.mastersMismatch,
+    lichessMismatch: signals.lichessMismatch,
     source: 'explicit' as const,
   });
 }
 
-function railValue(
+async function railValue(
   center: string,
   explorer: ExplorerReading | null,
   incoming: readonly unknown[],
   outgoing: readonly GraphEdge[],
-  sourceEval: unknown,
-  masters: unknown,
-): RailValue {
-  const sourceLines = (decorateExplorerMoves(explorer) as DecoratedExplorerMove[])
-    .map((move) => sourceLine(center, explorer, move, sourceEval, masters))
-    .filter(Boolean);
+  evidence: ReturnType<typeof createEvidenceReader>,
+): Promise<RailValue> {
+  const sourceLines = (await Promise.all(
+    (decorateExplorerMoves(explorer) as DecoratedExplorerMove[])
+      .map((move) => sourceLine(center, move, evidence)),
+  )).filter((line): line is NonNullable<typeof line> => Boolean(line));
   const sourceUci = new Set(sourceLines.map((line) => line.edge.uci));
-  const explicitLines = outgoing
+  const explicitLines = await Promise.all(outgoing
     .filter((edge) => edge.explicit && !sourceUci.has(edge.uci))
     .sort(stableEdgeOrder)
-    .map((edge) => explicitLine(center, edge, sourceEval, masters));
+    .map((edge) => explicitLine(edge, evidence)));
 
   return immutable({
     rootsCount: incoming.length,
@@ -155,17 +149,22 @@ export function createRailSource({
   return async function composeRail({ center, signal }: RailLoadOptions = {}) {
     throwIfObsolete(signal, 'Rail view became obsolete');
 
-    const [incoming, outgoing, cachedExplorer, sourceEval, mastersReading] = await Promise.all([
+    const [incoming, outgoing, cachedExplorer] = await Promise.all([
       graph.incoming(center),
       graph.outgoing(center),
       readCachedExplorer(center),
-      evalProvider.available(center),
-      masters.available(center),
     ]);
     throwIfObsolete(signal, 'Rail view became obsolete');
 
     const explorer = currentExplorer(center) ?? cachedExplorer;
-    return railValue(center, explorer, incoming, outgoing, sourceEval, mastersReading);
+    const evidence = createEvidenceReader({
+      signal,
+      currentExplorer: (position) => position === center ? explorer : currentExplorer(position),
+      readCachedExplorer: async (position) => position === center ? explorer : readCachedExplorer(position),
+      evalProvider,
+      mastersProvider: masters,
+    });
+    return railValue(center, explorer, incoming, outgoing, evidence);
   };
 }
 

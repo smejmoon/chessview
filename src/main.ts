@@ -23,7 +23,7 @@ import {
 } from './nodus-refinement.ts';
 import type { NodusRefinementTarget } from './nodus-refinement.ts';
 import { composeNodusStructure } from './nodus-structure.js';
-import { loadNodusEvidence } from './evidence-source.js';
+import { projectVisibleEvidence } from './evidence-presentation.js';
 import { lichessEval } from './lichess-eval.js';
 import { createLichessEvalStatusPresenter } from './lichess-eval-presentation.js';
 import { createNodusRenderer } from './nodus-renderer.js';
@@ -143,7 +143,7 @@ controller = new NodusController({
     max: compositionBoardBudget,
     signal,
   }),
-  evidence: ({ center, mode, structure, signal }) => loadNodusEvidence({
+  evidence: ({ center, mode, structure, signal }) => projectVisibleEvidence({
     center,
     mode,
     structure,

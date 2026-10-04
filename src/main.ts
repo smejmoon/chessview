@@ -39,7 +39,7 @@ const COMPACT_BOARD_BUDGET = 5;
 const CONSTRAINED_BOARD_BUDGET = 8;
 const ROOMY_BOARD_BUDGET = 12;
 const MAX_BOARD_BUDGET = 16;
-const RESIZE_REDRAW_DEBOUNCE_MS = 120;
+const RESIZE_UPDATE_DEBOUNCE_MS = 120;
 
 function boardBudget() {
   const area = window.innerWidth * window.innerHeight;
@@ -70,6 +70,7 @@ const presenter = createNodusPresenter({
 });
 
 let controller: NodusController;
+let compositionBoardBudget = boardBudget();
 
 function projectionPriority(mode: ViewMode) {
   return () => controller.snapshot.mode === mode ? 'foreground' : 'background';
@@ -162,7 +163,7 @@ controller = new NodusController({
   structure: ({ center, mode, signal }) => composeNodusStructure({
     center,
     mode,
-    max: boardBudget(),
+    max: compositionBoardBudget,
     signal,
   }),
   evidence: ({ center, mode, structure, signal }) => loadNodusEvidence({
@@ -184,7 +185,15 @@ debugLog('app start', controller.snapshot);
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { void controller.redraw(); }, RESIZE_REDRAW_DEBOUNCE_MS);
+  resizeTimer = setTimeout(() => {
+    const nextBoardBudget = boardBudget();
+    if (nextBoardBudget === compositionBoardBudget) {
+      void controller.redraw();
+      return;
+    }
+    compositionBoardBudget = nextBoardBudget;
+    void controller.recompose();
+  }, RESIZE_UPDATE_DEBOUNCE_MS);
 });
 window.addEventListener('beforeunload', () => {
   stopLichessEvalStatus();

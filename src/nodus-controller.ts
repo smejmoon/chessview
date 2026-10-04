@@ -32,6 +32,7 @@ export type NodusActions = Readonly<{
   flip(): Promise<boolean>;
   back(): boolean;
   refresh(): Promise<boolean>;
+  recompose(): Promise<boolean>;
   redraw(): Promise<boolean>;
 }>;
 
@@ -294,6 +295,7 @@ export class NodusController {
       flip: () => this.flip(),
       back: () => this.back(),
       refresh: () => this.refresh(),
+      recompose: () => this.recompose(),
       redraw: () => this.redraw(),
     });
   }
@@ -400,6 +402,25 @@ export class NodusController {
   async refresh(): Promise<boolean> {
     if (this.#disposed) return false;
     await this.#startView('refresh');
+    return true;
+  }
+
+  async recompose(): Promise<boolean> {
+    if (this.#disposed) return false;
+    const run = this.#run;
+    if (!this.#isCurrent(run)) return false;
+    const activeMode = this.#state.mode;
+
+    this.#state.settling = true;
+    await this.#presentCurrent('update');
+
+    await this.#settleProjection(run, activeMode);
+    if (!this.#isCurrent(run)) return false;
+
+    this.#state.settling = run.refinementPending > 0;
+    await this.#presentCurrent('update');
+
+    void this.#settleProjection(run, otherMode(activeMode));
     return true;
   }
 

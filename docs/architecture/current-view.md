@@ -31,6 +31,7 @@ Settlement never downgrades an established trustworthy value to loading. While t
 - Rail inventory and tab counts are Nodus-level current-view values, independent of active Constellation mode and presentation-space capacity. Rail is recomputed from available facts when relevant results are incorporated rather than owning hydration itself.
 - Publication and settlement are separate decisions. A trustworthy value may publish while the active Constellation is Settling; supplementary Evidence/Rail values may also publish after structural settlement.
 - One run may publish successive accepted immutable values as trustworthy structural, Rail, or Evidence facts become available. The previously published value remains current until a replacement is fully derived and accepted.
+- A material change to effective presentation constraints invalidates the sibling Constellation derivations for the same Nodus without starting a replacement run. The active projection is recomposed against the new constraints while the previously accepted structure remains usable; any newly admitted structural obligations may make it Settling again. The inactive sibling may be recomposed independently in the same run. A presentation-only redraw does not recompose Constellation or create settlement work.
 - Explicit refresh starts a replacement run for the same Nodus but preserves the established trustworthy snapshot while the replacement derivation proceeds. Refresh is not a command to bypass provider freshness policy.
 - Recenter or history restoration to another recorded Nodus starts a replacement run. Before accepting any result or settlement state, the controller checks that it still belongs to that run. Obsolete completion cannot mutate, refine, or settle the replacement view.
 - Every user Recenter command enters the controller through Nodus behavior. A known canonical target may be accepted directly; a played Move is first materialized into [ChartedGraph](../components/charted-graph.md). `NodusController` also owns the RouteLedger restoration subscription for its lifetime.
@@ -60,6 +61,8 @@ Deterministic/browser contract tests should cover:
 - unchanged recomputation producing no redundant current-view publication;
 - supplementary failure preserving established trustworthy values without becoming a structural failure;
 - explicit refresh retaining the established same-Nodus snapshot until a replacement value is accepted;
+- changed effective presentation constraints recomposing the active Constellation in the same Nodus run, with a newly exposed Reading frontier able to make it Settling again;
+- presentation-only redraw leaving Constellation derivation and acquisition unchanged;
 - one Nodus run maintaining sibling Root and Line projections while mode switching selects between them without restarting the run and settlement follows the newly active projection;
 - active-projection demand receiving foreground precedence over queued inactive-sibling demand without duplicate source producers;
 - inactive-sibling work not keeping the active Nodus structurally Settling by itself;

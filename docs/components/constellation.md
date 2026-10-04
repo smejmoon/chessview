@@ -69,6 +69,8 @@ Constellation optimizes for a coherent, understandable structure rather than max
 
 The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count or opening-depth cap. Presentation may supply capacity constraints, but two-dimensional coordinates, board sizes, connector paths, colors, and labels remain presentation concerns.
 
+A material change to those effective constraints invalidates the previous composition as the fixed point for the new inputs and requires same-Nodus recomposition. That recomposition may expose or remove Reading-frontier obligations; if no admitted structural obligation remains, the new shape may be Settled immediately. A presentation-only relayout that leaves the effective composition constraints unchanged does not recompose Constellation.
+
 Rail inventory and counts are independent of Constellation capacity. Presentation-space changes may alter Constellation membership without changing Rail values. [Rail](rail.md) owns exhaustive immediate Line inventory and its evidence presentation.
 
 ## Verification
@@ -89,6 +91,8 @@ Deterministic tests should cover:
 - stale but usable local Explorer evidence remaining composable without composition initiating refresh;
 - Explorer failure being unable to suppress already-known graph/navigation facts;
 - Rail inventory and Line count remaining independent of presentation-space constraints;
+- a material presentation-constraint change recomposing the same-Nodus Constellation and being able to expose a new Reading-frontier obligation;
+- a presentation-only relayout leaving Constellation composition and settlement unchanged;
 - a trustworthy provisional Constellation remaining available while it is Settling;
 - a narrow useful Line deepening without an independent fixed opening-depth cap;
 - missing optional engine evidence neither triggering acquisition nor creating a structural settlement obligation;

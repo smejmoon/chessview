@@ -48,9 +48,23 @@ type ProducerContext = Readonly<{
   priority: () => LoadPriority;
 }>;
 
+type ExplorerFacet = Readonly<{
+  value: ParsedExplorerReading;
+  fetchedAt: number;
+  persisted: boolean;
+}>;
+
 type ExplorerRepository = Readonly<{
   get(position: string): Promise<PositionRecord | null>;
   merge(position: string, fields: Readonly<Record<string, unknown>>): Promise<unknown>;
+  currentFacet(position: string, facet: string): ExplorerFacet | null;
+  admitFacet(
+    position: string,
+    facet: string,
+    value: ParsedExplorerReading,
+    metadata: Readonly<{ fetchedAt: number; persisted: boolean }>,
+  ): ExplorerFacet;
+  invalidateFacet(facet: string, positions?: readonly string[]): void;
   load<T>(
     position: string,
     facet: string,
@@ -89,12 +103,6 @@ export type ExplorerProviderOptions = Readonly<{
   cooldownUntil?: () => number;
   now?: () => number;
   log?: Log;
-}>;
-
-type AdmittedExplorer = Readonly<{
-  reading: ParsedExplorerReading;
-  fetchedAt: number;
-  persisted: boolean;
 }>;
 
 function explorerUrl(key: string): URL {
@@ -163,8 +171,6 @@ export function createExplorerProvider({
   now = () => Date.now(),
   log = debugLog,
 }: ExplorerProviderOptions = {}) {
-  const latest = new Map<string, AdmittedExplorer>();
-
   function report(message: string, detail?: unknown, level: DebugLevel = 'info'): void {
     Reflect.apply(log, undefined, [message, detail, level]);
   }
@@ -173,29 +179,23 @@ export function createExplorerProvider({
     canonical: string,
     reading: ParsedExplorerReading,
     fetchedAt: number,
-    {
-      fresh = false,
-      persisted = true,
-    }: Readonly<{ fresh?: boolean; persisted?: boolean }> = {},
+    persisted = true,
   ): ParsedExplorerReading {
-    const existing = latest.get(canonical);
-    if (!fresh && existing?.fetchedAt === fetchedAt) return existing.reading;
-    latest.set(canonical, Object.freeze({ reading, fetchedAt, persisted }));
-    return reading;
+    const existing = repository.currentFacet(canonical, 'explorer');
+    if (existing?.fetchedAt === fetchedAt && existing.value === reading && existing.persisted === persisted) {
+      return existing.value;
+    }
+    return repository.admitFacet(canonical, 'explorer', reading, { fetchedAt, persisted }).value;
   }
 
   function markPersisted(canonical: string, reading: ParsedExplorerReading, fetchedAt: number): void {
-    const admitted = latest.get(canonical);
-    if (!admitted || admitted.reading !== reading || admitted.fetchedAt !== fetchedAt) return;
-    latest.set(canonical, Object.freeze({ ...admitted, persisted: true }));
+    const admitted = repository.currentFacet(canonical, 'explorer');
+    if (!admitted || admitted.value !== reading || admitted.fetchedAt !== fetchedAt) return;
+    repository.admitFacet(canonical, 'explorer', reading, { fetchedAt, persisted: true });
   }
 
   function invalidate(keys?: readonly string[]): void {
-    if (!keys) {
-      latest.clear();
-      return;
-    }
-    for (const key of keys) latest.delete(canonicalPosition(key));
+    repository.invalidateFacet('explorer', keys);
   }
 
   async function readCached(key: string): Promise<ParsedExplorerReading | null> {
@@ -204,7 +204,7 @@ export function createExplorerProvider({
   }
 
   function current(key: string): ParsedExplorerReading | null {
-    return latest.get(canonicalPosition(key))?.reading ?? null;
+    return repository.currentFacet(canonicalPosition(key), 'explorer')?.value ?? null;
   }
 
   function recoverRefresh(
@@ -282,7 +282,7 @@ export function createExplorerProvider({
           return admit(canonical, cachedExplorer, cachedFetchedAt);
         }
 
-        const admitted = latest.get(canonical);
+        const admitted = repository.currentFacet(canonical, 'explorer');
         if (
           admitted
           && !admitted.persisted
@@ -290,9 +290,9 @@ export function createExplorerProvider({
         ) {
           report('Explorer Reading live hit', {
             position: canonical,
-            games: totalGames(admitted.reading),
+            games: totalGames(admitted.value),
           });
-          return admitted.reading;
+          return admitted.value;
         }
 
         let explorer: ParsedExplorerReading;
@@ -328,7 +328,7 @@ export function createExplorerProvider({
         }
 
         const fetchedAt = now();
-        const usable = admit(canonical, explorer, fetchedAt, { fresh: true, persisted: false });
+        const usable = admit(canonical, explorer, fetchedAt, false);
         if (await persist(canonical, usable, cached, fetchedAt)) {
           markPersisted(canonical, usable, fetchedAt);
         }

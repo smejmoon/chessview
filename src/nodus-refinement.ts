@@ -18,31 +18,30 @@ type MutableExplorerTarget = MutableTarget & {
   structuralModes: Set<ViewMode>;
 };
 
-export type NodusRefinementTarget = Readonly<{
+export type CurrentViewRefinementTarget = Readonly<{
   position: string;
   modes: readonly ViewMode[];
   nodusWide: boolean;
 }>;
 
-export type NodusExplorerDemand = NodusRefinementTarget & Readonly<{
+export type CurrentViewExplorerDemand = CurrentViewRefinementTarget & Readonly<{
   structuralModes: readonly ViewMode[];
 }>;
 
-export type NodusRefinementDemand = Readonly<{
+export type CurrentViewRefinementDemand = Readonly<{
   rootTransposition: string;
-  explorer: readonly NodusExplorerDemand[];
-  cloudEval: readonly NodusRefinementTarget[];
-  masters: readonly NodusRefinementTarget[];
+  explorer: readonly CurrentViewExplorerDemand[];
+  cloudEval: readonly CurrentViewRefinementTarget[];
+  masters: readonly CurrentViewRefinementTarget[];
 }>;
 
-export type NodusRefinementInput = Readonly<{
+export type CurrentViewRefinementInput = Readonly<{
   center: string;
-  structures: Readonly<Record<ViewMode, unknown | null>>;
+  mode: ViewMode;
+  structure: unknown | null;
 }>;
 
-export type NodusRefinementPriority = 'foreground' | 'background';
-
-const MODES: readonly ViewMode[] = Object.freeze(['roots', 'lines']);
+export type CurrentViewRefinementPriority = 'foreground' | 'background';
 
 function addTarget(
   demand: Map<string, MutableTarget>,
@@ -80,7 +79,7 @@ function addExplorer(
 function freezeTargets(
   demand: Map<string, MutableTarget>,
   center: string,
-): readonly NodusRefinementTarget[] {
+): readonly CurrentViewRefinementTarget[] {
   return Object.freeze([...demand].map(([position, target]) => Object.freeze({
     position,
     modes: Object.freeze([...target.modes]),
@@ -91,7 +90,7 @@ function freezeTargets(
 function freezeExplorerTargets(
   demand: Map<string, MutableExplorerTarget>,
   center: string,
-): readonly NodusExplorerDemand[] {
+): readonly CurrentViewExplorerDemand[] {
   return Object.freeze([...demand].map(([position, target]) => Object.freeze({
     position,
     modes: Object.freeze([...target.modes]),
@@ -100,30 +99,29 @@ function freezeExplorerTargets(
   })));
 }
 
-export function deriveNodusRefinementDemand({
+export function deriveCurrentViewRefinementDemand({
   center,
-  structures,
-}: NodusRefinementInput): NodusRefinementDemand {
+  mode,
+  structure: inputStructure,
+}: CurrentViewRefinementInput): CurrentViewRefinementDemand {
   const explorerDemand = new Map<string, MutableExplorerTarget>();
   const evalDemand = new Map<string, MutableTarget>();
   const mastersDemand = new Map<string, MutableTarget>();
+  const structure = inputStructure as StructureLike | null;
 
-  for (const mode of MODES) {
-    const structure = structures[mode] as StructureLike | null;
-    for (const position of structure?.readingFrontier ?? []) {
-      addExplorer(explorerDemand, position, mode, true);
-    }
-    for (const node of structure?.composition?.nodes ?? []) {
-      addExplorer(explorerDemand, node.key, mode);
-    }
-    for (const relationship of structure?.composition?.relationships ?? []) {
-      const edge = relationship.edge;
-      if (!edge?.source || !edge.target) continue;
-      addExplorer(explorerDemand, edge.source, mode);
-      addTarget(evalDemand, edge.source, mode);
-      addTarget(evalDemand, edge.target, mode);
-      addTarget(mastersDemand, edge.source, mode);
-    }
+  for (const position of structure?.readingFrontier ?? []) {
+    addExplorer(explorerDemand, position, mode, true);
+  }
+  for (const node of structure?.composition?.nodes ?? []) {
+    addExplorer(explorerDemand, node.key, mode);
+  }
+  for (const relationship of structure?.composition?.relationships ?? []) {
+    const edge = relationship.edge;
+    if (!edge?.source || !edge.target) continue;
+    addExplorer(explorerDemand, edge.source, mode);
+    addTarget(evalDemand, edge.source, mode);
+    addTarget(evalDemand, edge.target, mode);
+    addTarget(mastersDemand, edge.source, mode);
   }
 
   if (!explorerDemand.has(center)) {
@@ -143,9 +141,18 @@ export function deriveNodusRefinementDemand({
   });
 }
 
-export function nodusRefinementPriority(
-  demand: NodusRefinementTarget,
+export function currentViewRefinementPriority(
+  demand: CurrentViewRefinementTarget,
   activeMode: ViewMode,
-): NodusRefinementPriority {
+): CurrentViewRefinementPriority {
   return demand.nodusWide || demand.modes.includes(activeMode) ? 'foreground' : 'background';
 }
+
+// Compatibility aliases while callers move from the former Nodus-owned wording.
+export type NodusRefinementTarget = CurrentViewRefinementTarget;
+export type NodusExplorerDemand = CurrentViewExplorerDemand;
+export type NodusRefinementDemand = CurrentViewRefinementDemand;
+export type NodusRefinementInput = CurrentViewRefinementInput;
+export type NodusRefinementPriority = CurrentViewRefinementPriority;
+export const deriveNodusRefinementDemand = deriveCurrentViewRefinementDemand;
+export const nodusRefinementPriority = currentViewRefinementPriority;

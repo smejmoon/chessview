@@ -18,6 +18,7 @@ export type WeatherStructuralMeasures = Readonly<{
   working: number;
   retryWaiting: number;
   satisfied: number;
+  incorporationPending: number;
   unavailable: number;
   failed: number;
   unplanned: number;
@@ -174,6 +175,7 @@ type RefinementRun = {
   evidenceTail: Promise<boolean>;
   railTail: Promise<boolean>;
   participants: Map<string, RefinementParticipant>;
+  incorporationPending: Set<string>;
   settlementDirty: boolean;
   settlementDraining: boolean;
   settlementReady: boolean;
@@ -406,10 +408,19 @@ export class CurrentViewController {
 
   async restore(route: RestoreRoute = {}): Promise<boolean> {
     if (this.#disposed) return false;
-    this.#state.nodus = this.#canonicalize(route.center ?? this.#state.nodus);
-    this.#state.mode = normalizeMode(route.view ?? route.mode ?? this.#state.mode);
+    const previousNodus = this.#state.nodus;
+    const previousMode = this.#state.mode;
+    const nextNodus = this.#canonicalize(route.center ?? previousNodus);
+    const nextMode = normalizeMode(route.view ?? route.mode ?? previousMode);
+    const sameNodus = nextNodus === previousNodus;
+    const sameProjection = sameNodus && nextMode === previousMode;
+    this.#state.nodus = nextNodus;
+    this.#state.mode = nextMode;
     this.#log('history restored', this.#route());
-    await this.#startRun('restore');
+    await this.#startRun('restore', {
+      preserveEstablished: sameProjection,
+      preserveRail: sameNodus,
+    });
     return true;
   }
 
@@ -494,6 +505,7 @@ export class CurrentViewController {
       working: 0,
       retryWaiting: 0,
       satisfied: 0,
+      incorporationPending: 0,
       unavailable: 0,
       failed: 0,
       unplanned: 0,
@@ -530,8 +542,10 @@ export class CurrentViewController {
       }
       if (participant.phase === 'working') structural.working += 1;
       else if (participant.phase === 'retry-waiting') structural.retryWaiting += 1;
-      else if (participant.phase === 'satisfied') structural.satisfied += 1;
-      else if (participant.phase === 'unavailable') structural.unavailable += 1;
+      else if (participant.phase === 'satisfied') {
+        structural.satisfied += 1;
+        if (run?.incorporationPending.has(participant.key)) structural.incorporationPending += 1;
+      } else if (participant.phase === 'unavailable') structural.unavailable += 1;
       else structural.failed += 1;
     }
 
@@ -551,7 +565,7 @@ export class CurrentViewController {
     const structural = weather.structural;
     return structural.working > 0
       || structural.retryWaiting > 0
-      || structural.satisfied > 0
+      || structural.incorporationPending > 0
       || structural.failed > 0
       || structural.unplanned > 0;
   }
@@ -579,9 +593,13 @@ export class CurrentViewController {
     run.abortController.abort();
     for (const participant of run.participants.values()) participant.controller?.abort();
     run.participants.clear();
+    run.incorporationPending.clear();
   }
 
-  async #startRun(reason: 'start' | 'restore' | 'recenter' | 'refresh'): Promise<void> {
+  async #startRun(
+    reason: 'start' | 'restore' | 'recenter' | 'refresh',
+    options: { preserveEstablished?: boolean; preserveRail?: boolean } = {},
+  ): Promise<void> {
     this.#disposeRun(this.#run);
     this.#revision += 1;
     const run: RefinementRun = {
@@ -592,16 +610,22 @@ export class CurrentViewController {
       evidenceTail: Promise.resolve(false),
       railTail: Promise.resolve(false),
       participants: new Map(),
+      incorporationPending: new Set(),
       settlementDirty: false,
       settlementDraining: false,
       settlementReady: false,
     };
     this.#run = run;
 
-    const preserveEstablished = reason === 'refresh';
+    const preserveEstablished = (options.preserveEstablished ?? reason === 'refresh')
+      && this.#state.structure.status === 'ready';
+    const preserveRail = (options.preserveRail ?? reason === 'refresh')
+      && this.#state.rail.status === 'ready';
     if (!preserveEstablished) {
       this.#state.structure = lifecycle('loading');
       this.#state.evidence = lifecycle('idle');
+    }
+    if (!preserveRail) {
       this.#state.rail = typeof this.#rail === 'function' ? lifecycle('loading') : lifecycle('idle');
     }
     this.#log('Current View refinement run started', {
@@ -613,7 +637,7 @@ export class CurrentViewController {
     await this.#presentCurrent('start');
 
     if (typeof this.#rail === 'function') {
-      void this.#queueRail(run, { preserveEstablished, publish: true });
+      void this.#queueRail(run, { preserveEstablished: preserveRail, publish: true });
     }
 
     const ready = await this.#queueStructure(run, { preserveEstablished, publish: true });
@@ -819,6 +843,7 @@ export class CurrentViewController {
       if (planned.has(key)) continue;
       participant.retryToken += 1;
       participant.controller?.abort();
+      run.incorporationPending.delete(key);
       run.participants.delete(key);
     }
 
@@ -847,6 +872,7 @@ export class CurrentViewController {
       existing.modes = modes;
       existing.nodusWide = task.nodusWide === true;
       existing.structuralReading = structuralReading;
+      if (priorStructuralReading !== structuralReading) run.incorporationPending.delete(key);
 
       if (existing.phase === 'unavailable' && priorStructuralReading == null && structuralReading != null) {
         existing.phase = 'working';
@@ -862,6 +888,7 @@ export class CurrentViewController {
   #startParticipant(run: RefinementRun, participant: RefinementParticipant): void {
     if (!this.#isCurrent(run) || run.participants.get(participant.key) !== participant) return;
     participant.controller?.abort();
+    run.incorporationPending.delete(participant.key);
     const controller = new AbortController();
     participant.controller = controller;
     participant.phase = 'working';
@@ -879,11 +906,17 @@ export class CurrentViewController {
         const outcome = refinementOutcome(value);
         if (outcome?.refinement === 'retryable') {
           participant.phase = 'retry-waiting';
+          run.incorporationPending.delete(participant.key);
           this.#waitForRetry(run, participant, attempt, outcome.retry);
           this.#queueSettlement(run);
           return;
         }
         participant.phase = outcome?.refinement === 'unavailable' ? 'unavailable' : 'satisfied';
+        if (participant.phase === 'satisfied' && participant.structuralReading != null) {
+          run.incorporationPending.add(participant.key);
+        } else {
+          run.incorporationPending.delete(participant.key);
+        }
         this.#queueSettlement(run);
       })
       .catch((error: unknown) => {
@@ -891,6 +924,7 @@ export class CurrentViewController {
         if (controller.signal.aborted || isObsoleteWork(error, controller.signal)) return;
         participant.controller = null;
         participant.phase = 'failed';
+        run.incorporationPending.delete(participant.key);
         this.#log('Current View refinement failed', { key: participant.key, error: errorMessage(error) });
         this.#queueSettlement(run);
       });
@@ -928,6 +962,7 @@ export class CurrentViewController {
         if (run.participants.get(participant.key) !== participant) return;
         if (participant.phase !== 'retry-waiting' || participant.retryToken !== attempt) return;
         participant.phase = 'failed';
+        run.incorporationPending.delete(participant.key);
         this.#log('Current View refinement retry gate failed', {
           key: participant.key,
           error: errorMessage(error),
@@ -966,9 +1001,22 @@ export class CurrentViewController {
     if (!this.#isCurrent(run)) return;
     const before = this.snapshot;
     const beforeStructure = before.structure.value;
+    const pendingIncorporation = [...run.incorporationPending]
+      .map((key) => {
+        const participant = run.participants.get(key);
+        return participant ? Object.freeze({ key, retryToken: participant.retryToken }) : null;
+      })
+      .filter((item): item is Readonly<{ key: string; retryToken: number }> => item != null);
 
     await this.#queueStructure(run, { preserveEstablished: true, publish: false });
     if (!this.#isCurrent(run)) return;
+
+    for (const pending of pendingIncorporation) {
+      const participant = run.participants.get(pending.key);
+      if (participant?.phase === 'satisfied' && participant.retryToken === pending.retryToken) {
+        run.incorporationPending.delete(pending.key);
+      }
+    }
 
     const refinements: Promise<boolean>[] = [];
     if (this.#state.structure.status === 'ready' && typeof this.#evidence === 'function') {

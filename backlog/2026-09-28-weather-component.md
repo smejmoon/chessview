@@ -1,51 +1,51 @@
 # Do:
 
-Make Weather a faithful presentation of structural settlement/readiness without owning or reconstructing the settlement rules, while keeping enough independent measures visible in Debug to diagnose the lifecycle during development.
+Finish Weather as the compact presentation of structural readiness now that Current View owns the lifecycle rule.
 
-A trustworthy provisional Constellation must remain visible and navigable while the accepted view is structurally Settling. `Updating…` should reflect the structural state supplied by Current View; successful settlement should receive the existing brief Ready acknowledgement/check treatment; failure to establish any trustworthy current structure should remain globally degraded.
+Keep the normal surface limited to the established Updating / Ready / settled-check / unavailable presentation, downstream of Current View's supplied structural state. Keep Debug useful during development by exposing the independent aggregate measures that explain that state, including incorporation-pending separately from the participant's satisfied execution phase.
 
-In Debug, present aggregate Weather measures for accepted-structure lifecycle, Settling, Reading-frontier size, current frontier participation phases, detached structural participation, and supplementary active/total participation. Use those measures to verify why the primary state is changing or stuck without turning the diagnostic counts into another settlement definition.
-
-Keep supplementary Evidence, Rail enrichment, cloud evaluation, Masters retrieval, lookahead, provider activity, and other non-structural work from changing the primary Weather state merely because they are running or publishing richer values.
+Verify the presentation timing against the settled lifecycle: same-projection refinement may leave a trustworthy Constellation interactive while Updating, a new spatial projection may be establishing while Nodus-scoped Rail remains usable, supplementary activity must not reopen Weather, and successful structural work must stop blocking after its settlement recomposition has been drained.
 
 # Because:
 
-`docs/components/weather.md` defines Weather as an observer/presenter of structural readiness, not the owner of that readiness. `docs/glossary.md` defines Settled independently from asynchronous task completion.
+[Current View](../docs/architecture/current-view.md) now owns the durable lifecycle distinctions. A spatial projection is accepted for one Nodus plus Root/Line mode; refresh and same-projection recomposition can preserve it, while Nodus or mode changes establish different spatial structure. Structural readiness follows live work, retry gates, and successful work still awaiting incorporation rather than Reading-frontier membership alone.
 
-A single Ready/Updating presentation is intentionally compact for normal use but hides distinctions that matter while the lifecycle contract is still being developed. Aggregate Debug measures let development distinguish an accepted map with working structural participation from retry waiting, successful completion, terminal unavailability, arbitrary failure, missing participation, or supplementary activity without exporting per-task or source identity.
+The primary Weather surface is intentionally compact. Debug diagnostics preserve development visibility without turning task counts into product meaning: accepted structure lifecycle, Settling, frontier size, structural execution phases, incorporation-pending, detached participation, and supplementary participation can be inspected independently.
 
-The current presentation delay/acknowledgement behavior remains useful UX machinery, but it must sit downstream of correct structural truth. Diagnostic visibility is allowed to be noisier than the normal product Weather surface.
+The existing presentation delay/acknowledgement behavior remains useful UX machinery, but it must sit downstream of correct structural truth.
 
 # Edges:
 
-Current-view publication and Weather are separate. A trustworthy current structure may publish while Weather says Updating, and supplementary values may publish after Weather is settled.
+Current-view publication and Weather are separate. A trustworthy current projection may publish while Weather says Updating, and supplementary values may publish after Weather is settled.
 
-`LichessEval.subscribe()` remains an operational source-status channel and must not drive primary Weather directly. Provider activity says nothing by itself about whether the accepted Constellation has an unresolved structural obligation.
+`LichessEval.subscribe()` remains an operational source-status channel and must not drive primary Weather directly. Provider activity says nothing by itself about structural readiness.
 
-Presentation failure remains distinct from structural settlement failure. If the renderer cannot present a trustworthy view, Weather may degrade for presentation reasons without redefining Constellation settlement.
+Presentation failure remains distinct from structural settlement failure. If the renderer cannot present a trustworthy view, Weather may degrade for presentation reasons without redefining Current View settlement.
 
-A material presentation-constraint change may cause same-Nodus Constellation recomposition and therefore make Weather Updating again if that new derivation admits structural obligations. Pure redraw does not.
+A material presentation-constraint change may recompose the same projection and therefore make Weather Updating again if that derivation admits structural obligations. Pure redraw does not.
 
 Normal Weather must not expose provider names, task keys, canonical-position identities, controller revision tokens, source payloads, or transport state. Debug may show aggregate current-view counts and execution phases because they are measurements, not product meaning or source policy.
 
-`backlog/2026-10-04-structural-reading-unavailability.md` owns the unresolved lifecycle semantics around same-view preservation and when a structurally relevant unknown no longer has an automatic progress path. Weather diagnostics should make those states inspectable rather than deciding that outcome here.
+`failed` and `unplanned` structural participation remain owned by the refinement-participation/planning outcome. Weather diagnostics expose them, but this outcome does not decide their coordination semantics.
 
 # Unsettled:
 
-Choose the smallest primary Weather input/state interface once the Current View lifecycle decision is settled. It should distinguish at least usable-but-settling, settled, and unavailable/degraded without requiring the Debug measures to become product states.
+Choose the smallest primary Weather input/state interface now that the lifecycle contract is durable. It should distinguish usable-but-settling, settled, and unavailable/degraded without requiring the Debug measures to become product states.
 
-Keep or adjust the current delay/Ready/check timing only after verifying the resulting UX. Anti-fidgeting may debounce presentation, but it must never display Settled while the supplied structural state is unsettled.
+Keep or adjust the current delay/Ready/check timing only after browser verification. Anti-fidgeting may debounce presentation, but it must never display Settled while the supplied structural state is unsettled.
 
-Decide after the lifecycle work stabilizes which diagnostic measures remain useful enough to keep in Debug; normal Weather should stay compact regardless.
+Decide after the lifecycle work stabilizes which Debug measures remain useful enough to keep long-term; normal Weather should stay compact regardless.
 
 # Complete:
 
 Deterministic/browser tests prove that:
 
-- a trustworthy provisional Constellation remains usable while primary Weather presents Updating;
+- a trustworthy accepted Constellation remains usable while primary Weather presents Updating for same-projection structural progress;
 - Settled reaches Ready/check without waiting for supplementary work;
 - late supplementary Evidence/Rail/engine/Masters/lookahead activity does not reopen primary Weather;
-- a structural obligation admitted after same-Nodus constraint change can make Weather Updating again;
+- a structural obligation admitted after same-projection constraint change can make Weather Updating again;
+- a successful structural result blocks while incorporation is pending but not merely because its satisfied phase remains after the settlement drain;
+- new Nodus/mode spatial establishment cannot present the old Constellation as current structure;
 - failure to establish trustworthy current structure presents unavailable/degraded;
 - obsolete-run completion cannot change Weather for the replacement view;
 - presentation debounce/acknowledgement never creates a false Settled interval;

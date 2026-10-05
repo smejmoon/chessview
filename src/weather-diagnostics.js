@@ -15,6 +15,7 @@ export function weatherMeasureLabels(view) {
     `working ${finiteCount(structural.working)}`,
     `retry ${finiteCount(structural.retryWaiting)}`,
     `satisfied ${finiteCount(structural.satisfied)}`,
+    `incorporating ${finiteCount(structural.incorporationPending)}`,
     `unavailable ${finiteCount(structural.unavailable)}`,
     `failed ${finiteCount(structural.failed)}`,
     `unplanned ${finiteCount(structural.unplanned)}`,

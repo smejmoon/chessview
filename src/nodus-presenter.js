@@ -3,7 +3,7 @@ import { createViewStatusPresenter } from './view-status.js';
 export function createNodusPresenter({
   renderer = null,
   statusPresenter = null,
-  decorateWeather = () => {},
+  decorateWeather = (_view, _presentation) => {},
   log = (..._args) => {},
 } = {}) {
   if (typeof renderer?.render !== 'function') throw new TypeError('Nodus presenter requires renderer.render');

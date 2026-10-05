@@ -26,13 +26,42 @@ Conceptually that accepted state includes:
 - presentation-facing Evidence decoration when useful.
 
 These values are accepted independently of work still trying to improve them.
-Refresh or failed refinement must not erase an established trustworthy view.
+Refresh or failed refinement must not erase an established trustworthy value that
+still represents the current inputs.
 
-There is one semantically current Constellation around the one Nodus. Root/Line
-mode is a Current View input that changes what context is composed; it does not
-create a second Nodus or a sibling semantic projection lifetime. An implementation
-may cache derivations for another mode, but that cache is not another accepted
-current view and does not own settlement.
+### Spatial projection validity
+
+The accepted spatial Constellation has an explicit validity key: **Nodus plus
+Root/Line mode**. Preservation follows that semantic key rather than the command
+path that happened to start work.
+
+- Refresh keeps the same projection inputs. The established Constellation remains
+  accepted while a replacement refinement run derives a newer value.
+- Recomposition after new knowledge or a material Lens-capacity change also keeps
+  the same Nodus and mode. The established Constellation remains accepted until a
+  coherent replacement is ready; derivation failure leaves the established value
+  usable.
+- A Root/Line mode change keeps the Nodus but changes the spatial question being
+  asked. The old Constellation is not relabeled as the new mode's projection; the
+  new spatial projection is established before becoming accepted.
+- Recenter changes the Nodus and therefore establishes a new accepted spatial
+  projection.
+- Browser-history restoration applies the same rule to the restored inputs: an
+  exact same-Nodus/same-mode restoration may preserve the established projection
+  while refreshing it; a different Nodus or mode establishes a new projection.
+
+There is still one semantically current Constellation around the one Nodus.
+Root/Line mode changes what context is composed; it does not create a second
+Nodus or a sibling accepted lifetime. An implementation may cache derivations for
+another mode, but that cache is not another accepted current view and does not own
+settlement.
+
+Rail has a different validity boundary. Its inventory is Nodus-scoped, so an
+accepted Rail may remain useful across a same-Nodus Root/Line transition while the
+new Constellation is established. A different Nodus establishes new Rail state.
+Presentation Evidence decoration is projection-facing and may update independently
+as richer values arrive, but it must not be carried onto a spatial projection it
+does not describe.
 
 Lens orientation/Guide/Debug and browser-history state are outside accepted-view
 identity. Current View may publish Lens orientation and `RouteLedger.canGoBack()`
@@ -45,18 +74,16 @@ View is presently trying to improve about its accepted view.
 
 Run-local state includes cancellation/currentness, live source-work
 participation, structural provenance carried from Constellation admission,
-working/retry-waiting/satisfied/unavailable/failed execution phases, and
-recomposition scheduling. This state is coordination state, not Nodus identity
-and not durable chess knowledge.
+working/retry-waiting/satisfied/unavailable/failed execution phases, successful
+structural work still awaiting a settlement recomposition, and recomposition
+scheduling. This state is coordination state, not Nodus identity and not durable
+chess knowledge.
 
-Explicit refresh keeps the same Nodus and accepted trustworthy view while
-replacing the refinement run. Recenter or browser-history restoration to another
-canonical position replaces the Nodus, accepted view, and refinement run. An
-obsolete run cannot mutate, publish into, or settle its replacement.
-
-Mode changes and material Lens-capacity changes keep the same Nodus. They may
-recompose the accepted Constellation and reconcile the existing run's live demand
-rather than manufacturing a new Nodus lifetime.
+Explicit refresh keeps the same accepted projection while replacing the
+refinement run. Recenter or restoration to a different Nodus replaces the Nodus,
+accepted spatial projection, and refinement run. Mode change establishes a new
+spatial projection for the same Nodus. An obsolete run cannot mutate, publish
+into, or settle its replacement.
 
 Reusable source producer/cache lifetime remains separate. [`PositionRepository`](position-repository.md)
 owns shared per-position facet producers and participants may detach from them;
@@ -89,32 +116,44 @@ structural settlement.
 [Settled](../glossary.md#settled) is derived, not stored as a second mutable
 truth. Constellation exposes the structural facts that could still change its
 shape, most importantly its Reading frontier. The active refinement run exposes
-what is happening to the corresponding admitted obligations.
+whether the current attempt still has an automatic progress witness for the
+corresponding admitted obligation.
 
-A frontier obligation keeps the current view structurally Settling while its
-run participation is actively working, waiting on a semantic retry gate, or has
-completed successfully but still awaits incorporation. It stops blocking only
-when recomposition incorporates the result or makes the obligation irrelevant,
-or when a lower boundary reports semantic terminal unavailability for that
-run's structural obligation.
+A frontier obligation keeps the accepted projection structurally Settling while
+its current participation is actively working, waiting on a semantic retry gate,
+or has completed successfully and still has a settlement recomposition pending.
+A nonzero Reading frontier alone is not a progress witness.
 
-Terminal unavailability is run-local coordination state. It does not remove the
-position from Constellation's Reading frontier as structural knowledge, create
-synthetic Evidence, alter ChartedGraph, or persist into PositionRepository. A
-replacement refinement run begins without the old run's discharge and may try
-again under normal source policy.
+Successful execution and pending incorporation are deliberately separate. A
+participant may remain `satisfied` as run history after the settlement drain has
+attempted recomposition. Before that drain, Current View marks the successful
+structural participant as **incorporation pending** and Weather remains Updating.
+After the corresponding recomposition attempt completes, that pending marker is
+consumed. If the same Reading remains on the accepted frontier, the old success
+no longer proves that this run can automatically advance it; another new result
+or replacement run is required to create a new progress path.
 
-A failed supplementary task does not affect structural settlement. A retryable
-failure is not terminal unavailability and remains Settling while a legitimate
-progress path exists. Current View must not infer retryability or terminality
-from HTTP status, UI strings, or raw transport errors; the lower boundary that
-owns fallback/recovery policy must keep retrying internally or expose a semantic
-outcome and wakeup/eligibility condition.
+A semantic terminal-unavailable outcome also stops the matching run-local
+structural obligation from blocking. The chess fact remains unknown and may remain
+on Constellation's Reading frontier. Unavailability does not create synthetic
+Evidence, alter ChartedGraph, persist into PositionRepository, or become a durable
+source conclusion. A replacement refinement run begins without the old run's
+discharge and may try again under normal source policy.
 
-Successful structural completion still requires incorporation. Completion marks
-settlement dirty and requests recomposition; a trustworthy in-flight composition
-may publish, but Weather cannot claim Settled while a completed relevant result
-still awaits incorporation.
+A retryable result is not terminal unavailability. It remains Settling while its
+lower-owned retry gate can wake another attempt. Current View must not infer
+retryability or terminality from HTTP status, UI strings, or raw transport
+errors; the lower boundary that owns fallback/recovery policy must keep retrying
+internally or expose a semantic outcome and wakeup/eligibility condition.
+
+`failed` and `unplanned` participation are coordination states rather than source
+unavailability. Their resolution and whether they should continue to block
+primary Weather are owned by the refinement-participation/planning outcome; this
+settlement rule does not silently reinterpret either as unavailable chess
+knowledge.
+
+Supplementary completion or failure does not affect structural settlement merely
+because it belongs to the same refinement run.
 
 ## Publication boundary
 
@@ -146,13 +185,13 @@ still awaits incorporation.
   invalidation. Same-turn completions may coalesce; a completion during
   recomposition dirties settlement so another pass follows.
 - Publication and settlement are separate decisions. A trustworthy accepted
-  Constellation may remain visible and interactive while the refinement run is
-  still structurally Settling.
+  Constellation may remain visible and interactive while its same projection is
+  structurally Settling.
 - Accepted supplementary lookahead remains outside structural settlement.
 - Missing cloud evaluation is outside structural settlement; currently available
   engine Evidence may influence composition, but acquiring it does not keep or
   reopen settlement by itself.
-- A material Lens capacity change recomposes the same Nodus and may admit new
+- A material Lens capacity change recomposes the same projection and may admit new
   structural obligations. A presentation-only relayout redraws without changing
   composition or refinement demand.
 - Current View may publish aggregate Weather diagnostics derived from the accepted
@@ -173,8 +212,8 @@ contain values from several authorities, for example:
 - structural readiness derived from accepted Constellation plus the active
   refinement run;
 - aggregate Weather diagnostics such as accepted-structure lifecycle, Reading
-  frontier size, structural participation counts by phase, detached structural
-  participation, and supplementary active/total counts;
+  frontier size, structural participation counts by phase, incorporation-pending
+  count, detached structural participation, and supplementary active/total counts;
 - orientation from Lens;
 - Back availability from RouteLedger.
 
@@ -194,17 +233,20 @@ Deterministic/browser contract tests should cover:
 
 - Nodus remaining exactly one canonical position while Current View owns mode,
   accepted Constellation/Rail state, and refinement lifetime;
-- Recenter replacing the Nodus and refinement run while refresh replaces only the
-  run and preserves the established same-Nodus accepted view;
-- mode switching preserving the Nodus and recomposing one accepted Constellation
-  rather than creating a second semantic Nodus projection;
+- refresh and same-mode recomposition preserving an established coherent spatial
+  projection while a replacement is derived;
+- mode switching and Nodus changes establishing a new spatial projection instead
+  of relabeling an old one;
+- same-Nodus/same-mode history restoration preserving the accepted projection and
+  same-Nodus/different-mode restoration preserving Rail but not spatial structure;
 - Constellation Reading-frontier admission retaining structural provenance through
   refinement planning and live participation;
 - provider/task identity being unable to manufacture structural criticality;
-- a trustworthy accepted view remaining interactive while structural refinement
-  is active or retry-waiting;
-- a completed structural result remaining unsettled until recomposition
-  incorporates it or makes its obligation irrelevant;
+- a trustworthy accepted projection remaining interactive while structural
+  refinement is active or retry-waiting;
+- a completed structural result remaining unsettled exactly while its settlement
+  recomposition is pending, then ceasing to block solely because its old success
+  remains recorded;
 - semantic terminal unavailability discharging only the matching run-local
   structural obligation without manufacturing Evidence or durable knowledge;
 - replacement runs being free to try a previously unavailable Reading again;
@@ -212,8 +254,8 @@ Deterministic/browser contract tests should cover:
 - obsolete completion, retry gates, and unavailable outcomes being unable to
   mutate a replacement view/run;
 - aggregate Weather diagnostics distinguishing working, retry-waiting, satisfied,
-  unavailable, failed, unplanned, detached, and supplementary participation
-  without exposing task/position identity;
+  incorporation-pending, unavailable, failed, unplanned, detached, and
+  supplementary participation without exposing task/position identity;
 - Lens-owned orientation/presentation state and RouteLedger-owned browser state
   remaining outside accepted-view and Nodus identity;
 - Evidence remaining readable independently of Constellation;

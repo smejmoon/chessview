@@ -13,6 +13,7 @@ function view() {
         working: 1,
         retryWaiting: 1,
         satisfied: 0,
+        incorporationPending: 1,
         unavailable: 1,
         failed: 0,
         unplanned: 0,
@@ -31,6 +32,7 @@ test('Weather diagnostic labels expose independent measures', () => {
     'working 1',
     'retry 1',
     'satisfied 0',
+    'incorporating 1',
     'unavailable 1',
     'failed 0',
     'unplanned 0',
@@ -63,6 +65,7 @@ test('Weather diagnostics decorate only Debug presentation', () => {
   assert.equal(decorateWeatherDiagnostics(app, view(), { debug: true }), true);
   assert.equal(status.dataset.weatherDiagnostics, 'true');
   assert.match(status.child.textContent, /frontier 3/);
+  assert.match(status.child.textContent, /incorporating 1/);
   assert.match(status.child.textContent, /supplementary 2\/5/);
 
   assert.equal(decorateWeatherDiagnostics(app, view(), { debug: false }), true);

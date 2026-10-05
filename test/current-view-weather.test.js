@@ -54,6 +54,7 @@ test('Weather exposes aggregate refinement measures without task or position ide
       working: 1,
       retryWaiting: 1,
       satisfied: 1,
+      incorporationPending: 0,
       unavailable: 1,
       failed: 1,
       unplanned: 1,
@@ -65,6 +66,47 @@ test('Weather exposes aggregate refinement measures without task or position ide
   assert.equal(JSON.stringify(controller.snapshot.weather).includes('explorer:'), false);
   assert.equal(Object.isFrozen(controller.snapshot.weather), true);
   assert.equal(Object.isFrozen(controller.snapshot.weather.structural), true);
+
+  controller.dispose();
+});
+
+test('successful structural work blocks only until its settlement pass has attempted incorporation', async () => {
+  const work = deferred();
+  const secondComposition = deferred();
+  let compositions = 0;
+  const controller = new CurrentViewController({
+    initial: { center: 'A', view: 'lines' },
+    canonicalize: (value) => String(value),
+    structure: async () => {
+      compositions += 1;
+      if (compositions === 2) await secondComposition.promise;
+      return structure(['B']);
+    },
+    refine: () => [{
+      key: 'structural',
+      structuralReading: 'B',
+      run: () => work.promise,
+    }],
+    presenter: { start() {}, update() {} },
+  });
+
+  await controller.start();
+  assert.equal(controller.snapshot.weather.structural.working, 1);
+  assert.equal(controller.snapshot.settling, true);
+
+  work.resolve();
+  await flush(8);
+  assert.equal(compositions, 2);
+  assert.equal(controller.snapshot.weather.structural.satisfied, 1);
+  assert.equal(controller.snapshot.weather.structural.incorporationPending, 1);
+  assert.equal(controller.snapshot.settling, true);
+
+  secondComposition.resolve();
+  await flush();
+  assert.deepEqual(controller.snapshot.structure.value.readingFrontier, ['B']);
+  assert.equal(controller.snapshot.weather.structural.satisfied, 1);
+  assert.equal(controller.snapshot.weather.structural.incorporationPending, 0);
+  assert.equal(controller.snapshot.settling, false);
 
   controller.dispose();
 });

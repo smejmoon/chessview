@@ -104,20 +104,26 @@ test('malformed fresh Masters data falls back to a usable stale cached Reading',
   )));
 });
 
-test('valid fresh Masters Reading remains usable when persistence fails', async () => {
+test('valid fresh Masters Reading remains usable and is reused when persistence fails', async () => {
   const fresh = reading();
   const logs = [];
+  let requests = 0;
   const provider = createMastersProvider({
     repository: repositoryStub({
       merge: async () => { throw new Error('storage unavailable'); },
     }),
-    request: async () => response(fresh),
+    request: async () => {
+      requests += 1;
+      return response(fresh);
+    },
     now: () => 3_000,
     log: (...args) => logs.push(args),
   });
 
   assert.strictEqual(await provider.load(CENTER), fresh);
   assert.strictEqual(provider.current(CENTER), fresh);
+  assert.strictEqual(await provider.load(CENTER), fresh);
+  assert.equal(requests, 1);
   assert.ok(logs.some(([message, _detail, level]) => (
     message === 'Masters Reading persistence failed' && level === 'error'
   )));

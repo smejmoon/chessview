@@ -11,7 +11,7 @@ import { CurrentViewController } from './current-view-controller.ts';
 import type { RefinementTask } from './current-view-controller.ts';
 import { debugLog } from './debug.js';
 import { clearExplorerCache } from './explorer-cache.ts';
-import { acquireExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
+import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
 import { createLens } from './lens.ts';
 import { loadMasters } from './masters.js';
 import { materializeMove } from './move-materialization.ts';
@@ -86,7 +86,7 @@ async function tasksForCurrentView({ center, mode, structure }): Promise<readonl
       modes: target.modes,
       nodusWide: target.nodusWide,
       structuralReading: target.structuralModes.includes(mode) ? target.position : null,
-      run: ({ signal, priority }) => acquireExplorerReading(target.position, { signal, priority }),
+      run: ({ signal, priority }) => refineExplorerReading(target.position, { signal, priority }),
     });
   }
 

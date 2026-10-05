@@ -1,46 +1,50 @@
 # Do:
 
-Align Constellation sizing and Interface layout with the actual presentation space available to the map rather than the browser viewport as a proxy.
+Review the deployed `10-04-geom` presentation across representative desktop aspect ratios and Rail allocations after the family-region and game-weighted connector pass. Confirm that each first-move Line family reads as one visual group without interrupting the flowing graph, Root/sibling context remains intelligible when enabled, connector thickness tracks visible relationship game count, and the Nodus remains playable while Weather is `Updating…`.
 
-Have Interface derive the usable map constraints that matter to legible board placement and supply those constraints to Constellation composition. Unify Root and Line board placement around one authoritative presentation-geometry decision so center position, surrounding boards, and connector space do not independently compete for the same area.
+If the deployed result still shows overlap, clipping, family ambiguity, obscured/crossing flow, misleading connector weight, or interrupted Nodus interaction, correct the Interface-owned presentation geometry/rendering and repeat exact-tip CI plus preview review.
 
 # Because:
 
-`docs/components/constellation.md` requires the amount shown to be constrained by available presentation space and legibility, and explicitly allows Presentation to provide the constraints needed to compose the view. `docs/components/interface.md` makes that responsibility explicit: Interface derives presentation-space constraints from the available viewport and supplies them to Constellation composition.
+`docs/components/constellation.md` requires one coherent current-view surroundings projection whose amount shown is constrained by available presentation space and legibility. `docs/components/interface.md` assigns one geometry owner the rendered map rectangle, board tiers, directional slots, family grouping, and abstract composition capacities.
 
-The current implementation does not yet match that contract. `src/main.ts::boardBudget()` derives a scalar capacity from `window.innerWidth * window.innerHeight`, before accounting for the actual map region left after the header and Rail. `src/nodus-renderer.js` places the generic/Line composition from viewport-width-based percentages, while `src/root-presentation.js::layoutRoots()` performs a second Root-specific geometry pass from DOM rectangles and `src/root-ui.css` overrides center positioning separately.
+The first deployed implementation replaced viewport-derived capacity and competing Root/Line geometry with actual-map geometry, but browser review exposed presentation defects that automated capacity tests did not catch. Same-Nodus publications rebuilt the center Chessground during `Updating…`, interrupting move interaction; flat slot ordering obscured Constellation families; and after family-first flow improved the graph, the remaining review showed that family boundaries still needed an explicit visual cue and edge thickness should communicate actual play volume rather than a first-move share proxy.
 
-Narrow-screen screenshots exposed the mismatch as board collisions, clipping, and competing center/satellite placement. Mobile support is not the requirement here; the screenshots are evidence that the current geometry model can measure and allocate the wrong space. The same class of defect can appear on supported desktop layouts under unusual aspect ratios, zoom, split-screen, or future Rail changes.
+The current correction keeps the accepted Nodus Chessground stable across same-Nodus updates, keeps the existing family-first flowing placement, renders subtle Interface-owned family regions around the boards already assigned to each family, and derives connector width from current Evidence `frequency.games` on one visible relationship scale. The Evidence values remain presentation inputs; no game-count statistic is persisted back onto ChartedGraph edges or moved into Constellation selection.
 
 # Edges:
 
-The Candidate/composition ownership boundary is already landed in `docs/components/constellation-selection.md` and `docs/components/constellation.md`: selection constructs evidence-backed Candidates and supplies same-source order, while Constellation owns coherent cross-branch allocation under presentation constraints. This outcome may change which selected Candidates fit as available space changes, but it must not change Candidate eligibility, recreate explicit-navigation admission, or re-rank siblings from the same source.
+Candidate eligibility and same-source Salience remain owned by `docs/components/constellation-selection.md`. This outcome may change which already-selected Candidates receive scarce visible space, but it must not recreate explicit-navigation admission or independently re-rank siblings from the same source.
 
-Constellation continues to own which canonical positions and relationships belong in the coherent view. Interface continues to own two-dimensional coordinates, board sizes, and connector paths. This outcome is about making the constraint passed between those owners truthful and making presentation geometry internally coherent.
+Constellation owns which canonical positions and relationships belong in the coherent surroundings and already carries family/depth annotations. Interface owns two-dimensional coordinates, board sizes, family grouping, slot assignment, family-region decoration, connector paths, and game-count-to-stroke mapping. Pixel and DOM geometry do not cross into Constellation.
 
-Rail inventory and tab counts are Nodus/source-level Rail facts under `docs/components/rail.md`, not presentation-capacity outputs. Changing map geometry may add, remove, or rearrange Constellation boards without changing settled Rail rows or counts.
+Current sizing is deliberately only three tiers: Nodus, prominent high-priority immediate Lines, and all remaining surrounding boards. Further size-policy tuning is not part of this outcome.
 
-The recomposition trigger boundary is settled: a material change in effective composition constraints rederives the sibling Constellations inside the existing Nodus run, while a viewport change that only affects placement redraws the accepted projection. Constraint-driven recomposition may expose new Reading-frontier work and therefore make the active Constellation Settling again; it is not a new Nodus run and does not make Rail capacity-dependent.
+Root and sibling context is one toggle and is off by default. Enabling or disabling it changes composition inputs and reallocates space; it is not a DOM-only hide/show control. Acquisition policy while that layer is off is outside this outcome and must not block geometry completion.
 
-Do not make mobile support a completion dependency. A later mobile-specific interaction/layout outcome may choose a different presentation regime after this boundary is sound.
+Rail is Line-only. Root inventory/counts and Root/Line mode switching are not Rail facts. Rail Line inventory remains independent of Constellation capacity and Root-context visibility.
 
-Future user-controlled Constellation zoom is tracked separately; this outcome establishes the truthful presentation-space/geometry boundary that zoom can later vary.
+A material change in effective capacities rederives the Constellation inside the existing Nodus run, while a map change that only affects placement redraws the accepted Constellation. Constraint-driven recomposition may expose new Reading-frontier work and therefore make the Constellation Settling again; it is not a new Nodus run.
 
-This outcome does not change ChartedGraph identity, Knowledge Acquisition, Explorer behavior, Rail evidence meaning, or Weather semantics.
+Same-Nodus structural, Evidence, Rail, and Weather publications must leave the accepted center Chessground interactive. Replacing that board is reserved for an actual Nodus/orientation/presentation-regime change that requires a new board surface.
 
-# Unsettled:
+Do not make mobile-specific interaction/layout polish a completion dependency. Future user-controlled Constellation zoom remains separate and should vary this one geometry/capacity model rather than create another system.
 
-Decide the smallest presentation-space contract Constellation needs in order to spend visible space correctly. A raw viewport-derived board count is insufficient; avoid inventing a richer geometry protocol than the composition decision actually needs.
-
-Decide the single Interface owner for Root and Line placement so mode-specific semantics can differ without center/satellite geometry being independently authored by generic renderer code, Root decoration code, and CSS overrides.
+This outcome does not change ChartedGraph identity, Candidate eligibility, Knowledge Acquisition semantics, Explorer transport/cache policy, Rail evidence meaning, or Weather semantics.
 
 # Complete:
 
-The current view composes against constraints derived from the actual usable map presentation area rather than browser area alone, and deterministic/browser coverage proves that changing those constraints can change Constellation membership without changing durable graph knowledge or settled Rail inventory/counts.
+The current view composes one surroundings Constellation against capacities derived from the actual rendered map presentation area rather than browser area alone. Deterministic/browser coverage proves that changing those capacities or Root-context visibility can change Constellation membership without changing durable graph knowledge or Rail Line inventory.
 
-Root and Line presentation consume one authoritative geometry source for center and surrounding-board placement; mode-specific layout semantics remain possible without conflicting independent placement rules.
+Nodus, Line, Root, and sibling boards consume one authoritative Interface geometry source. No separate Root coordinate pass or CSS center-position owner remains, connector rendering follows the final shared geometry, and visible boards remain recognizably grouped by their Constellation families rather than by incidental slot order. Family regions reinforce that grouping without replacing the relationship graph or forcing boards back into a lattice.
 
-Supported desktop layouts remain legible across materially different window shapes and Rail allocations, including cases that previously over-selected or overlapped boards because the viewport was larger than the usable map. Mobile-specific polish and interaction design may remain unfinished.
+Visible connector thickness is monotonic with the current relationship's Evidence game count, normalized against the heaviest visible relationship and kept above a legible floor. Root and Line relationships use the same visual scale; missing Evidence falls back to the minimum stroke without inventing durable graph statistics.
+
+The normal UI presents Nodus + Lines with Root/sibling context off by default and a Line-only Rail. Enabling Root context reallocates map capacity in the same Constellation rather than switching to another projection.
+
+The accepted Nodus remains playable during `Updating…`; same-Nodus presentation updates do not reconstruct its Chessground under user interaction.
+
+Supported desktop layouts remain legible across materially different map rectangles and Rail allocations, including cases that previously over-selected, overlapped, visually scrambled family structure, or hid graph flow because the browser viewport was larger than the usable map. Mobile-specific polish and detailed future size/priority tuning may remain unfinished.
 
 # Sync:
 

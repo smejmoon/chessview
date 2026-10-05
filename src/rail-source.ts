@@ -17,7 +17,6 @@ import { positionGraph } from './position-graph.ts';
 import type { GraphEdge, PositionGraph } from './position-graph.ts';
 
 export type RailValue = Readonly<{
-  rootsCount: number;
   lines: readonly unknown[];
 }>;
 
@@ -28,19 +27,13 @@ export type RailLoadOptions = Readonly<{
 
 type CurrentExplorer = (position: string) => ExplorerReading | null;
 type ReadCachedExplorer = (position: string) => Promise<ExplorerReading | null>;
-
-type EvalProvider = Readonly<{
-  available(position: string): Promise<unknown>;
-}>;
-
-type MastersProvider = Readonly<{
-  available(position: string): Promise<unknown>;
-}>;
+type EvalProvider = Readonly<{ available(position: string): Promise<unknown> }>;
+type MastersProvider = Readonly<{ available(position: string): Promise<unknown> }>;
 
 export type RailSourceOptions = Readonly<{
   currentExplorer?: CurrentExplorer;
   readCachedExplorer?: ReadCachedExplorer;
-  graph?: Pick<PositionGraph, 'incoming' | 'outgoing'>;
+  graph?: Pick<PositionGraph, 'outgoing'>;
   evalProvider?: EvalProvider;
   mastersProvider?: MastersProvider;
 }>;
@@ -63,11 +56,7 @@ function immutable<T>(value: T): T {
   return value;
 }
 
-async function sourceLine(
-  center: string,
-  move: DecoratedExplorerMove,
-  evidence: ReturnType<typeof createEvidenceReader>,
-) {
+async function sourceLine(center: string, move: DecoratedExplorerMove, evidence: ReturnType<typeof createEvidenceReader>) {
   let resolved;
   try {
     resolved = resolveMove(center, { uci: move.uci });
@@ -79,7 +68,6 @@ async function sourceLine(
     }, 'warn');
     return null;
   }
-
   const edge = {
     source: center,
     target: resolved.target,
@@ -100,10 +88,7 @@ async function sourceLine(
   });
 }
 
-async function explicitLine(
-  edge: GraphEdge,
-  evidence: ReturnType<typeof createEvidenceReader>,
-) {
+async function explicitLine(edge: GraphEdge, evidence: ReturnType<typeof createEvidenceReader>) {
   const signals = await evidence.move(edge);
   return immutable({
     edge,
@@ -119,24 +104,18 @@ async function explicitLine(
 async function railValue(
   center: string,
   explorer: ExplorerReading | null,
-  incoming: readonly unknown[],
   outgoing: readonly GraphEdge[],
   evidence: ReturnType<typeof createEvidenceReader>,
 ): Promise<RailValue> {
   const sourceLines = (await Promise.all(
-    (decorateExplorerMoves(explorer) as DecoratedExplorerMove[])
-      .map((move) => sourceLine(center, move, evidence)),
+    (decorateExplorerMoves(explorer) as DecoratedExplorerMove[]).map((move) => sourceLine(center, move, evidence)),
   )).filter((line): line is NonNullable<typeof line> => Boolean(line));
   const sourceUci = new Set(sourceLines.map((line) => line.edge.uci));
   const explicitLines = await Promise.all(outgoing
     .filter((edge) => edge.explicit && !sourceUci.has(edge.uci))
     .sort(stableEdgeOrder)
     .map((edge) => explicitLine(edge, evidence)));
-
-  return immutable({
-    rootsCount: incoming.length,
-    lines: [...sourceLines, ...explicitLines],
-  });
+  return immutable({ lines: [...sourceLines, ...explicitLines] });
 }
 
 export function createRailSource({
@@ -148,14 +127,11 @@ export function createRailSource({
 }: RailSourceOptions = {}) {
   return async function composeRail({ center, signal }: RailLoadOptions = {}) {
     throwIfObsolete(signal, 'Rail view became obsolete');
-
-    const [incoming, outgoing, cachedExplorer] = await Promise.all([
-      graph.incoming(center),
+    const [outgoing, cachedExplorer] = await Promise.all([
       graph.outgoing(center),
       readCachedExplorer(center),
     ]);
     throwIfObsolete(signal, 'Rail view became obsolete');
-
     const explorer = currentExplorer(center) ?? cachedExplorer;
     const evidence = createEvidenceReader({
       signal,
@@ -164,7 +140,7 @@ export function createRailSource({
       evalProvider,
       mastersProvider: masters,
     });
-    return railValue(center, explorer, incoming, outgoing, evidence);
+    return railValue(center, explorer, outgoing, evidence);
   };
 }
 

@@ -10,13 +10,17 @@ A Constellation is a projection of Chessview's [`ChartedGraph`](charted-graph.md
 
 ## Composition
 
+- One Nodus has one current Constellation. Lines, optional Root context, siblings, and canonical convergence are roles inside that surroundings projection rather than separate Root and Line projections.
+- The normal surroundings emphasize the Nodus and Lines. Root context is off by default; when enabled, immediate Roots and useful sibling context may compete for visible space in the same Constellation.
+- Root-context visibility is a composition input. Turning it on or off reallocates scarce visible space; it is not a post-composition DOM hide/show operation.
 - The graph Chessview knows may be larger than the current Constellation. Omitting a known position from a view never removes it from `ChartedGraph`.
 - Composition derives from durable graph facts plus Evidence currently available for relevant canonical positions and Graph Edges. It requests Evidence through the Evidence boundary rather than calculating evidence semantics or reading engine/Explorer/Masters clients directly.
 - Evidence requests during composition are reads only. Constellation does not start Explorer, engine, Masters, Root enrichment, or graph-reconciliation work.
 - A Candidate refers to one known Graph Edge plus the current Evidence and selection state needed for this composition. Prevalence, human-result Evidence, engine Evidence, eligibility, Salience, local ordering, family membership, and depth are not persisted back onto the Graph Edge.
 - A Graph Edge does not become a Candidate merely because it is `explicit`. Explicit materialization preserves navigation behavior independently; usable current Prevalence may separately make that same Graph Edge an ordinary Candidate.
 - A visible relationship is the Constellation-local representation of a selected Candidate. It refers to durable Graph Edge identity while carrying only current-view structure needed by composition; it is not a persisted second graph and does not own a duplicate Evidence record.
-- Constellation allocates already-selected Candidates across branches in same-source order. It may merge, omit, deepen, or truncate structure to preserve coherence and fit available space, but it does not re-run provider acquisition.
+- Constellation allocates already-selected Candidates across structural roles and branches in same-source order. It may merge, omit, deepen, or truncate structure to preserve coherence and fit available space, but it does not re-run provider acquisition.
+- Forward Lines have the normal allocation priority. Root and sibling context is lower-priority explanatory context and only participates when its presentation layer is enabled. Concrete priority tuning remains an implementation choice while this ordering remains true.
 - Prevalence from different source positions is local Evidence, not one globally comparable score. Constellation owns the cross-branch choices needed to preserve a coherent view.
 - Broad positions should retain meaningful alternatives instead of allowing one branch to consume the whole view; narrow Lines may deepen when that is the best use of available space.
 - Distinct immediate Root or first-level Line families remain distinct until selected paths genuinely converge on the same canonical position.
@@ -28,7 +32,7 @@ A Constellation is a projection of Chessview's [`ChartedGraph`](charted-graph.md
 
 ## Settlement
 
-A Constellation applies the glossary meaning of [Settled](../glossary.md#settled) to its **shape**. It is Settled when Chessview has finished deciding the shape of the current view with respect to its admitted structural obligations: no unresolved admitted obligation can still change constrained composition, and every completed relevant structural result has been incorporated. Repeating composition from the same admitted facts would then produce the same shape.
+A Constellation applies the glossary meaning of [Settled](../glossary.md#settled) to its **shape**. It is Settled when Chessview has finished deciding the shape of the current view with respect to its admitted structural obligations: no unresolved admitted obligation can still change constrained composition, and every completed relevant structural result has been incorporated. Repeating composition from the same admitted facts and presentation inputs would then produce the same shape.
 
 The Reading frontier is how Constellation identifies and admits missing rated Explorer knowledge that may participate in structural settlement. Constellation learns whether a usable rated Reading is currently available by asking Evidence; it does not inspect Explorer transport/cache state itself. A frontier obligation participates only while another Reading can still change constrained composition. A completed structural Reading or reconciliation remains relevant to settlement until recomposition has incorporated its result. Nodus may carry that obligation alongside other current-Nodus refinement demand, but the structural admission belongs to Constellation.
 
@@ -42,12 +46,12 @@ Constellation identifies where missing graph-bearing Explorer knowledge can stil
 
 - If the Nodus itself lacks usable rated Reading Evidence and another Reading can establish automatic Line Candidates, the Nodus may be in the frontier even before any selected Line exists.
 - When a currently selected Line position lacks a usable rated Reading and another Reading can still change the constrained composition, that position is in the frontier.
-- Root composition may likewise expose source positions whose missing rated Reading prevents known non-explicit incoming relationships from becoming ordinary Candidates.
+- When Root context is enabled, source positions needed to decide selected Root or sibling context may likewise participate while another Reading can still change constrained composition.
 - Selection membership and missing acquisition are separate facts. A position belongs in the frontier only while its missing Reading can still affect the constrained result.
 - A full visible-space budget does not by itself mean composition is Settled; another selected-position Reading may still change which structure deserves that space.
 - Conversely, Constellation does not expand through unselected Candidates merely to spend an acquisition budget.
 - Once another Explorer Reading cannot change the constrained composition, the position leaves the frontier and no longer participates in structural settlement.
-- Nodus includes frontier positions in current-Nodus refinement demand while preserving their structural provenance. Current-view coordination may then map that demand to Explorer acquisition/reconciliation. When such a structural result completes, the current Nodus is recomposed from facts now available; the Constellation is not Settled until that completed result has been incorporated.
+- Nodus includes frontier positions in current-Nodus refinement demand while preserving their structural provenance. Current-view coordination may then map that demand to Explorer acquisition/reconciliation. When such a structural result completes, the current Nodus is recomposed from facts now available; the Constellation is not Settled until that completed result has been incorporated or its obligation is no longer relevant to constrained shape.
 - A trustworthy provisional Constellation remains visible and navigable while it is Settling; [Current view](../architecture/current-view.md) coordinates incorporation and [Weather](weather.md) presents settlement state.
 
 Acquisition granularity, transport, cache policy, and Edge Admission are not part of the Constellation contract.
@@ -70,17 +74,21 @@ Lookahead relevance belongs here because Constellation owns coherent locality ar
 
 Constellation optimizes for a coherent, understandable structure rather than maximum coverage.
 
-The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count or opening-depth cap. Presentation may supply capacity constraints, but two-dimensional coordinates, board sizes, connector paths, colors, labels, and the joining of Evidence onto visible relationship IDs remain presentation concerns.
+The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count or opening-depth cap. Interface supplies abstract capacities for the forward-Line region and, when enabled, the Root-context region. Those capacities are derived from the actual map presentation area and the board-size regime; pixel coordinates and DOM measurements do not cross into Constellation.
 
-A material change to those effective constraints invalidates the previous composition as the fixed point for the new inputs and requires same-Nodus recomposition. That recomposition may expose or remove Reading-frontier obligations; if no admitted structural obligation remains, the new shape may be Settled immediately. A presentation-only relayout that leaves the effective composition constraints unchanged does not recompose Constellation.
+The current presentation uses three board-size tiers: the Nodus, prominent high-priority immediate Lines, and the remaining surrounding boards. Exact sizes and how many prominent slots fit are Interface concerns; Constellation membership remains governed by the supplied capacities and structural priorities.
 
-Rail inventory and counts are independent of Constellation capacity. Presentation-space changes may alter Constellation membership without changing Rail values. [Rail](rail.md) owns exhaustive immediate Line inventory and its evidence presentation.
+A material change to effective capacities or Root-context visibility invalidates the previous composition as the fixed point for the new inputs and requires same-Nodus recomposition. That recomposition may expose or remove Reading-frontier obligations; if no admitted structural obligation remains, the new shape may be Settled immediately. A presentation-only relayout that leaves the effective composition inputs unchanged does not recompose Constellation.
+
+Rail inventory is independent of Constellation capacity and Root-context visibility. Presentation-space changes may alter Constellation membership without changing Rail values. [Rail](rail.md) owns exhaustive immediate Line inventory and its evidence presentation.
 
 ## Verification
 
 Deterministic tests should cover:
 
 - durable known graph state being larger than the selected Constellation;
+- one Constellation containing forward Lines and, when enabled, Root/sibling context without duplicate canonical positions;
+- disabling Root context reallocating its capacity to forward Lines rather than merely hiding already-composed boards;
 - Constellation requesting position/Graph Edge Evidence without Evidence depending on Constellation structure;
 - Constellation composition importing neither Evidence arithmetic nor Explorer/engine/Masters provider clients for Candidate evidence;
 - Candidates combining Graph Edges with current Evidence without mutating persisted Graph Edges;
@@ -96,7 +104,7 @@ Deterministic tests should cover:
 - a completed structural Reading/reconciliation not counting as Settled until recomposition incorporates it or makes its obligation irrelevant;
 - stale but usable local Evidence remaining composable without composition initiating refresh;
 - Explorer failure being unable to suppress already-known graph/navigation facts;
-- Rail inventory and Line count remaining independent of presentation-space constraints;
+- Rail Line inventory remaining independent of presentation-space constraints and Root-context visibility;
 - a material presentation-constraint change recomposing the same-Nodus Constellation and being able to expose a new Reading-frontier obligation;
 - a presentation-only relayout leaving Constellation composition and settlement unchanged;
 - a trustworthy provisional Constellation remaining available while it is Settling;

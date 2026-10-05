@@ -1,6 +1,7 @@
 import {
   START_FEN,
   canonicalPosition,
+  edgeId,
   legalDestinations,
   legalMoveTargets,
   toPlayableFen,
@@ -9,7 +10,13 @@ import {
   composeLineNeighborhood,
   chooseRootNeighborhood,
 } from './visible-graph.ts';
-import type { LineCompositionPlan, VisibleComposition } from './visible-graph.ts';
+import type {
+  LineCompositionPlan,
+  VisibleComposition,
+  VisibleFamily,
+  VisibleNode,
+  VisibleRelationship,
+} from './visible-graph.ts';
 import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge } from './position-graph.ts';
@@ -33,23 +40,18 @@ type CandidateSource = Readonly<{
   hasReconciledReading(source: string): Promise<boolean>;
   missingReadings(): readonly string[];
 }>;
-type PositionRecord = {
-  key: string;
-  fen: string;
-  [field: string]: unknown;
-};
-type RootRow = Readonly<{
-  key: string;
-  label: string;
-  title: string;
-}>;
+type PositionRecord = { key: string; fen: string; [field: string]: unknown };
+type RootRow = Readonly<{ key: string; label: string; title: string }>;
 
 export type NodusMode = 'roots' | 'lines';
 
 export type ComposeNodusStructureOptions = Readonly<{
   center: string;
   mode: NodusMode;
-  max: number;
+  max?: number;
+  lineMax?: number;
+  rootMax?: number;
+  rootContext?: boolean;
   signal?: AbortSignal;
 }>;
 
@@ -67,11 +69,15 @@ function immutable<T>(value: T): T {
   if (Array.isArray(value)) return Object.freeze(value.map(immutable)) as T;
   if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
     return Object.freeze(Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .map(([key, child]) => [key, immutable(child)]),
+      Object.entries(value as Record<string, unknown>).map(([key, child]) => [key, immutable(child)]),
     )) as T;
   }
   return value;
+}
+
+function capacity(value: number | undefined, fallback = 1): number {
+  const numeric = Number.isFinite(value) ? Number(value) : fallback;
+  return Math.max(1, Math.floor(numeric));
 }
 
 function createCandidateSource(signal?: AbortSignal): CandidateSource {
@@ -93,15 +99,11 @@ function createCandidateSource(signal?: AbortSignal): CandidateSource {
       reconciledReadingFor(edge.source),
     ]);
     throwIfAborted(signal);
-    if (!reconciledReading && !edge.explicit) {
-      missing.add(edge.source);
-    }
+    if (!reconciledReading && !edge.explicit) missing.add(edge.source);
     if (!readingAvailable) return null;
-
     const moveEvidence = await evidence.move(edge, { comparisons: false });
     throwIfAborted(signal);
     if (!moveEvidence.frequency) return null;
-
     return selectionCandidate({
       edge,
       frequency: moveEvidence.frequency,
@@ -113,7 +115,7 @@ function createCandidateSource(signal?: AbortSignal): CandidateSource {
   async function outgoing(source: string): Promise<readonly SelectionCandidate[]> {
     const edges = await positionGraph.outgoing(source);
     throwIfAborted(signal);
-    const candidates = (await Promise.all(edges.map((edge) => candidate(edge))))
+    const candidates = (await Promise.all(edges.map(candidate)))
       .filter((item): item is SelectionCandidate => item != null);
     return rankSameSourceCandidates(candidates);
   }
@@ -121,26 +123,22 @@ function createCandidateSource(signal?: AbortSignal): CandidateSource {
   async function incoming(target: string): Promise<readonly SelectionCandidate[]> {
     const edges = await positionGraph.incoming(target);
     throwIfAborted(signal);
-    const candidates = (await Promise.all(edges.map((edge) => candidate(edge))))
+    const candidates = (await Promise.all(edges.map(candidate)))
       .filter((item): item is SelectionCandidate => item != null);
     return rankCrossSourceCandidates(candidates);
-  }
-
-  async function hasReconciledReading(source: string): Promise<boolean> {
-    return reconciledReadingFor(source);
   }
 
   return Object.freeze({
     outgoing,
     incoming,
-    hasReconciledReading,
+    hasReconciledReading: reconciledReadingFor,
     missingReadings: () => Object.freeze([...missing]),
   });
 }
 
 async function composeKnownLineGraph(
   center: string,
-  capacity: number,
+  max: number,
   candidateSource: CandidateSource,
   signal?: AbortSignal,
 ): Promise<LineCompositionPlan> {
@@ -159,16 +157,14 @@ async function composeKnownLineGraph(
   }
 
   await inspect(center);
-  let plan = composeLineNeighborhood({ center, outgoingBySource, max: capacity });
-
+  let plan = composeLineNeighborhood({ center, outgoingBySource, max });
   while (true) {
     throwIfAborted(signal);
-    const uninspected = plan.composition.nodes
-      .map((node) => node.key)
+    const uninspected = plan.composition.nodes.map((node) => node.key)
       .filter((key) => !outgoingBySource.has(key));
     if (!uninspected.length) break;
     await Promise.all(uninspected.map(inspect));
-    plan = composeLineNeighborhood({ center, outgoingBySource, max: capacity });
+    plan = composeLineNeighborhood({ center, outgoingBySource, max });
   }
 
   const unresolvedReadings = new Set(plan.composition.nodes
@@ -176,43 +172,30 @@ async function composeKnownLineGraph(
     .filter((key) => readingReconciled.get(key) === false && legalDestinations(key).size > 0));
   const legalTargetsBySource = new Map<string, ReadonlySet<string>>([...unresolvedReadings]
     .map((key) => [key, legalMoveTargets(key) as ReadonlySet<string>]));
-  plan = composeLineNeighborhood({
-    center,
-    outgoingBySource,
-    unresolvedReadings,
-    legalTargetsBySource,
-    max: capacity,
-  });
-
+  plan = composeLineNeighborhood({ center, outgoingBySource, unresolvedReadings, legalTargetsBySource, max });
   if (readingReconciled.get(center) === false && legalDestinations(center).size > 0) {
-    plan = {
-      ...plan,
-      readingFrontier: [center, ...plan.readingFrontier.filter((key) => key !== center)],
-    };
+    plan = { ...plan, readingFrontier: [center, ...plan.readingFrontier.filter((key) => key !== center)] };
   }
   return plan;
 }
 
 async function collectIncomingGraph(
   center: string,
-  capacity: number,
+  max: number,
   candidateSource: CandidateSource,
   signal?: AbortSignal,
 ): Promise<Map<string, readonly SelectionCandidate[]>> {
   const incomingByTarget = new Map<string, readonly SelectionCandidate[]>();
   const queue = [center];
   const visited = new Set<string>();
-  while (queue.length && visited.size < capacity) {
+  while (queue.length && visited.size < max) {
     throwIfAborted(signal);
     const key = queue.shift();
     if (!key || visited.has(key)) continue;
     visited.add(key);
     const candidates = await candidateSource.incoming(key);
-    throwIfAborted(signal);
     incomingByTarget.set(key, candidates);
-    for (const candidate of candidates) {
-      if (!visited.has(candidate.edge.source)) queue.push(candidate.edge.source);
-    }
+    for (const candidate of candidates) if (!visited.has(candidate.edge.source)) queue.push(candidate.edge.source);
   }
   return incomingByTarget;
 }
@@ -227,60 +210,186 @@ async function collectIncomingToStart(
   while (queue.length) {
     throwIfAborted(signal);
     const current = queue.shift();
-    if (!current) break;
-    if (seen.has(current.key) || current.depth >= maxDepth) continue;
+    if (!current || seen.has(current.key) || current.depth >= maxDepth) continue;
     seen.add(current.key);
     const incoming = await positionGraph.incoming(current.key);
-    throwIfAborted(signal);
     incomingByTarget.set(current.key, incoming);
     if (incoming.some((edge) => edge.source === START)) break;
-    for (const edge of incoming) {
-      if (!seen.has(edge.source)) queue.push({ key: edge.source, depth: current.depth + 1 });
-    }
+    for (const edge of incoming) if (!seen.has(edge.source)) queue.push({ key: edge.source, depth: current.depth + 1 });
   }
   return incomingByTarget;
 }
 
-async function rootRows(
-  composition: VisibleComposition,
-  signal?: AbortSignal,
-): Promise<readonly RootRow[]> {
+async function rootRows(composition: VisibleComposition, signal?: AbortSignal): Promise<readonly RootRow[]> {
   const rows = await Promise.all(composition.nodes.map(async (node): Promise<RootRow | null> => {
-    throwIfAborted(signal);
     const incomingByTarget = await collectIncomingToStart(node.key, { signal });
     const path = reconstructPgnPath(node.key, incomingByTarget, START);
     if (path == null) return null;
     const full = path.length ? formatPgnMoves(path) : 'start position';
     const suffix = path.length ? formatPgnSuffix(path, ROOT_LABEL_MAX_PLIES) : 'start position';
-    return {
-      key: node.key,
-      label: node.merge ? `↗ ${suffix}` : suffix,
-      title: node.merge ? `Transposition merge · ${full}` : full,
-    };
+    return { key: node.key, label: node.merge ? `↗ ${suffix}` : suffix, title: node.merge ? `Transposition merge · ${full}` : full };
   }));
   return immutable(rows.filter((row): row is RootRow => row != null));
 }
 
-export async function composeNodusStructure({
-  center,
-  mode,
-  max,
-  signal,
-}: ComposeNodusStructureOptions) {
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values)];
+}
+
+function addContextNode(nodes: VisibleNode[], byKey: Map<string, VisibleNode>, input: VisibleNode, max: number): VisibleNode | null {
+  const existing = byKey.get(input.key);
+  if (existing) {
+    existing.families = unique([...existing.families, ...input.families]);
+    existing.relationships = unique([...existing.relationships, ...input.relationships]);
+    existing.merge = true;
+    return existing;
+  }
+  if (nodes.length >= max) return null;
+  nodes.push(input);
+  byKey.set(input.key, input);
+  return input;
+}
+
+async function composeRootContext(
+  center: string,
+  max: number,
+  candidateSource: CandidateSource,
+): Promise<VisibleComposition> {
+  const nodes: VisibleNode[] = [];
+  const relationships: VisibleRelationship[] = [];
+  const families: VisibleFamily[] = [];
+  const nodesByKey = new Map<string, VisibleNode>();
+  const relationshipIds = new Set<string>();
+  const immediate = await candidateSource.incoming(center);
+  const selectedRoots: Array<{ key: string; family: string }> = [];
+
+  function addRelationship(candidate: SelectionCandidate, family: string, distance: number): void {
+    const id = edgeId(candidate.edge);
+    if (relationshipIds.has(id)) return;
+    relationshipIds.add(id);
+    relationships.push({ id, edge: candidate.edge, source: candidate.edge.source, target: candidate.edge.target, distance, families: [family] });
+    for (const key of [candidate.edge.source, candidate.edge.target]) {
+      const node = nodesByKey.get(key);
+      if (node && !node.relationships.includes(id)) node.relationships.push(id);
+    }
+  }
+
+  for (const candidate of immediate) {
+    if (nodes.length >= max) break;
+    const family = candidate.edge.source;
+    families.push({ id: family, rootEdgeId: edgeId(candidate.edge) });
+    const node: VisibleNode = {
+      key: family,
+      distance: 1,
+      relation: 'root',
+      families: [family],
+      relationships: [],
+      merge: false,
+      edge: candidate.edge,
+      branch: family,
+      branches: [family],
+    };
+    if (addContextNode(nodes, nodesByKey, node, max)) {
+      selectedRoots.push({ key: family, family });
+      addRelationship(candidate, family, 1);
+    }
+  }
+
+  const siblingLists = await Promise.all(selectedRoots.map(async ({ key, family }) => ({
+    family,
+    candidates: (await candidateSource.outgoing(key)).filter((candidate) => candidate.edge.target !== center),
+  })));
+  let siblingIndex = 0;
+  while (nodes.length < max && siblingLists.some(({ candidates }) => siblingIndex < candidates.length)) {
+    for (const { family, candidates } of siblingLists) {
+      if (nodes.length >= max) break;
+      const candidate = candidates[siblingIndex];
+      if (!candidate) continue;
+      const node: VisibleNode = {
+        key: candidate.edge.target,
+        distance: 1,
+        relation: 'sibling',
+        families: [family],
+        relationships: [],
+        merge: false,
+        edge: candidate.edge,
+        branch: family,
+        branches: [family],
+      };
+      const added = addContextNode(nodes, nodesByKey, node, max);
+      if (added) addRelationship(candidate, family, 1);
+    }
+    siblingIndex += 1;
+  }
+  return { nodes, relationships, families };
+}
+
+function mergeCompositions(primary: VisibleComposition, context: VisibleComposition): VisibleComposition {
+  const nodes = primary.nodes.map((node) => ({ ...node, families: [...node.families], relationships: [...node.relationships] }));
+  const nodesByKey = new Map(nodes.map((node) => [node.key, node]));
+  const relationships = primary.relationships.map((relationship) => ({ ...relationship, families: [...relationship.families] }));
+  const relationshipIds = new Set(relationships.map((relationship) => relationship.id));
+  const families = primary.families.map((family) => ({ ...family }));
+  const familyIds = new Set(families.map((family) => family.id));
+
+  for (const node of context.nodes) {
+    const existing = nodesByKey.get(node.key);
+    if (existing) {
+      existing.families = unique([...existing.families, ...node.families]);
+      existing.relationships = unique([...existing.relationships, ...node.relationships]);
+      existing.merge = true;
+      continue;
+    }
+    const copy = { ...node, families: [...node.families], relationships: [...node.relationships] };
+    nodes.push(copy);
+    nodesByKey.set(copy.key, copy);
+  }
+  for (const relationship of context.relationships) {
+    if (relationshipIds.has(relationship.id)) continue;
+    relationships.push({ ...relationship, families: [...relationship.families] });
+    relationshipIds.add(relationship.id);
+  }
+  for (const family of context.families) {
+    if (familyIds.has(family.id)) continue;
+    families.push({ ...family });
+    familyIds.add(family.id);
+  }
+  return { nodes, relationships, families };
+}
+
+export async function composeNodusStructure(options: ComposeNodusStructureOptions) {
+  const { center, mode, signal } = options;
   throwIfAborted(signal);
-  const capacity = Math.max(1, Number.isFinite(max) ? Math.floor(max) : 1);
+  const legacyMax = capacity(options.max, 1);
   const candidateSource = createCandidateSource(signal);
   let selected: VisibleComposition;
   let readingFrontier: string[] = [];
+  let rows: readonly RootRow[] = [];
 
-  if (mode === 'roots') {
-    const incomingByTarget = await collectIncomingGraph(center, capacity, candidateSource, signal);
-    selected = chooseRootNeighborhood({ center, incomingByTarget, max: capacity });
-    readingFrontier = [...candidateSource.missingReadings()];
+  if (options.rootContext === undefined) {
+    if (mode === 'roots') {
+      const incomingByTarget = await collectIncomingGraph(center, legacyMax, candidateSource, signal);
+      selected = chooseRootNeighborhood({ center, incomingByTarget, max: legacyMax });
+      readingFrontier = [...candidateSource.missingReadings()];
+      rows = await rootRows(selected, signal);
+    } else {
+      const line = await composeKnownLineGraph(center, legacyMax, candidateSource, signal);
+      selected = line.composition;
+      readingFrontier = line.readingFrontier;
+    }
   } else {
-    const line = await composeKnownLineGraph(center, capacity, candidateSource, signal);
+    const lineMax = capacity(options.lineMax, legacyMax);
+    const line = await composeKnownLineGraph(center, lineMax, candidateSource, signal);
     selected = line.composition;
-    readingFrontier = line.readingFrontier;
+    readingFrontier = [...line.readingFrontier];
+    if (options.rootContext && (options.rootMax ?? 0) > 0) {
+      const before = new Set(candidateSource.missingReadings());
+      const context = await composeRootContext(center, capacity(options.rootMax, 1), candidateSource);
+      selected = mergeCompositions(selected, context);
+      for (const key of candidateSource.missingReadings()) {
+        if (!before.has(key) && !readingFrontier.includes(key)) readingFrontier.push(key);
+      }
+    }
   }
   throwIfAborted(signal);
 
@@ -304,6 +413,6 @@ export async function composeNodusStructure({
     positions,
     readingFrontier,
     settling: readingFrontier.length > 0,
-    rootRows: mode === 'roots' ? await rootRows(composition, signal) : [],
+    rootRows: rows,
   });
 }

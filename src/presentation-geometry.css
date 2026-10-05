@@ -1,0 +1,48 @@
+.map-controls {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 22;
+}
+.root-context-toggle {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  background: rgba(24,23,21,.76);
+  color: #aaa69f;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.root-context-toggle:hover { background: rgba(255,255,255,.09); color: #ddd9d2; }
+.root-context-toggle.is-active {
+  border-color: rgba(179,210,103,.28);
+  background: rgba(179,210,103,.12);
+  color: #e8f0d5;
+}
+.center-position { width: var(--center-size); }
+.satellite { width: var(--size); }
+.satellite.tier-compact:hover,
+.satellite.tier-compact:focus-visible { transform: translate(-50%, -50%) scale(1.75); z-index: 28; }
+.relation-root .mini-label strong,
+.relation-sibling .mini-label strong { color: #c5d99a; }
+.map.has-root-context .satellite.rarity-rare .mini-label strong::after,
+.map.has-root-context .satellite.rarity-very-rare .mini-label strong::after {
+  content: '◇';
+  margin-left: 4px;
+  color: #9a968f;
+  font-size: .82em;
+  font-weight: 800;
+}
+.map.has-root-context .satellite.rarity-rare { filter: brightness(.82) saturate(.78); }
+.map.has-root-context .satellite.rarity-very-rare { filter: brightness(.66) saturate(.58); }
+.map.has-root-context .satellite.rarity-rare:hover,
+.map.has-root-context .satellite.rarity-rare:focus-visible,
+.map.has-root-context .satellite.rarity-very-rare:hover,
+.map.has-root-context .satellite.rarity-very-rare:focus-visible,
+.map.has-root-context .satellite.rarity-rare.is-related-highlight,
+.map.has-root-context .satellite.rarity-very-rare.is-related-highlight { filter: brightness(1.09); }
+@media (max-width: 760px) {
+  .map-controls { top: 8px; left: 8px; }
+  .root-context-toggle { min-height: 28px; font-size: 10px; }
+}

@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Own the supporting control, inventory, and evidence surface beside the spatial map.
+Own the supporting Line inventory and evidence surface beside the spatial map.
 
-The Rail helps the user inspect and navigate the current Nodus and its immediate move neighborhood without becoming the graph, deciding canonical identity, growing graph knowledge, deciding which relationships receive visible Constellation space, or owning source acquisition lifecycle.
+The Rail helps the user inspect and navigate immediate Lines from the current Nodus without becoming the graph, deciding canonical identity, growing graph knowledge, deciding which relationships receive visible Constellation space, or owning source acquisition lifecycle. Root and sibling context belongs to the spatial map rather than a parallel Rail mode.
 
 ## Line inventory
 
-For Line view, the Rail is exhaustive rather than selective.
+The Rail is exhaustive rather than selective.
 
 **Source Lines** are every legal immediate Move returned by the current usable rated `LichessGamesDB` Explorer Reading for the Nodus. Every Source Line is listed in the Rail regardless of whether it is selected into the current Constellation.
 
@@ -18,7 +18,7 @@ The **Visible Constellation Lines** are selected independently by [Constellation
 
 ## Projection boundary
 
-Rail is a projection over facts already available for the current Nodus. It reads known immediate incoming/outgoing Graph relationships and the provider's current or durable Explorer Reading to establish inventory. For semantic signals on those rows, Rail requests [Evidence](evidence.md) by Graph Edge rather than calculating engine, human-result, mismatch, rarity, or Prevalence semantics itself.
+Rail is a projection over facts already available for the current Nodus. It reads known immediate outgoing Graph relationships and the provider's current or durable Explorer Reading to establish Line inventory. For semantic signals on those rows, Rail requests [Evidence](evidence.md) by Graph Edge rather than calculating engine, human-result, mismatch, rarity, or Prevalence semantics itself.
 
 Rail does not start Explorer, engine, or Masters acquisition, subscribe to source notifications, expose a progress callback, or keep any producer alive. Evidence requests made by Rail are reads of currently available facts only.
 
@@ -26,21 +26,19 @@ Source work is planned outside Rail. When relevant facts are incorporated into t
 
 A fresh usable Explorer observation may therefore contribute Source Lines on a later Rail derivation even when durable cache persistence failed. Rail does not reconcile that observation into `ChartedGraph`; [Knowledge Acquisition](knowledge-acquisition.md) alone owns graph admission and durable graph growth.
 
-Rail richness is independent from structural [settlement](../glossary.md#settled). Engine or Masters facts may make later Evidence richer before or after the active Constellation becomes Settled; those supplementary changes do not by themselves make the Nodus Settling.
+Rail richness is independent from structural [settlement](../glossary.md#settled). Engine or Masters facts may make later Evidence richer before or after the Constellation becomes Settled; those supplementary changes do not by themselves make the Nodus Settling.
 
 ## Requirements
 
-- The Rail shows current-position context and controls used to switch between Root and Line views.
-- The Lines Rail lists every current Source Line plus explicit-only navigable outgoing Graph Edges not already represented by that source inventory. It may scroll rather than truncate.
-- The Lines tab count equals the number of Line rows in the Rail. It does not count visible Constellation boards or classify a semantic subset of Lines.
-- The Roots tab count reports immediate known Root relationships for the current Nodus, independent of how many Root boards fit in the current Constellation.
-- Root/Line mode switching is a display choice. It does not clear, reacquire, or reinterpret Rail inventory merely because the active mode changed.
-- Rail inventory and tab counts are independent of Constellation presentation capacity.
-- Known Graph inventory remains usable when Explorer is absent, delayed, stale, or failed. Missing source evidence does not suppress already-known explicit Lines or Root counts.
+- The Rail shows current-position context and an exhaustive immediate-Line inventory.
+- The Rail lists every current Source Line plus explicit-only navigable outgoing Graph Edges not already represented by that source inventory. It may scroll rather than truncate.
+- Root inventory, Root counts, and Root/Line mode switching are not Rail responsibilities. Root and sibling visibility is controlled on the map.
+- Rail inventory is independent of Constellation presentation capacity and Root-context visibility.
+- Known Graph Line inventory remains usable when Explorer is absent, delayed, stale, or failed. Missing source evidence does not suppress already-known explicit Lines.
 - A currently usable Explorer Reading contributes Source Lines without waiting for graph reconciliation, cloud evaluation, Masters retrieval, or source-cache persistence.
 - Cloud evaluation and Masters may refine Evidence later; their delay, absence, rate limiting, persistence failure, or retrieval failure must not suppress otherwise usable Rail inventory or keep Weather structurally unsettled.
-- While the active Constellation is Settling, the established Rail remains interactive and `ready`; it is replaced only after a recomputed Rail value is accepted.
-- After the active Constellation is Settled, supplementary Evidence may continue enriching Rail without reopening structural settlement.
+- While the Constellation is Settling, the established Rail remains interactive and `ready`; it is replaced only after a recomputed Rail value is accepted.
+- After the Constellation is Settled, supplementary Evidence may continue enriching Rail without reopening structural settlement.
 - Selecting a navigable Rail row requests a Recenter to the row's canonical target position.
 - Engine, human-result, mismatch, rarity, Prevalence, and other evidence shown in the Rail follow [Evidence](evidence.md). Rail requests and presents those signals without deriving a separate evidence grammar, admission rule, or importance classification.
 - A Guide or legend that explains evidence presentation belongs to the Rail because it explains Rail/map evidence channels; it does not become a second source of evidence rules.
@@ -50,18 +48,15 @@ Rail richness is independent from structural [settlement](../glossary.md#settled
 
 Deterministic/browser contract tests should cover:
 
-- Root and Line controls selecting the intended display without restarting the Nodus solely because the mode changed;
 - every legal current Explorer Source Line appearing in the Rail, including Lines omitted from the Constellation;
 - explicit-only navigable outgoing Graph Edges appearing without source evidence or automatic Constellation candidacy;
-- Rail deriving known Graph inventory with no source acquisition side effect;
+- Rail deriving known outgoing Graph inventory with no source acquisition side effect;
 - Rail requesting move Evidence by Graph Edge instead of importing Evidence calculation rules;
 - recomposition adding Source Lines when an Explorer fact becomes available, without a Rail progress/subscription lifecycle;
 - provider-current Explorer state taking precedence over older durable cached state for the current application lifetime;
 - a Graph Edge already represented by a Source Line not producing a duplicate explicit Rail row;
-- Lines Rail scrolling rather than semantic truncation;
-- Lines/Roots tab counts following complete immediate Rail inventory rather than visible-board capacity;
-- same-Nodus Root/Line switching preserving Rail values while later derivation may refine them;
-- presentation-space changes altering Constellation membership without altering Rail inventory;
+- Rail scrolling rather than semantic truncation;
+- presentation-space or Root-context changes altering Constellation membership without altering Rail inventory;
 - Explorer/graph inventory remaining available before engine or Masters Evidence, with later supplementary facts refining rows;
 - supplementary Evidence arriving, failing, or completing after Constellation settlement without reopening structural settlement;
 - Rail navigation targeting the correct canonical position;

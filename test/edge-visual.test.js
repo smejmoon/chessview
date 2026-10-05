@@ -1,20 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  LINE_EDGE_MAX_WIDTH,
-  LINE_EDGE_MIN_WIDTH,
-  lineStrokeWidth,
+  EDGE_MAX_WIDTH,
+  EDGE_MIN_WIDTH,
+  edgeStrokeWidth,
 } from '../src/edge-visual.js';
 
-test('Line connector width grows monotonically with first-move share', () => {
-  assert.equal(lineStrokeWidth(0), LINE_EDGE_MIN_WIDTH);
-  assert.equal(lineStrokeWidth(1), LINE_EDGE_MAX_WIDTH);
-  assert.equal(lineStrokeWidth(0.25), 2.75);
-  assert.ok(lineStrokeWidth(0.45) > lineStrokeWidth(0.15));
+test('connector width is proportional to visible relationship game count', () => {
+  assert.equal(edgeStrokeWidth(0, 1000), EDGE_MIN_WIDTH);
+  assert.equal(edgeStrokeWidth(1000, 1000), EDGE_MAX_WIDTH);
+  assert.equal(edgeStrokeWidth(500, 1000), EDGE_MAX_WIDTH * 0.5);
+  assert.equal(edgeStrokeWidth(250, 1000), EDGE_MAX_WIDTH * 0.25);
+  assert.ok(edgeStrokeWidth(700, 1000) > edgeStrokeWidth(300, 1000));
 });
 
-test('Line connector width clamps missing and out-of-range shares', () => {
-  assert.equal(lineStrokeWidth(undefined), LINE_EDGE_MIN_WIDTH);
-  assert.equal(lineStrokeWidth(-1), LINE_EDGE_MIN_WIDTH);
-  assert.equal(lineStrokeWidth(2), LINE_EDGE_MAX_WIDTH);
+test('connector width keeps a visible floor and clamps invalid counts', () => {
+  assert.equal(edgeStrokeWidth(undefined, 1000), EDGE_MIN_WIDTH);
+  assert.equal(edgeStrokeWidth(-1, 1000), EDGE_MIN_WIDTH);
+  assert.equal(edgeStrokeWidth(100, undefined), EDGE_MIN_WIDTH);
+  assert.equal(edgeStrokeWidth(2000, 1000), EDGE_MAX_WIDTH);
 });

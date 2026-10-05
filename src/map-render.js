@@ -1,4 +1,4 @@
-import { lineStrokeWidth } from './edge-visual.js';
+import { edgeStrokeWidth } from './edge-visual.js';
 
 function familyRecord(composition, id) {
   if (!id) return null;
@@ -9,14 +9,28 @@ function nodeRecord(composition, key) {
   return composition?.nodes?.find?.((node) => node.key === key) ?? null;
 }
 
-export function visibleConnectors(composition, { direction }) {
-  if (direction !== 'lines' && direction !== 'roots') {
-    throw new TypeError('visibleConnectors requires a roots or lines direction');
+function relationshipDirection(composition, relationship, requested) {
+  if (requested !== 'mixed') return requested;
+  const source = nodeRecord(composition, relationship.source);
+  return source?.relation === 'root' || source?.relation === 'sibling' ? 'roots' : 'lines';
+}
+
+function gameCount(gamesByRelationship, relationshipId) {
+  const games = gamesByRelationship?.get?.(relationshipId);
+  return Number.isFinite(games) && games > 0 ? games : 0;
+}
+
+export function visibleConnectors(composition, { direction, gamesByRelationship = new Map() }) {
+  if (!['lines', 'roots', 'mixed'].includes(direction)) {
+    throw new TypeError('visibleConnectors requires a roots, lines, or mixed direction');
   }
   const relationships = Array.isArray(composition?.relationships) ? composition.relationships : [];
-
+  const maxGames = Math.max(0, ...relationships.map((relationship) => gameCount(gamesByRelationship, relationship.id)));
   return relationships.flatMap((relationship) => {
-    if (direction === 'lines') {
+    const actualDirection = relationshipDirection(composition, relationship, direction);
+    const games = gameCount(gamesByRelationship, relationship.id);
+    const strokeWidth = edgeStrokeWidth(games, maxGames);
+    if (actualDirection === 'lines') {
       const familyIds = relationship.families?.length ? relationship.families : [null];
       return familyIds.map((familyId, index) => {
         const family = familyRecord(composition, familyId);
@@ -33,11 +47,11 @@ export function visibleConnectors(composition, { direction }) {
           edge: relationship.edge,
           className: familyIds.length > 1 ? 'edge edge-shared-family' : 'edge',
           lineShare,
-          strokeWidth: lineStrokeWidth(lineShare),
+          games,
+          strokeWidth,
         };
       });
     }
-
     const sourceNode = nodeRecord(composition, relationship.source);
     const classes = ['edge'];
     if ((relationship.edge?.share ?? 0) >= 0.2) classes.push('edge-strong');
@@ -54,17 +68,16 @@ export function visibleConnectors(composition, { direction }) {
       edge: relationship.edge,
       className: classes.join(' '),
       lineShare: null,
-      strokeWidth: null,
+      games,
+      strokeWidth,
     }];
   });
 }
 
 function elementMap(map) {
-  return new Map(
-    [...map.querySelectorAll('.position[data-key]')]
-      .filter((element) => element.dataset.key)
-      .map((element) => [element.dataset.key, element]),
-  );
+  return new Map([...map.querySelectorAll('.position[data-key]')]
+    .filter((element) => element.dataset.key)
+    .map((element) => [element.dataset.key, element]));
 }
 
 function connectorPath(source, target, mapRect, familyOffset = 0) {
@@ -82,7 +95,6 @@ function connectorPath(source, target, mapRect, familyOffset = 0) {
   const offset = familyOffset * 8;
   const offsetX = (-dy / length) * offset;
   const offsetY = (dx / length) * offset;
-
   return `M ${x1} ${y1} C ${x1 + horizontal * bend + offsetX} ${y1 + offsetY}, ${x2 - horizontal * bend + offsetX} ${y2 + offsetY}, ${x2} ${y2}`;
 }
 
@@ -91,9 +103,7 @@ function retainedEvidenceClasses(svg) {
   for (const path of svg.querySelectorAll('path[data-relationship-id]')) {
     const id = path.dataset.relationshipId;
     if (!id) continue;
-    const classes = [...path.classList].filter((className) => (
-      className.startsWith('edge-quality-') || className.startsWith('edge-rarity-')
-    ));
+    const classes = [...path.classList].filter((className) => className.startsWith('edge-quality-') || className.startsWith('edge-rarity-'));
     if (!classes.length) continue;
     const current = result.get(id) ?? [];
     result.set(id, [...new Set([...current, ...classes])]);
@@ -101,32 +111,20 @@ function retainedEvidenceClasses(svg) {
   return result;
 }
 
-export function drawVisibleEdges(map, composition, { direction }) {
+export function drawVisibleEdges(map, composition, { direction, gamesByRelationship = new Map() }) {
   const svg = map?.querySelector('#edges');
   if (!map || !svg) return [];
-
   const mapRect = map.getBoundingClientRect();
   const elements = elementMap(map);
   const paths = [];
-
-  for (const connector of visibleConnectors(composition, { direction })) {
+  for (const connector of visibleConnectors(composition, { direction, gamesByRelationship })) {
     const source = elements.get(connector.source);
     const target = elements.get(connector.target);
     if (!source || !target) continue;
-    paths.push({
-      ...connector,
-      d: connectorPath(source, target, mapRect, connector.familyOffset),
-    });
+    paths.push({ ...connector, d: connectorPath(source, target, mapRect, connector.familyOffset) });
   }
-
-  const signature = `${mapRect.width}x${mapRect.height}|${paths.map((item) => [
-    item.id,
-    item.className,
-    item.strokeWidth ?? '',
-    item.d,
-  ].join(':')).join('|')}`;
+  const signature = `${mapRect.width}x${mapRect.height}|${paths.map((item) => [item.id, item.className, item.strokeWidth ?? '', item.games ?? '', item.d].join(':')).join('|')}`;
   if (svg.dataset.visibleEdgesSignature === signature) return paths;
-
   const evidenceClasses = retainedEvidenceClasses(svg);
   svg.dataset.visibleEdgesSignature = signature;
   svg.setAttribute('viewBox', `0 0 ${mapRect.width} ${mapRect.height}`);
@@ -141,9 +139,9 @@ export function drawVisibleEdges(map, composition, { direction }) {
     path.dataset.edgeTarget = item.target;
     if (item.familyId) path.dataset.familyId = item.familyId;
     if (Number.isFinite(item.lineShare)) path.dataset.lineShare = String(item.lineShare);
+    if (Number.isFinite(item.games) && item.games > 0) path.dataset.games = String(item.games);
     if (Number.isFinite(item.strokeWidth)) path.style.strokeWidth = `${item.strokeWidth}px`;
     svg.appendChild(path);
   }
-
   return paths;
 }

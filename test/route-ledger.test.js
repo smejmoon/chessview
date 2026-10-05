@@ -15,7 +15,7 @@ function fixture(href = `https://example.test/chessview/?fen=${encodeURIComponen
     get search() { return current.search; },
   };
   const history = {
-    state: { cvDepth: 0, keep: 'value' },
+    state: { keep: 'value' },
     pushState(state, _title, next) {
       this.state = state;
       current = new URL(next, current);
@@ -31,7 +31,10 @@ function fixture(href = `https://example.test/chessview/?fen=${encodeURIComponen
   const events = {
     addEventListener(type, listener) { if (type === 'popstate') listeners.add(listener); },
     removeEventListener(type, listener) { if (type === 'popstate') listeners.delete(listener); },
-    emit(state) { for (const listener of [...listeners]) listener({ state }); },
+    emit(state) {
+      history.state = state;
+      for (const listener of [...listeners]) listener({ state });
+    },
   };
   const preferences = { getView: () => 'roots' };
   const ledger = createRouteLedger({ location, history, events, preferences });
@@ -44,9 +47,9 @@ function fixture(href = `https://example.test/chessview/?fen=${encodeURIComponen
   };
 }
 
-test('reads route identity from URL and history state', () => {
+test('reads shareable route identity from the URL', () => {
   const { ledger } = fixture();
-  assert.deepEqual(ledger.read(), { center: START, view: 'lines', navDepth: 0 });
+  assert.deepEqual(ledger.read(), { center: START, view: 'lines' });
 });
 
 test('falls back to PreferenceStore view when URL has no explicit mode', () => {
@@ -54,27 +57,63 @@ test('falls back to PreferenceStore view when URL has no explicit mode', () => {
   assert.equal(ledger.read().view, 'roots');
 });
 
-test('push and replace round-trip ChessView route through browser URL and state', () => {
+test('replace and push keep browser-entry navigation metadata out of the route', () => {
   const { ledger, calls, history } = fixture();
-  ledger.push({ center: OTHER, view: 'roots', navDepth: 1 });
-  assert.equal(calls.at(-1)[0], 'push');
-  assert.equal(history.state.keep, 'value');
-  assert.deepEqual(ledger.read(), { center: OTHER, view: 'roots', navDepth: 1 });
 
-  ledger.replace({ center: START, view: 'lines', navDepth: 1 });
+  ledger.replace({ center: START, view: 'lines' });
   assert.equal(calls.at(-1)[0], 'replace');
-  assert.deepEqual(ledger.read(), { center: START, view: 'lines', navDepth: 1 });
+  assert.equal(history.state.keep, 'value');
+  assert.equal(history.state.cvHasParent, false);
+  assert.equal(Object.hasOwn(history.state, 'fen'), false);
+  assert.equal(Object.hasOwn(history.state, 'cvDepth'), false);
+  assert.deepEqual(ledger.read(), { center: START, view: 'lines' });
+  assert.equal(ledger.canGoBack(), false);
+
+  ledger.push({ center: OTHER, view: 'roots' });
+  assert.equal(calls.at(-1)[0], 'push');
+  assert.equal(history.state.cvHasParent, true);
+  assert.deepEqual(ledger.read(), { center: OTHER, view: 'roots' });
+  assert.equal(ledger.canGoBack(), true);
+
+  ledger.replace({ center: START, view: 'lines' });
+  assert.equal(history.state.cvHasParent, true);
+  assert.deepEqual(ledger.read(), { center: START, view: 'lines' });
 });
 
-test('native popstate is translated into a restored ChessView route', () => {
+test('back availability is owned by RouteLedger', () => {
+  const { ledger, calls } = fixture();
+  assert.equal(ledger.back(), false);
+  assert.equal(calls.some(([name]) => name === 'back'), false);
+
+  ledger.push({ center: OTHER, view: 'roots' });
+  assert.equal(ledger.back(), true);
+  assert.equal(calls.at(-1)[0], 'back');
+});
+
+test('native popstate restores the URL address while entry metadata drives back availability', () => {
   const { ledger, events, setHref } = fixture();
   const restored = [];
   const stop = ledger.onRestore((route) => restored.push(route));
+
   setHref(`https://example.test/chessview/?fen=${encodeURIComponent(OTHER)}&view=roots`);
-  events.emit({ cvDepth: 4 });
-  assert.deepEqual(restored, [{ center: OTHER, view: 'roots', navDepth: 4 }]);
+  events.emit({ cvHasParent: true });
+  assert.deepEqual(restored.at(-1), { center: OTHER, view: 'roots' });
+  assert.equal(ledger.canGoBack(), true);
+
+  setHref(`https://example.test/chessview/?fen=${encodeURIComponent(START)}&view=lines`);
+  events.emit({ cvHasParent: false });
+  assert.deepEqual(restored.at(-1), { center: START, view: 'lines' });
+  assert.equal(ledger.canGoBack(), false);
 
   stop();
-  events.emit({ cvDepth: 5 });
-  assert.equal(restored.length, 1);
+  events.emit({ cvHasParent: true });
+  assert.equal(restored.length, 2);
+});
+
+test('legacy cvDepth entries retain back availability until rewritten', () => {
+  const { ledger, events } = fixture();
+  const stop = ledger.onRestore(() => {});
+  events.emit({ cvDepth: 4 });
+  assert.equal(ledger.canGoBack(), true);
+  stop();
 });

@@ -1,6 +1,6 @@
 # Do:
 
-Finish identifying what should fill the **Nodus session — “what is current”** role. Adjacent ownership is now explicit: [Lens](../docs/components/lens.md) owns presentation-only state/preferences such as orientation, Guide, and Debug plus presentation environment and derived geometry/constraints; `RouteLedger` owns navigation/history mechanics such as `navDepth`. Neither belongs to Nodus-session identity. The remaining session question is the owner whose lifetime is the user's current Nodus: canonical center, active Root/Line mode, accepted trustworthy Constellation projection(s), Rail/Evidence presentation values, and published structural readiness/Weather state that should survive refresh or failed refinement.
+Finish identifying what should fill the **Nodus session — “what is current”** role. Adjacent ownership is explicit: [Lens](../docs/components/lens.md) owns presentation-only state/preferences such as orientation, Guide, and Debug plus presentation environment and derived geometry/constraints; `RouteLedger` owns browser address/history mechanics and Back availability, serializing only canonical center plus Root/Line mode in the URL and keeping private browser-entry ancestry metadata outside Nodus state. Neither belongs to Nodus-session identity. The remaining session question is the owner whose lifetime is the user's current Nodus: canonical center, active Root/Line mode, accepted trustworthy Constellation projection(s), Rail/Evidence presentation values, and published structural readiness/Weather state that should survive refresh or failed refinement.
 
 Use that ownership result to separate the durable session from a **refinement run — “what are we currently trying to improve”**. Run-local cancellation, live source-work participation, retry waiting, successful-but-not-yet-incorporated work, terminal unavailability, and recomposition scheduling should die with the refinement attempt rather than with the accepted Nodus view. Do not implement structural Reading discharge until this session/run boundary has one natural owner.
 
@@ -16,7 +16,7 @@ Do not collapse a failed attempt into a final unavailable outcome. If the lower 
 
 The current architecture still conflates two lifetimes inside `NodusController`/Current View: the accepted Nodus-centered view that should remain usable while refinement changes or fails, and the ephemeral work attempting to improve that view. Structural unavailability is run-local by definition, so placing it correctly depends first on identifying the durable owner of “what is current” and the child lifetime of refinement work.
 
-Presentation and navigation state no longer muddy that ownership question. Lens is authoritative for live orientation and presentation choices and derives composition constraints from presentation conditions; `NodusController` may publish Lens orientation to rendering but does not maintain a second orientation truth. `RouteLedger` remains the navigation/history owner. The Nodus-session investigation can therefore focus on product/current-view state rather than absorbing unrelated UI or history state.
+Presentation and browser navigation no longer muddy that ownership question. Lens is authoritative for live orientation and presentation choices and derives composition constraints from presentation conditions. `RouteLedger` is authoritative for the URL-addressable `{center, view}` route, private browser-entry metadata, restoration, and Back availability. `NodusController` may publish Lens orientation and RouteLedger's `canGoBack` affordance, but it maintains neither a second orientation truth nor browser-history depth/state. The Nodus-session investigation can therefore focus on product/current-view state rather than absorbing unrelated UI or history state.
 
 The active Constellation is the authority for whether missing Reading knowledge could still change constrained shape, but it deliberately derives from graph facts and semantic Evidence rather than acquisition history. A failed attempt therefore leaves the same Reading frontier if composition is repeated from unchanged facts.
 
@@ -26,9 +26,9 @@ This preserves Constellation-owned structural admission without requiring Conste
 
 # Edges:
 
-The Nodus-session investigation is about ownership and lifetime, not introducing another stateful service by default. Keep presentation preferences/environment/constraints in Lens, routing/history mechanics in `RouteLedger`, source-facet state and shared producer lifetime in `PositionRepository`, source-specific policy in providers, transport policy in `LichessGateway`, and Constellation composition as derived value unless concrete evidence requires moving one of those boundaries.
+The Nodus-session investigation is about ownership and lifetime, not introducing another stateful service by default. Keep presentation preferences/environment/constraints in Lens, browser routing/history and Back availability in `RouteLedger`, source-facet state and shared producer lifetime in `PositionRepository`, source-specific policy in providers, transport policy in `LichessGateway`, and Constellation composition as derived value unless concrete evidence requires moving one of those boundaries.
 
-Root/Line mode is Nodus/current-view state even though Lens consumes it as presentation context when deriving geometry and capacities. A material Lens capacity change may request same-Nodus recomposition; this does not make Lens an owner of Constellation shape or Nodus identity.
+Root/Line mode is Nodus/current-view state even though `RouteLedger` serializes it in the URL and Lens consumes it as presentation context when deriving geometry and capacities. URL serialization does not make `RouteLedger` the semantic owner of mode, just as Lens consumption does not make Lens the owner. A material Lens capacity change may request same-Nodus recomposition; this does not make Lens an owner of Constellation shape or Nodus identity.
 
 `docs/components/lichess-access.md` §Cache and failure semantics and the source-provider contracts continue to own cache freshness, stale fallback, successful absence, authentication handling, cooldown/transport consequences, and retry timing they can decide locally. The Nodus-session/refinement-run layer must not classify retryability or terminality from HTTP status, UI strings, or raw transport errors.
 
@@ -55,7 +55,8 @@ Before this outcome closes, reconcile the governing current-view/session contrac
 
 The session/run ownership question is resolved and reflected in code/docs before structural unavailability is implemented. Deterministic tests then prove that:
 
-- Lens-owned orientation/presentation state and RouteLedger-owned navigation state remain outside Nodus-session identity;
+- Lens-owned orientation/presentation state and RouteLedger-owned browser address/history state remain outside Nodus-session identity;
+- RouteLedger alone derives Back availability from private browser-entry metadata while the shareable URL contains only the canonical center and Root/Line mode;
 - a failed supplementary task does not affect structural settlement;
 - a Constellation-admitted Explorer Reading remains Settling while its structural obligation is active or retry-waiting and can still make progress;
 - a retryable failure cannot be mistaken for terminal unavailability, and another attempt occurs only after the lower-owned retry gate opens while the obligation is still current;

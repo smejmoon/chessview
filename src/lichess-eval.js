@@ -63,7 +63,6 @@ export function createLichessEval({
   now = () => Date.now(),
 } = {}) {
   const listeners = new Set();
-  const latest = new Map();
   let pending = 0;
   let issue = null;
   let status = Object.freeze({ activity: 'idle', pending: 0, issue: null });
@@ -88,9 +87,17 @@ export function createLichessEval({
     publish();
   }
 
-  function admit(key, value) {
-    if (isUsableLichessEval(value)) latest.set(key, value);
+  function admit(key, value, { fetchedAt = 0, persisted = true } = {}) {
+    if (isUsableLichessEval(value)) {
+      repository.admitFacet(key, 'cloud-eval', value, { fetchedAt, persisted });
+    }
     return value;
+  }
+
+  function markPersisted(key, value, fetchedAt) {
+    const admitted = repository.currentFacet(key, 'cloud-eval');
+    if (!admitted || admitted.value !== value || admitted.fetchedAt !== fetchedAt) return;
+    repository.admitFacet(key, 'cloud-eval', value, { fetchedAt, persisted: true });
   }
 
   async function persist(key, fields) {
@@ -104,11 +111,11 @@ export function createLichessEval({
 
   async function available(position) {
     const key = canonicalPosition(position);
-    const admitted = latest.get(key);
+    const admitted = repository.currentFacet(key, 'cloud-eval')?.value ?? null;
     if (admitted) return admitted;
     const record = await repository.get(key);
     const cached = isUsableLichessEval(record?.cloudEval) ? record.cloudEval : null;
-    if (cached) admit(key, cached);
+    if (cached) admit(key, cached, { fetchedAt: record?.cloudEvalFetchedAt ?? 0, persisted: true });
     return cached;
   }
 
@@ -121,9 +128,10 @@ export function createLichessEval({
     return repository.load(key, 'cloud-eval', async ({ signal: requestSignal, priority: requestPriority }) => {
       const cached = await repository.get(key);
       const cachedValue = isUsableLichessEval(cached?.cloudEval) ? cached.cloudEval : null;
-      const fresh = cached?.cloudEvalFetchedAt
-        && now() - cached.cloudEvalFetchedAt < LICHESS_EVAL_TTL_MS;
-      if (fresh) return admit(key, cachedValue);
+      const cachedFetchedAt = cached?.cloudEvalFetchedAt ?? 0;
+      const fresh = cachedFetchedAt
+        && now() - cachedFetchedAt < LICHESS_EVAL_TTL_MS;
+      if (fresh) return admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
 
       const url = new URL(ENDPOINT);
       url.searchParams.set('fen', toPlayableFen(key));
@@ -145,21 +153,22 @@ export function createLichessEval({
           throw error;
         }
         const fallback = cachedValue ? 'cached' : null;
-        if (cachedValue) admit(key, cachedValue);
+        if (cachedValue) admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
         finishRequest(issueFor(error, key, fallback));
         return cachedValue;
       }
 
       if (response.status === 404) {
-        latest.delete(key);
-        const storageIssue = await persist(key, { cloudEval: null, cloudEvalFetchedAt: now() });
+        repository.invalidateFacet('cloud-eval', [key]);
+        const fetchedAt = now();
+        const storageIssue = await persist(key, { cloudEval: null, cloudEvalFetchedAt: fetchedAt });
         finishRequest(storageIssue);
         return null;
       }
       if (!response.ok) {
         const error = httpError(response.status, `Lichess cloud eval returned ${response.status}`);
         const fallback = cachedValue ? 'cached' : null;
-        if (cachedValue) admit(key, cachedValue);
+        if (cachedValue) admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
         finishRequest(issueFor(error, key, fallback));
         return cachedValue;
       }
@@ -169,24 +178,24 @@ export function createLichessEval({
         value = await response.json();
       } catch (error) {
         const invalid = typedError('invalid-data', 'Lichess cloud eval response could not be parsed', error);
-        if (cachedValue) admit(key, cachedValue);
+        if (cachedValue) admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
         finishRequest(issueFor(invalid, key, cachedValue ? 'cached' : null));
         return cachedValue;
       }
 
       if (!validPayload(value)) {
         const error = typedError('invalid-data', 'Lichess cloud eval returned invalid data');
-        if (cachedValue) admit(key, cachedValue);
+        if (cachedValue) admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
         finishRequest(issueFor(error, key, cachedValue ? 'cached' : null));
         return cachedValue;
       }
 
       if (!isUsableLichessEval(value)) {
         if (!cachedValue) {
-          latest.delete(key);
+          repository.invalidateFacet('cloud-eval', [key]);
           await persist(key, { cloudEval: value, cloudEvalFetchedAt: now() });
         } else {
-          admit(key, cachedValue);
+          admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
         }
         const error = typedError(
           'insufficient-data',
@@ -196,8 +205,10 @@ export function createLichessEval({
         return cachedValue;
       }
 
-      admit(key, value);
-      const storageIssue = await persist(key, { cloudEval: value, cloudEvalFetchedAt: now() });
+      const fetchedAt = now();
+      admit(key, value, { fetchedAt, persisted: false });
+      const storageIssue = await persist(key, { cloudEval: value, cloudEvalFetchedAt: fetchedAt });
+      if (!storageIssue) markPersisted(key, value, fetchedAt);
       finishRequest(storageIssue);
       return value;
     }, { signal, priority });

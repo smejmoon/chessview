@@ -48,8 +48,9 @@ export function createLens({
 }: LensOptions = {}): Lens {
   const app = appOption ?? globalThis.document?.querySelector('#app') ?? null;
   if (!app) throw new Error('Lens requires an app element');
+  const root = app as Element;
   const preferences = preferenceOption ?? {};
-  const document = app.ownerDocument ?? globalThis.document;
+  const document = root.ownerDocument ?? globalThis.document;
   const window = document?.defaultView ?? globalThis.window;
   const debugState = debugOption ?? Object.freeze({
     enabled: isDebugEnabled,
@@ -76,7 +77,7 @@ export function createLens({
   }
 
   function geometry(mode: ViewMode): PresentationGeometry {
-    const map = app.querySelector?.('#map') as HTMLElement | null;
+    const map = root.querySelector?.('#map') as HTMLElement | null;
     const rect = map?.getBoundingClientRect?.();
     const width = rect?.width && rect.width > 0 ? rect.width : Math.max(320, (window?.innerWidth ?? 1280) - 340);
     const height = rect?.height && rect.height > 0 ? rect.height : Math.max(240, (window?.innerHeight ?? 720) - 54);

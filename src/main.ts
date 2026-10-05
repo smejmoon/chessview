@@ -10,6 +10,7 @@ import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { debugLog } from './debug.js';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { acquireExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
+import { createLens } from './lens.ts';
 import { loadMasters } from './masters.js';
 import { materializeMove } from './move-materialization.ts';
 import { NodusController } from './nodus-controller.ts';
@@ -30,6 +31,8 @@ import { preferenceStore } from './preference-store.js';
 const RESIZE_UPDATE_DEBOUNCE_MS = 120;
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
 const initialRoute = routeLedger.read();
+const app = document.querySelector('#app');
+const lens = createLens({ app, preferences: preferenceStore });
 let controller: NodusController;
 
 async function clearExplorerAndReload(positions?: readonly string[]): Promise<void> {
@@ -42,8 +45,8 @@ async function clearExplorerAndReload(positions?: readonly string[]): Promise<vo
 }
 
 const renderer = createNodusRenderer({
-  app: document.querySelector('#app'),
-  preferences: preferenceStore,
+  app,
+  lens,
   maintenance: {
     refetchView: (positions) => clearExplorerAndReload(positions),
     clearExplorerCache: () => clearExplorerAndReload(),
@@ -59,7 +62,7 @@ const presenter = createNodusPresenter({ renderer, log: (message, detail) => { d
 const constraintsByMode = new Map<string, Readonly<{ lineCapacity: number; rootCapacity: number }>>();
 
 function constraintsFor(mode: 'roots' | 'lines') {
-  const constraints = renderer.presentationConstraints(mode === 'roots');
+  const constraints = lens.constraints(mode);
   constraintsByMode.set(mode, constraints);
   return constraints;
 }
@@ -88,10 +91,13 @@ async function warmLookahead({ center, structure, signal }) {
 }
 
 controller = new NodusController({
-  initial: { ...initialRoute, orientation: preferenceStore.getOrientation() },
+  initial: { ...initialRoute, orientation: lens.orientation() },
   canonicalize: canonicalPosition,
   routeLedger,
-  preferences: preferenceStore,
+  preferences: {
+    setView: (view) => { preferenceStore.setView(view); },
+    setOrientation: (orientation) => { lens.setOrientation(orientation); },
+  },
   structure: ({ center, mode, signal }) => {
     const constraints = constraintsFor(mode);
     return composeNodusStructure({
@@ -120,7 +126,7 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(() => {
     const mode = controller.snapshot.mode;
     const previous = constraintsByMode.get(mode);
-    const next = renderer.presentationConstraints(mode === 'roots');
+    const next = lens.constraints(mode);
     if (previous && previous.lineCapacity === next.lineCapacity && previous.rootCapacity === next.rootCapacity) {
       void controller.redraw();
       return;

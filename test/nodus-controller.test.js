@@ -17,6 +17,7 @@ function fixture(overrides = {}) {
   const calls = [];
   const publications = [];
   let restoreHandler = null;
+  let orientation = 'white';
   const routeLedger = {
     push(route) { calls.push(['push', route]); },
     replace(route) { calls.push(['replace', route]); },
@@ -31,7 +32,14 @@ function fixture(overrides = {}) {
   };
   const preferences = {
     setView(view) { calls.push(['setViewPreference', view]); },
-    setOrientation(orientation) { calls.push(['setOrientationPreference', orientation]); },
+  };
+  const lens = {
+    orientation() { return orientation; },
+    flipOrientation() {
+      orientation = orientation === 'white' ? 'black' : 'white';
+      calls.push(['flipOrientation', orientation]);
+      return orientation;
+    },
   };
   const presenter = {
     start(view, actions) {
@@ -44,10 +52,11 @@ function fixture(overrides = {}) {
     },
   };
   const controller = new NodusController({
-    initial: { center: 'A', view: 'roots', orientation: 'white', navDepth: 0 },
+    initial: { center: 'A', view: 'roots', navDepth: 0 },
     canonicalize: (value) => String(value).toUpperCase(),
     routeLedger,
     preferences,
+    lens,
     structure: async ({ center, mode }) => {
       calls.push(['structure', center, mode]);
       return { composition: { center, direction: mode }, marker: `${center}:${mode}`, settling: false };
@@ -67,7 +76,7 @@ function fixture(overrides = {}) {
   };
 }
 
-test('commands update one immutable current view while RouteLedger and preferences receive effects', async () => {
+test('commands update one immutable current view while RouteLedger, preferences, and Lens receive effects', async () => {
   const { controller, calls } = fixture();
   await controller.start();
   assert.equal(controller.snapshot.center, 'A');
@@ -87,7 +96,7 @@ test('commands update one immutable current view while RouteLedger and preferenc
 
   await controller.flip();
   assert.equal(controller.snapshot.orientation, 'black');
-  assert.ok(calls.some(([name, value]) => name === 'setOrientationPreference' && value === 'black'));
+  assert.ok(calls.some(([name, value]) => name === 'flipOrientation' && value === 'black'));
   assert.equal(Object.hasOwn(controller.snapshot, 'generation'), false);
   assert.equal(Object.hasOwn(controller.snapshot, 'navDepth'), false);
   assert.equal(Object.hasOwn(controller.snapshot, 'view'), false);

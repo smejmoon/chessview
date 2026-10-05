@@ -71,7 +71,7 @@ function constraintsFor(mode: 'roots' | 'lines') {
   return constraints;
 }
 
-async function tasksForCurrentView({ center, mode, structure }): Promise<readonly RefinementTask[]> {
+function tasksForCurrentView({ center, mode, structure }): readonly RefinementTask[] {
   const demand = deriveCurrentViewRefinementDemand({ center, mode, structure });
   const tasks = new Map<string, RefinementTask>();
 

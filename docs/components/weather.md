@@ -23,7 +23,7 @@ Weather presents the structural readiness derived by [Current View](../architect
 - The normal acknowledgement stays subtle: delayed `Updating…`, a brief `Ready`, then a persistent low-emphasis settled check.
 - Presentation failure must fail closed to a degraded/unavailable surface rather than leaving stale success feedback visible.
 
-`failed` and `unplanned` structural participation remain explicit coordination diagnostics. Their resolution and whether either should continue to block primary Weather are owned by refinement participation/planning; Weather must not silently reinterpret them as semantic source unavailability.
+`failed` and `unplanned` structural participation remain explicit coordination diagnostics, but neither is an automatic-progress witness. They do not keep primary Weather `Updating…` by themselves and must not be reinterpreted as semantic source unavailability. `unplanned` is evaluated only after synchronous Current View planning has had the opportunity to attach structural participation; the transient interval before planning is not a publishable Ready state. A later refresh, replacement run, or changed plan may create new live work.
 
 ## Development diagnostics
 
@@ -61,6 +61,8 @@ Deterministic/browser contract tests should cover:
 - obsolete completion, retry gates, and unavailable outcomes being unable to settle the current view;
 - fast cached structural work avoiding a distracting `Updating…` flash while still acknowledging successful settlement;
 - coalesced/debounced structural recomposition avoiding unnecessary visual fidgeting without concealing unresolved structural work;
+- no Ready publication occurring between Reading-frontier admission and synchronous refinement-participation reconciliation;
+- failed and unplanned structural coordination remaining visible in Debug while primary Weather is Ready when no working, retry-waiting, or incorporation-pending witness remains;
 - Debug Weather reporting aggregate frontier/phase/incorporation/supplementary measures supplied by Current View without exposing per-task or per-position identity;
 - disabling Debug removing the diagnostic readout without changing structural readiness;
 - presentation failure replacing stale success feedback with a degraded/unavailable state.

@@ -112,7 +112,7 @@ export type LookaheadInput = Readonly<{
 }>;
 
 type Contributor<Input> = (input: Input) => unknown | Promise<unknown>;
-type RefinementPlanner = (input: RefinementInput) => readonly RefinementTask[] | Promise<readonly RefinementTask[]>;
+type RefinementPlanner = (input: RefinementInput) => readonly RefinementTask[];
 type LookaheadContributor = (input: LookaheadInput) => unknown | Promise<unknown>;
 type MaterializeMove = (input: MaterializeMoveInput) => Promise<MaterializeMoveResult | null>;
 type Log = (message: string, detail?: unknown) => void;
@@ -565,9 +565,7 @@ export class CurrentViewController {
     const structural = weather.structural;
     return structural.working > 0
       || structural.retryWaiting > 0
-      || structural.incorporationPending > 0
-      || structural.failed > 0
-      || structural.unplanned > 0;
+      || structural.incorporationPending > 0;
   }
 
   async #commitRecenter(position: unknown): Promise<boolean> {
@@ -634,21 +632,23 @@ export class CurrentViewController {
       mode: this.#state.mode,
       reason,
     });
+    if (preserveEstablished) this.#planRefinements(run);
     await this.#presentCurrent('start');
 
     if (typeof this.#rail === 'function') {
       void this.#queueRail(run, { preserveEstablished: preserveRail, publish: true });
     }
 
-    const ready = await this.#queueStructure(run, { preserveEstablished, publish: true });
+    const ready = await this.#queueStructure(run, { preserveEstablished, publish: false });
+    if (!this.#isCurrent(run)) return;
+
+    this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
 
     if (ready && typeof this.#evidence === 'function') {
       void this.#queueEvidence(run, { preserveEstablished, publish: true });
     }
 
-    await this.#planRefinements(run);
-    if (!this.#isCurrent(run)) return;
     run.settlementReady = true;
     await this.#presentCurrent('update');
     this.#refreshLookahead(run);
@@ -808,7 +808,7 @@ export class CurrentViewController {
     }
   }
 
-  async #planRefinements(run: RefinementRun): Promise<void> {
+  #planRefinements(run: RefinementRun): void {
     if (!this.#isCurrent(run)) return;
     if (typeof this.#refine !== 'function') {
       this.#reconcileParticipants(run, []);
@@ -816,7 +816,7 @@ export class CurrentViewController {
     }
     let tasks: readonly RefinementTask[];
     try {
-      tasks = await this.#refine(Object.freeze({
+      tasks = this.#refine(Object.freeze({
         center: this.#state.nodus,
         mode: this.#state.mode,
         structure: this.#state.structure.status === 'ready' ? this.#state.structure.value : null,
@@ -1028,7 +1028,7 @@ export class CurrentViewController {
     await Promise.all(refinements);
     if (!this.#isCurrent(run)) return;
 
-    await this.#planRefinements(run);
+    this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
 
     const after = this.snapshot;
@@ -1048,7 +1048,7 @@ export class CurrentViewController {
       await this.#queueEvidence(run, { preserveEstablished, publish: false });
     }
     if (!this.#isCurrent(run)) return;
-    await this.#planRefinements(run);
+    this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
     this.#refreshLookahead(run);
     const after = this.snapshot;

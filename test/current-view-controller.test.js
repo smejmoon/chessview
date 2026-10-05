@@ -226,7 +226,7 @@ test('contributors receive one accepted structure and no controller publication 
       evidenceInput = input;
       return { center: input.center };
     },
-    refine: async (input) => {
+    refine: (input) => {
       refinementInput = input;
       return [];
     },
@@ -404,7 +404,7 @@ test('supplementary unavailability does not pre-discharge a Reading admitted str
   assert.equal(controller.snapshot.settling, false);
 });
 
-test('arbitrary structural task failure is not reclassified as terminal unavailability', async () => {
+test('arbitrary structural task failure remains diagnostic without implying automatic progress', async () => {
   const work = deferred();
   const { controller } = fixture({
     structure: async ({ center, mode }) => structure(center, mode, { readingFrontier: ['B'] }),
@@ -419,7 +419,9 @@ test('arbitrary structural task failure is not reclassified as terminal unavaila
   assert.equal(controller.snapshot.settling, true);
   work.reject(new Error('reconciliation failed'));
   await flush(32);
-  assert.equal(controller.snapshot.settling, true);
+  assert.equal(controller.snapshot.weather.structural.failed, 1);
+  assert.equal(controller.snapshot.weather.structural.unavailable, 0);
+  assert.equal(controller.snapshot.settling, false);
 });
 
 test('critical local structure failure is terminal for that accepted view and refresh can recover', async () => {

@@ -88,7 +88,7 @@ test('same-run recomposition can admit structural work after presentation constr
   assert.equal(controller.snapshot.settling, false);
 });
 
-test('refinement completion during evidence derivation keeps an intermediate replacement Settling and drains another pass', async () => {
+test('supplementary refinement during evidence derivation drains another pass without inventing structural progress', async () => {
   const first = deferred();
   const second = deferred();
   const evidenceGate = deferred();
@@ -156,7 +156,7 @@ test('refinement completion during evidence derivation keeps an intermediate rep
 
   const intermediate = publications.filter(({ structure }) => structure.value?.marker === 'lines:1');
   assert.ok(intermediate.length > 0);
-  assert.ok(intermediate.every(({ settling }) => settling === true));
+  assert.ok(intermediate.every(({ settling }) => settling === false));
   assert.ok(publications.some(({ structure, settling }) => structure.value?.marker === 'lines:2' && settling === false));
 });
 

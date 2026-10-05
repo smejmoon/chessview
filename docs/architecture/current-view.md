@@ -72,7 +72,7 @@ as renderer-facing affordances without becoming their authority.
 A **refinement run** is the replaceable child lifetime representing what Current
 View is presently trying to improve about its accepted view.
 
-Run-local state includes cancellation/currentness, live source-work
+Run-local state includes cancellation/currentness, live refinement
 participation, structural provenance carried from Constellation admission,
 working/retry-waiting/satisfied/unavailable/failed execution phases, successful
 structural work still awaiting a settlement recomposition, and recomposition
@@ -93,8 +93,8 @@ semantic run outcomes supplied by those lower boundaries.
 
 ## Refinement planning
 
-Current-view refinement planning derives what knowledge is worth pursuing from
-the accepted current-view state. It may combine:
+Current-view refinement planning derives what work is worth pursuing from the
+accepted current-view state. It may combine:
 
 - Constellation Reading-frontier demand, preserving Constellation-owned
   structural provenance;
@@ -103,13 +103,25 @@ the accepted current-view state. It may combine:
 - Root enrichment and other view-local enrichment.
 
 Planning does not make Nodus an acquisition owner. Current View maps demand onto
-opaque keyed source work and coordinates live participation; providers and
-Knowledge Acquisition retain source meaning, fallback/retry policy, and durable
-reconciliation behavior.
+opaque keyed refinement work and coordinates run-local participation. Planning
+is a synchronous, side-effect-free derivation from the accepted structure:
+planning never waits; the refinement work it describes may wait. A newly
+composed ready structure has its refinement participation reconciled before that
+structure is published, so a published Reading frontier has already had the
+opportunity to acquire matching structural participation.
+
+Some refinement work joins reusable source acquisition owned by
+PositionRepository and source providers; other refinement work, such as
+graph/topology enrichment, may have a different producer lifetime. Providers and
+Knowledge Acquisition retain source meaning, freshness/fallback/retry policy,
+and durable reconciliation behavior.
 
 A source name, task key, provider type, or mere run ownership cannot manufacture
 structural criticality. Only a Constellation-admitted obligation participates in
-structural settlement.
+structural settlement. Currently Explorer Reading refinement may carry that
+structural provenance; cloud evaluation, Masters, root-transposition enrichment,
+and lookahead remain supplementary unless a separate contract explicitly admits
+them structurally.
 
 ## Settlement coordination
 
@@ -146,10 +158,13 @@ retryability or terminality from HTTP status, UI strings, or raw transport
 errors; the lower boundary that owns fallback/recovery policy must keep retrying
 internally or expose a semantic outcome and wakeup/eligibility condition.
 
-`failed` and `unplanned` participation are coordination states rather than source
-unavailability. Their resolution and whether they should continue to block
-primary Weather are owned by the refinement-participation/planning outcome; this
-settlement rule does not silently reinterpret either as unavailable chess
+`failed` and `unplanned` are terminal coordination diagnostics for the current
+automatic settlement cycle, not source unavailability and not progress witnesses.
+A failed participant has no automatic retry path unless a lower-owned retry gate
+was supplied; an unplanned frontier Reading means the synchronous planning result
+did not attach current participation. Neither keeps primary Weather Updating by
+itself. A later refresh, replacement run, or genuinely changed plan may create a
+new progress path without reclassifying either condition as unavailable chess
 knowledge.
 
 Supplementary completion or failure does not affect structural settlement merely
@@ -162,6 +177,9 @@ because it belongs to the same refinement run.
   and renderer delegates consume them.
 - Current View is the sole owner allowed to make an asynchronous domain result
   current. Revision/currentness tokens and publication decisions remain private.
+- A newly composed ready Constellation is planned and its refinement participation
+  reconciled synchronously before publication. Publication must not expose the
+  transient gap between structural admission and participation attachment.
 - Recenter selects another canonical position as the Nodus. A played Move is
   first materialized into ChartedGraph; a known canonical target may be selected
   directly.
@@ -240,7 +258,11 @@ Deterministic/browser contract tests should cover:
 - same-Nodus/same-mode history restoration preserving the accepted projection and
   same-Nodus/different-mode restoration preserving Rail but not spatial structure;
 - Constellation Reading-frontier admission retaining structural provenance through
-  refinement planning and live participation;
+  synchronous refinement planning and live participation;
+- no ready Constellation publication occurring between frontier admission and
+  refinement-participation reconciliation;
+- failed structural participation and unplanned frontier demand remaining visible
+  as coordination diagnostics without falsely implying automatic progress;
 - provider/task identity being unable to manufacture structural criticality;
 - a trustworthy accepted projection remaining interactive while structural
   refinement is active or retry-waiting;

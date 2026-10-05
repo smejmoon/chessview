@@ -110,3 +110,65 @@ test('successful structural work blocks only until its settlement pass has attem
 
   controller.dispose();
 });
+
+
+test('failed and unplanned structural coordination remain diagnostic without implying automatic progress', async () => {
+  const controller = new CurrentViewController({
+    initial: { center: 'A', view: 'lines' },
+    canonicalize: (value) => String(value),
+    structure: async () => structure(['B', 'C']),
+    refine: () => [{
+      key: 'failed',
+      structuralReading: 'B',
+      run: async () => { throw new Error('coordination failed'); },
+    }],
+    presenter: { start() {}, update() {} },
+  });
+
+  await controller.start();
+  await flush();
+
+  assert.equal(controller.snapshot.weather.structural.failed, 1);
+  assert.equal(controller.snapshot.weather.structural.unplanned, 1);
+  assert.equal(controller.snapshot.weather.structural.working, 0);
+  assert.equal(controller.snapshot.weather.structural.retryWaiting, 0);
+  assert.equal(controller.snapshot.weather.structural.incorporationPending, 0);
+  assert.equal(controller.snapshot.settling, false);
+
+  controller.dispose();
+});
+
+
+test('ready frontier is published only after synchronous structural participation is reconciled', async () => {
+  const work = deferred();
+  const publications = [];
+  const controller = new CurrentViewController({
+    initial: { center: 'A', view: 'lines' },
+    canonicalize: (value) => String(value),
+    structure: async () => structure(['B']),
+    refine: () => [{
+      key: 'explorer:B',
+      structuralReading: 'B',
+      run: () => work.promise,
+    }],
+    presenter: {
+      start(view) { publications.push(view); },
+      update(view) { publications.push(view); },
+    },
+  });
+
+  await controller.start();
+  await controller.refresh();
+
+  const readyWithFrontier = publications.filter(
+    ({ structure: lifecycle, weather }) => lifecycle.status === 'ready' && weather.frontier > 0,
+  );
+  assert.ok(readyWithFrontier.length > 0);
+  assert.ok(readyWithFrontier.every(({ settling, weather }) => (
+    settling === true
+    && weather.structural.working === 1
+    && weather.structural.unplanned === 0
+  )));
+
+  controller.dispose();
+});

@@ -190,6 +190,14 @@ export function createExplorerProvider({
     latest.set(canonical, Object.freeze({ ...admitted, persisted: true }));
   }
 
+  function invalidate(keys?: readonly string[]): void {
+    if (!keys) {
+      latest.clear();
+      return;
+    }
+    for (const key of keys) latest.delete(canonicalPosition(key));
+  }
+
   async function readCached(key: string): Promise<ParsedExplorerReading | null> {
     const canonical = canonicalPosition(key);
     return cachedExplorerReading(await repository.get(canonical));
@@ -330,7 +338,7 @@ export function createExplorerProvider({
     );
   }
 
-  return Object.freeze({ ensure, current, readCached });
+  return Object.freeze({ ensure, current, readCached, invalidate });
 }
 
 export const explorerProvider = createExplorerProvider();

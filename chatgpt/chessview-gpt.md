@@ -159,6 +159,10 @@ ref. It owns the compact lifecycle and command meanings for branch work:
 
 `branch -> implement -> preview -> review -> distill -> merge`
 
+Whenever preview is explicitly requested or deployed visual inspection is needed,
+also load and follow `chatgpt/preview.md` from the Chessview project-policy ref.
+That file owns preview inspection/reporting details and canonical scenario links.
+
 The workflow is a project-local convention, not a Strake skill. This adapter
 continues to own authorization, policy refs, and skill routing; `.github/workflows/`
 continues to own executable CI and deployment behavior.

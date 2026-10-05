@@ -34,10 +34,43 @@
 .debug-actions { display: flex; gap: 6px; }
 .debug-action { border: 0; border-radius: 6px; padding: 5px 8px; background: rgba(255,255,255,.07); color: #aaa7a2; font-size: 10px; cursor: pointer; }
 .debug-action:hover { background: rgba(255,255,255,.12); color: #ddd; }
-.debug-log { margin: 0; padding: 9px 10px 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #aaa7a2; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select: text; }
+.debug-maintenance { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,.05); }
+.debug-maintenance .debug-action { position: relative; }
+.debug-maintenance .debug-action::after {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  z-index: 90;
+  width: 250px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 7px;
+  background: rgba(18,17,16,.98);
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  color: #d0cdc7;
+  font: 10px/1.4 system-ui, sans-serif;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 90ms ease, transform 90ms ease;
+}
+.debug-maintenance .debug-action:hover::after,
+.debug-maintenance .debug-action:focus-visible::after { opacity: 1; transform: translateY(0); }
+#debug-refetch-view::after {
+  left: 0;
+  content: 'Clear Explorer readings for the current Nodus and visible Constellation, then reload this view. Structural graph data is kept.';
+}
+#debug-clear-explorer::after {
+  right: 0;
+  content: 'Clear all persisted and in-memory Explorer readings, then reload. Structural graph data is kept.';
+}
+.rail-debug { grid-template-rows: auto auto minmax(0, 1fr); }
+.debug-log { min-height: 0; margin: 0; padding: 9px 10px 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #aaa7a2; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select: text; }
 .debug-log:empty::after { content: 'No debug events yet.'; color: #696662; }
 
 @media (max-width: 760px) {
   .toolbar-button { padding: 0 8px; min-width: 32px; }
   .debug-drawer { right: 8px; bottom: 8px; width: calc(100vw - 16px); max-height: 34vh; }
+  .debug-maintenance .debug-action::after { width: 210px; }
 }

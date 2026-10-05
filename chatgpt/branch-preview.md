@@ -31,11 +31,9 @@ keeping.
 the repository's current preview mechanism, then report the exact preview URL or
 the blocker when publication is unavailable.
 
-For Constellation, geometry, Root/Line presentation, or evidence-decoration work,
-report the branch root plus the canonical topology stress links from
-`chatgpt/preview-scenarios.md`. These scenarios deliberately exercise
-transpositional, forcing/deep, and highly critical graph shapes so a layout is
-not accepted from one friendly opening alone.
+Load and follow `chatgpt/preview.md` whenever preview is requested or when deployed
+visual inspection is needed. That file owns preview inspection/reporting rules,
+including the canonical topology stress scenarios for Constellation-related work.
 
 A preview must not replace production from `main`. Preview success is inspection
 evidence, not CI verification.

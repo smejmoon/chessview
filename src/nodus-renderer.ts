@@ -60,7 +60,15 @@ export type RendererView = Readonly<{
   rail?: Lifecycle<RailValue>;
 }>;
 type RendererPreferences = Readonly<{ getGuide?: () => boolean; setGuide?: (enabled: boolean) => void }>;
-export type NodusRendererOptions = Readonly<{ app?: Element | null; preferences?: RendererPreferences }>;
+type RendererMaintenance = Readonly<{
+  refetchView?: (positions: readonly string[]) => unknown | Promise<unknown>;
+  clearExplorerCache?: () => unknown | Promise<unknown>;
+}>;
+export type NodusRendererOptions = Readonly<{
+  app?: Element | null;
+  preferences?: RendererPreferences;
+  maintenance?: RendererMaintenance;
+}>;
 
 function percent(value?: number | null): string { return `${Math.round((value ?? 0) * 100)}%`; }
 function compactGames(value = 0): string { return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value); }
@@ -99,7 +107,7 @@ function railExplorerHtml(view: RendererView): string {
 }
 function debugRailHtml(): string {
   if (!isDebugEnabled()) return '';
-  return `<section class="rail-debug" aria-label="Chessview debug log"><div class="debug-head"><div class="debug-title">Debug <small>${getDebugEntries().length} events</small></div><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy</button><button class="debug-action" id="debug-clear" type="button">Clear</button></div></div><pre class="debug-log" id="debug-log">${escapeHtml(debugText())}</pre></section>`;
+  return `<section class="rail-debug" aria-label="Chessview debug log"><div class="debug-head"><div class="debug-title">Debug <small>${getDebugEntries().length} events</small></div><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy</button><button class="debug-action" id="debug-clear" type="button">Clear</button></div></div><div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div><pre class="debug-log" id="debug-log">${escapeHtml(debugText())}</pre></section>`;
 }
 function rootContextButton(rootContext: boolean): string {
   return `<button id="root-context-toggle" class="root-context-toggle ${rootContext ? 'is-active' : ''}" type="button" aria-pressed="${rootContext}">Roots + siblings</button>`;
@@ -109,7 +117,7 @@ function railHtml(view: RendererView, centerNode: PositionRecord, turn: Orientat
   return `<div class="rail-title">Rail</div><div class="rail-position rail-current-details"><div class="eyebrow">${centerNode.opening ? `${escapeHtml(centerNode.opening.eco ?? '')} · opening` : 'current position'}</div><h1>${escapeHtml(centerNode.opening?.name ?? 'Explore from here')}</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml()}`;
 }
 
-export function createNodusRenderer({ app: appOption = null, preferences = {} }: NodusRendererOptions = {}) {
+export function createNodusRenderer({ app: appOption = null, preferences = {}, maintenance = {} }: NodusRendererOptions = {}) {
   const app = (appOption ?? globalThis.document?.querySelector('#app') ?? null) as Element;
   if (!app) throw new Error('Nodus renderer requires an app element');
   const document = app.ownerDocument ?? globalThis.document;
@@ -118,6 +126,8 @@ export function createNodusRenderer({ app: appOption = null, preferences = {} }:
   const promotionChooser = createPromotionChooser({ app });
   let centerBoardState: CenterBoardState | null = null;
   let lichessEvalStatus: unknown = null;
+  let debugPinnedToLatest = true;
+  let debugScrollTop = 0;
 
   function geometry(rootContext: boolean): PresentationGeometry {
     const map = app.querySelector?.('#map') as HTMLElement | null;
@@ -132,22 +142,64 @@ export function createNodusRenderer({ app: appOption = null, preferences = {} }:
   function disposeCenterBoard(): void { centerBoardState?.api.destroy?.(); centerBoardState = null; }
   function disposeBoards(): void { disposeSatelliteBoards(); disposeCenterBoard(); }
 
+  function visiblePositions(view: RendererView): readonly string[] {
+    return Object.freeze([...new Set([
+      view.center,
+      ...((view.structure.value?.positions ?? []).map((position) => position.key)),
+    ])]);
+  }
+
+  function bindDebugScroll(): void {
+    const log = app.querySelector('#debug-log') as HTMLElement | null;
+    if (!log) return;
+    const scrollHeight = Number(log.scrollHeight ?? 0);
+    if (debugPinnedToLatest) log.scrollTop = scrollHeight;
+    else log.scrollTop = Math.min(debugScrollTop, scrollHeight);
+    log.addEventListener('scroll', () => {
+      debugScrollTop = Number(log.scrollTop ?? 0);
+      const remaining = Number(log.scrollHeight ?? 0) - debugScrollTop - Number(log.clientHeight ?? 0);
+      debugPinnedToLatest = remaining <= 8;
+    });
+  }
+
   function bindStaticControls(actions: NodusActions): void {
     app.querySelector('#back')?.addEventListener('click', actions.back);
     app.querySelector('#flip')?.addEventListener('click', actions.flip);
     app.querySelector('#guide-toggle')?.addEventListener('click', () => { preferences.setGuide?.(!preferences.getGuide?.()); void actions.redraw(); });
-    app.querySelector('#debug-toggle')?.addEventListener('click', () => { setDebugEnabled(!isDebugEnabled()); void actions.redraw(); });
+    app.querySelector('#debug-toggle')?.addEventListener('click', () => {
+      const opening = !isDebugEnabled();
+      if (opening) {
+        debugPinnedToLatest = true;
+        debugScrollTop = 0;
+      }
+      setDebugEnabled(opening);
+      void actions.redraw();
+    });
   }
 
-  function bindDynamicControls(actions: NodusActions, rootContext: boolean): void {
+  function bindDynamicControls(actions: NodusActions, rootContext: boolean, view: RendererView): void {
     app.querySelector('#root-context-toggle')?.addEventListener('click', () => actions.setMode(rootContext ? 'lines' : 'roots'));
     app.querySelectorAll('[data-nav-key]').forEach((button) => bindRecenterTarget(button, actions, () => (button as HTMLElement).dataset.navKey));
-    app.querySelector('#debug-clear')?.addEventListener('click', () => { clearDebugLog(); void actions.redraw(); });
+    app.querySelector('#debug-clear')?.addEventListener('click', () => {
+      clearDebugLog();
+      debugPinnedToLatest = true;
+      debugScrollTop = 0;
+      void actions.redraw();
+    });
     app.querySelector('#debug-copy')?.addEventListener('click', async () => {
       try { await window.navigator?.clipboard?.writeText?.(debugText()); debugLog('debug log copied'); }
       catch (error) { debugLog('debug copy failed', error, 'warn'); }
       void actions.redraw();
     });
+    app.querySelector('#debug-refetch-view')?.addEventListener('click', async () => {
+      try { await maintenance.refetchView?.(visiblePositions(view)); }
+      catch (error) { debugLog('refetch view failed', error, 'error'); void actions.redraw(); }
+    });
+    app.querySelector('#debug-clear-explorer')?.addEventListener('click', async () => {
+      try { await maintenance.clearExplorerCache?.(); }
+      catch (error) { debugLog('clear Explorer cache failed', error, 'error'); void actions.redraw(); }
+    });
+    bindDebugScroll();
   }
 
   function renderSatellite(item: RendererPosition, slot: PresentationSlot, view: RendererView, structure: RendererStructure, actions: NodusActions): void {
@@ -294,7 +346,7 @@ export function createNodusRenderer({ app: appOption = null, preferences = {} }:
     centerPosition?.style.setProperty('top', `${mapGeometry.center.y}px`, 'important');
     centerPosition?.style.setProperty('--center-size', `${mapGeometry.center.size}px`);
 
-    bindDynamicControls(actions, rootContext);
+    bindDynamicControls(actions, rootContext, view);
     renderSatellites(view, structure, actions, mapGeometry);
     decorateRootPresentation(app, view);
     decorateEvidencePresentation(app, view, actions, { showGuide: guide });

@@ -8,6 +8,7 @@ import './debug.css';
 import { canonicalPosition } from './graph.js';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { debugLog } from './debug.js';
+import { clearExplorerCache } from './explorer-cache.ts';
 import { acquireExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
 import { loadMasters } from './masters.js';
 import { materializeMove } from './move-materialization.ts';
@@ -29,7 +30,25 @@ import { preferenceStore } from './preference-store.js';
 const RESIZE_UPDATE_DEBOUNCE_MS = 120;
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
 const initialRoute = routeLedger.read();
-const renderer = createNodusRenderer({ app: document.querySelector('#app'), preferences: preferenceStore });
+let controller: NodusController;
+
+async function clearExplorerAndReload(positions?: readonly string[]): Promise<void> {
+  debugLog(positions ? 'Refetching current view' : 'Clearing Explorer cache', {
+    positions: positions?.length ?? 'all',
+  });
+  controller.dispose();
+  await clearExplorerCache(positions);
+  window.location.reload();
+}
+
+const renderer = createNodusRenderer({
+  app: document.querySelector('#app'),
+  preferences: preferenceStore,
+  maintenance: {
+    refetchView: (positions) => clearExplorerAndReload(positions),
+    clearExplorerCache: () => clearExplorerAndReload(),
+  },
+});
 const lichessEvalStatusPresenter = createLichessEvalStatusPresenter({
   render: (status) => renderer.renderLichessEvalStatus(status),
   log: (message, detail) => { debugLog(message, detail, 'error'); },
@@ -37,7 +56,6 @@ const lichessEvalStatusPresenter = createLichessEvalStatusPresenter({
 const stopLichessEvalStatus = lichessEval.subscribe(lichessEvalStatusPresenter.update);
 const presenter = createNodusPresenter({ renderer, log: (message, detail) => { debugLog(message, detail, 'error'); } });
 
-let controller: NodusController;
 const constraintsByMode = new Map<string, Readonly<{ lineCapacity: number; rootCapacity: number }>>();
 
 function constraintsFor(mode: 'roots' | 'lines') {

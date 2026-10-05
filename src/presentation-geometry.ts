@@ -12,16 +12,31 @@ export type PresentationSlot = Readonly<{
   tier: 'prominent' | 'compact';
 }>;
 
-export type FamilyPlacementItem = Readonly<{
+export type PresentationNode = Readonly<{
   key: string;
-  family: string;
-  anchor?: boolean;
+  relation?: string;
+  distance?: number;
+  families?: readonly string[];
+}>;
+
+export type PresentationRelationship = Readonly<{
+  source: string;
+  target: string;
+  families?: readonly string[];
+}>;
+
+export type PresentationTopology = Readonly<{
+  center: string;
+  nodes: readonly PresentationNode[];
+  relationships: readonly PresentationRelationship[];
 }>;
 
 export type PresentationGeometry = Readonly<{
   width: number;
   height: number;
   center: Readonly<{ x: number; y: number; size: number }>;
+  prominentSize: number;
+  compactSize: number;
   lineSlots: readonly PresentationSlot[];
   rootSlots: readonly PresentationSlot[];
   lineCapacity: number;
@@ -111,25 +126,13 @@ function rootSlots({
   })));
 }
 
-function grouped(items: readonly FamilyPlacementItem[]): Array<{
-  family: string;
-  anchor: FamilyPlacementItem;
-  rest: FamilyPlacementItem[];
-}> {
-  const byFamily = new Map<string, FamilyPlacementItem[]>();
-  for (const item of items) {
-    const family = item.family || item.key;
-    if (!byFamily.has(family)) byFamily.set(family, []);
-    byFamily.get(family)?.push(item);
-  }
-  return [...byFamily.entries()].map(([family, familyItems]) => {
-    const anchor = familyItems.find((item) => item.anchor) ?? familyItems[0];
-    return {
-      family,
-      anchor,
-      rest: familyItems.filter((item) => item !== anchor),
-    };
-  });
+function isRootContext(node: PresentationNode | undefined): boolean {
+  return node?.relation === 'root' || node?.relation === 'sibling';
+}
+
+function average(values: readonly number[], fallback: number): number {
+  if (!values.length) return fallback;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function takeBest(
@@ -159,88 +162,118 @@ function takeBest(
   return slots.splice(best.index, 1)[0] ?? null;
 }
 
-function familyBandHalfHeight(groups: number, height: number): number {
-  if (groups <= 1) return height / 2;
-  return Math.max(54, (height - MAP_PADDING_PX * 2) / groups / 2 - FAMILY_GAP_PX / 2);
+function compactSlot(geometry: PresentationGeometry, slot: PresentationSlot): PresentationSlot {
+  if (slot.tier === 'compact' && slot.size === geometry.compactSize) return slot;
+  return Object.freeze({ x: slot.x, y: slot.y, size: geometry.compactSize, tier: 'compact' as const });
 }
 
-export function placeLineFamilies(
-  geometry: PresentationGeometry,
-  items: readonly FamilyPlacementItem[] = [],
-): ReadonlyMap<string, PresentationSlot> {
-  const result = new Map<string, PresentationSlot>();
-  const groups = grouped(items.slice(0, geometry.lineCapacity));
-  const prominent = geometry.lineSlots
-    .filter((slot) => slot.tier === 'prominent')
-    .slice()
-    .sort((a, b) => a.y - b.y || a.x - b.x);
-  const compact = geometry.lineSlots
-    .filter((slot) => slot.tier === 'compact')
-    .slice();
-  const familyY = new Map<string, number>();
-  const familyBand = familyBandHalfHeight(groups.length, geometry.height);
-
-  groups.forEach((group, index) => {
-    const targetY = geometry.height * ((index + 1) / (groups.length + 1));
-    let slot = takeBest(prominent, targetY, 'left-to-right');
-    if (!slot) slot = takeBest(compact, targetY, 'left-to-right');
-    if (!slot) return;
-    result.set(group.anchor.key, slot);
-    familyY.set(group.family, slot.y);
-  });
-
-  let round = 0;
-  while (groups.some((group) => round < group.rest.length) && compact.length) {
-    for (const group of groups) {
-      const item = group.rest[round];
-      if (!item) continue;
-      const targetY = familyY.get(group.family) ?? geometry.height / 2;
-      const slot = takeBest(compact, targetY, 'left-to-right', (candidate) => Math.abs(candidate.y - targetY) <= familyBand)
-        ?? takeBest(compact, targetY, 'left-to-right');
-      if (!slot) break;
-      result.set(item.key, slot);
-    }
-    round += 1;
-  }
-  return result;
+function familyYs(
+  node: PresentationNode,
+  anchors: ReadonlyMap<string, number>,
+): number[] {
+  return [...(node.families ?? [])]
+    .map((family) => anchors.get(family))
+    .filter((value): value is number => Number.isFinite(value));
 }
 
-export function placeRootFamilies(
+function recordFamilyAnchors(
+  node: PresentationNode,
+  y: number,
+  anchors: Map<string, number>,
+): void {
+  for (const family of node.families ?? []) if (!anchors.has(family)) anchors.set(family, y);
+}
+
+function sourcePoints(
+  node: PresentationNode,
+  topology: PresentationTopology,
+  nodesByKey: ReadonlyMap<string, PresentationNode>,
+  result: ReadonlyMap<string, PresentationSlot>,
   geometry: PresentationGeometry,
-  items: readonly FamilyPlacementItem[] = [],
+  side: 'lines' | 'roots',
+): Array<Readonly<{ x: number; y: number }>> {
+  const points: Array<Readonly<{ x: number; y: number }>> = [];
+  for (const relationship of topology.relationships) {
+    if (relationship.target !== node.key) continue;
+    if (relationship.source === topology.center) {
+      if (side === 'lines') points.push(geometry.center);
+      continue;
+    }
+    const sourceNode = nodesByKey.get(relationship.source);
+    if (side === 'lines' ? isRootContext(sourceNode) : !isRootContext(sourceNode)) continue;
+    const point = result.get(relationship.source);
+    if (point) points.push(point);
+  }
+  return points;
+}
+
+export function placeConstellation(
+  geometry: PresentationGeometry,
+  topology: PresentationTopology,
 ): ReadonlyMap<string, PresentationSlot> {
   const result = new Map<string, PresentationSlot>();
-  const groups = grouped(items.slice(0, geometry.rootCapacity));
-  const available = geometry.rootSlots.slice();
-  const familyY = new Map<string, number>();
-  const familyX = new Map<string, number>();
-  const familyBand = familyBandHalfHeight(groups.length, geometry.height);
+  const nodesByKey = new Map(topology.nodes.map((node) => [node.key, node]));
+  const indexed = topology.nodes.map((node, index) => ({ node, index }));
+  const lineNodes = indexed.filter(({ node }) => !isRootContext(node));
+  const rootNodes = indexed.filter(({ node }) => isRootContext(node));
+  const lineAnchors = lineNodes.filter(({ node }) => node.relation === 'outgoing');
+  const lineRest = lineNodes
+    .filter(({ node }) => node.relation !== 'outgoing')
+    .sort((a, b) => (a.node.distance ?? Number.MAX_SAFE_INTEGER) - (b.node.distance ?? Number.MAX_SAFE_INTEGER) || a.index - b.index);
+  const rootAnchors = rootNodes.filter(({ node }) => node.relation === 'root');
+  const rootRest = rootNodes
+    .filter(({ node }) => node.relation !== 'root')
+    .sort((a, b) => (a.node.distance ?? Number.MAX_SAFE_INTEGER) - (b.node.distance ?? Number.MAX_SAFE_INTEGER) || a.index - b.index);
+  const lineAvailable = geometry.lineSlots.slice();
+  const rootAvailable = geometry.rootSlots.slice();
+  const lineFamilyY = new Map<string, number>();
+  const rootFamilyY = new Map<string, number>();
 
-  groups.forEach((group, index) => {
-    const targetY = geometry.height * ((index + 1) / (groups.length + 1));
-    const slot = takeBest(available, targetY, 'right-to-left');
+  lineAnchors.forEach(({ node }, index) => {
+    const targetY = geometry.height * ((index + 1) / (lineAnchors.length + 1));
+    const slot = takeBest(lineAvailable, targetY, 'left-to-right', (candidate) => candidate.tier === 'prominent')
+      ?? takeBest(lineAvailable, targetY, 'left-to-right');
     if (!slot) return;
-    result.set(group.anchor.key, slot);
-    familyY.set(group.family, slot.y);
-    familyX.set(group.family, slot.x);
+    result.set(node.key, slot);
+    recordFamilyAnchors(node, slot.y, lineFamilyY);
   });
 
-  let round = 0;
-  while (groups.some((group) => round < group.rest.length) && available.length) {
-    for (const group of groups) {
-      const item = group.rest[round];
-      if (!item) continue;
-      const targetY = familyY.get(group.family) ?? geometry.height / 2;
-      const anchorX = familyX.get(group.family) ?? geometry.center.x;
-      const inBand = (candidate: PresentationSlot) => Math.abs(candidate.y - targetY) <= familyBand;
-      const slot = takeBest(available, targetY, 'right-to-left', (candidate) => candidate.x < anchorX && inBand(candidate))
-        ?? takeBest(available, targetY, 'right-to-left', (candidate) => candidate.x < anchorX)
-        ?? takeBest(available, targetY, 'right-to-left');
-      if (!slot) break;
-      result.set(item.key, slot);
-    }
-    round += 1;
-  }
+  lineRest.forEach(({ node }, index) => {
+    const parents = sourcePoints(node, topology, nodesByKey, result, geometry, 'lines');
+    const fallbackY = geometry.height * ((index + 1) / (lineRest.length + 1));
+    const targetY = average(
+      parents.map(({ y }) => y),
+      average(familyYs(node, lineFamilyY), fallbackY),
+    );
+    const parentX = parents.length ? Math.max(...parents.map(({ x }) => x)) : geometry.center.x;
+    const slot = takeBest(lineAvailable, targetY, 'left-to-right', (candidate) => candidate.x > parentX)
+      ?? takeBest(lineAvailable, targetY, 'left-to-right');
+    if (!slot) return;
+    result.set(node.key, compactSlot(geometry, slot));
+  });
+
+  rootAnchors.forEach(({ node }, index) => {
+    const targetY = geometry.height * ((index + 1) / (rootAnchors.length + 1));
+    const slot = takeBest(rootAvailable, targetY, 'left-to-right');
+    if (!slot) return;
+    result.set(node.key, slot);
+    recordFamilyAnchors(node, slot.y, rootFamilyY);
+  });
+
+  rootRest.forEach(({ node }, index) => {
+    const parents = sourcePoints(node, topology, nodesByKey, result, geometry, 'roots');
+    const fallbackY = geometry.height * ((index + 1) / (rootRest.length + 1));
+    const targetY = average(
+      parents.map(({ y }) => y),
+      average(familyYs(node, rootFamilyY), fallbackY),
+    );
+    const parentX = parents.length ? Math.max(...parents.map(({ x }) => x)) : -Infinity;
+    const slot = takeBest(rootAvailable, targetY, 'left-to-right', (candidate) => candidate.x > parentX)
+      ?? takeBest(rootAvailable, targetY, 'right-to-left');
+    if (!slot) return;
+    result.set(node.key, slot);
+  });
+
   return result;
 }
 
@@ -272,6 +305,8 @@ export function derivePresentationGeometry({
     width: safeWidth,
     height: safeHeight,
     center: Object.freeze({ x: centerX, y: safeHeight / 2, size: centerSize }),
+    prominentSize,
+    compactSize,
     lineSlots: Object.freeze(frozenLines),
     rootSlots: Object.freeze(frozenRoots),
     lineCapacity: Math.max(1, lines.length),

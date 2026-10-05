@@ -61,20 +61,15 @@ button { color: inherit; }
 
 .position { position: absolute; }
 .center-position {
-  top: 50%;
   transform: translate(-50%, -50%);
-  width: min(42vmin, 470px);
   z-index: 10;
   transition: left 240ms ease, top 220ms ease;
 }
-.mode-lines .center-position { left: 26%; }
-.mode-roots .center-position { left: 74%; }
 .center-hint { margin-top: 8px; text-align: center; color: #85827e; font-size: 11px; }
 .board-frame { display: block; aspect-ratio: 1; box-shadow: 0 12px 32px rgba(0,0,0,.34); }
 .center-board { width: 100%; border-radius: 3px; overflow: hidden; box-shadow: 0 20px 56px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06); }
 
 .satellite {
-  --size: 112px;
   left: var(--x); top: var(--y); transform: translate(-50%, -50%);
   width: var(--size);
   padding: 0;
@@ -87,7 +82,6 @@ button { color: inherit; }
   transition: transform 190ms cubic-bezier(.2,.8,.2,1), filter 160ms ease;
 }
 .satellite:hover, .satellite:focus-visible { transform: translate(-50%, -50%) scale(1.34); z-index: 24; outline: none; filter: brightness(1.09); }
-.satellite.tier-2 { --size: 74px; }
 .satellite.tier-2:hover, .satellite.tier-2:focus-visible { transform: translate(-50%, -50%) scale(1.85); z-index: 28; }
 .satellite .mini-board { width: 100%; border-radius: 2px; overflow: hidden; box-shadow: 0 9px 24px rgba(0,0,0,.31), 0 0 0 1px rgba(255,255,255,.045); pointer-events: none; }
 .satellite:hover .mini-board, .satellite:focus-visible .mini-board { box-shadow: 0 18px 42px rgba(0,0,0,.5), 0 0 0 1px rgba(179,210,103,.18); }
@@ -144,11 +138,6 @@ cg-board piece { will-change: transform; }
 
 @media (max-width: 1100px) {
   .workspace { grid-template-columns: minmax(0, 1fr) 300px; }
-  .center-position { width: min(39vmin, 420px); }
-  .mode-lines .center-position { left: 29%; }
-  .mode-roots .center-position { left: 71%; }
-  .satellite { --size: 92px; }
-  .satellite.tier-2 { --size: 66px; }
   .rail-position h1 { font-size: 18px; }
 }
 
@@ -158,11 +147,6 @@ cg-board piece { will-change: transform; }
   .network-status { display: none; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(190px, 34vh); }
   .map { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.055); }
-  .center-position { width: min(54vw, 330px); top: 50%; }
-  .mode-lines .center-position { left: 31%; }
-  .mode-roots .center-position { left: 69%; }
-  .satellite { --size: 68px; }
-  .satellite.tier-2 { --size: 50px; }
   .satellite:hover, .satellite:focus-visible { transform: translate(-50%, -50%) scale(1.26); }
   .satellite.tier-2:hover, .satellite.tier-2:focus-visible { transform: translate(-50%, -50%) scale(1.6); }
   .opening-label { display: none; }

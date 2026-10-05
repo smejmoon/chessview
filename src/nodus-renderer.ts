@@ -12,7 +12,7 @@ import { decorateLichessEvalStatus } from './lichess-eval-presentation.js';
 import { decorateRootPresentation } from './root-presentation.js';
 import { createPromotionChooser } from './promotion-chooser.js';
 import { bindRecenterTarget, createBoardMoveRecenterHandler } from './recenter-input.js';
-import { placeLineFamilies, placeRootFamilies } from './presentation-geometry.js';
+import { placeConstellation } from './presentation-geometry.js';
 import type { PresentationGeometry, PresentationSlot } from './presentation-geometry.ts';
 import { viewStatusSpec } from './view-status.js';
 
@@ -22,6 +22,7 @@ type DisplayEdge = Readonly<{ target?: string; san?: string; uci?: string; share
 type Opening = Readonly<{ eco?: string; name?: string }>;
 type PositionRecord = Readonly<{ key?: string; fen?: string; games?: number; opening?: Opening }>;
 type CompositionNode = Readonly<{ key: string; relation?: string; merge?: boolean }>;
+type CompositionRelationship = Readonly<{ source: string; target: string; families?: readonly string[] }>;
 type RendererPosition = Readonly<{
   key: string;
   distance: number;
@@ -32,7 +33,7 @@ type RendererPosition = Readonly<{
   record?: PositionRecord;
 }>;
 type RendererStructure = Readonly<{
-  composition?: Readonly<{ nodes?: readonly CompositionNode[]; relationships?: readonly unknown[]; families?: readonly unknown[] }>;
+  composition?: Readonly<{ nodes?: readonly CompositionNode[]; relationships?: readonly CompositionRelationship[]; families?: readonly unknown[] }>;
   centerNode?: PositionRecord;
   positions?: readonly RendererPosition[];
 }>;
@@ -215,25 +216,14 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   }
 
   function renderSatellites(view: RendererView, structure: RendererStructure, actions: CurrentViewActions, presentation: PresentationGeometry): void {
-    const all = [...(structure.positions ?? [])];
-    const lines = all.filter((item) => !isRootContext(item)).slice(0, presentation.lineCapacity);
-    const roots = all.filter(isRootContext).slice(0, presentation.rootCapacity);
-    const linePlacement = placeLineFamilies(presentation, lines.map((item) => ({
-      key: item.key,
-      family: familyFor(item),
-      anchor: item.relation === 'outgoing',
-    })));
-    const rootPlacement = placeRootFamilies(presentation, roots.map((item) => ({
-      key: item.key,
-      family: familyFor(item),
-      anchor: item.relation === 'root',
-    })));
-    for (const item of lines) {
-      const slot = linePlacement.get(item.key);
-      if (slot) renderSatellite(item, slot, view, structure, actions);
-    }
-    for (const item of roots) {
-      const slot = rootPlacement.get(item.key);
+    const positions = [...(structure.positions ?? [])];
+    const placement = placeConstellation(presentation, {
+      center: view.center,
+      nodes: positions.map(({ key, relation, distance, families }) => ({ key, relation, distance, families })),
+      relationships: structure.composition?.relationships ?? [],
+    });
+    for (const item of positions) {
+      const slot = placement.get(item.key);
       if (slot) renderSatellite(item, slot, view, structure, actions);
     }
   }

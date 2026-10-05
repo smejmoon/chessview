@@ -9,6 +9,11 @@ import {
   readCachedExplorerReading,
 } from './explorer.js';
 import {
+  classifyExplorerRefinementFailure,
+  type ExplorerRefinementFailureClassifier,
+  type ExplorerRefinementOutcome,
+} from './explorer-refinement.ts';
+import {
   canonicalPosition,
   resolveMove,
   totalGames,
@@ -40,6 +45,10 @@ export type ExplorerLoadOptions = Readonly<{
   signal?: AbortSignal;
   priority?: AcquisitionPriorityInput;
 }>;
+
+export type ExplorerRefinementRunOutcome =
+  | ExplorerRefinementOutcome
+  | Readonly<{ refinement: 'satisfied' }>;
 
 type ResolvedMove = Readonly<{
   target: string;
@@ -73,6 +82,7 @@ export type KnowledgeAcquisitionOptions = Readonly<{
   loadExplorer?: LoadExplorer;
   currentExplorer?: CurrentExplorer;
   readCachedExplorer?: ReadCachedExplorer;
+  classifyExplorerFailure?: ExplorerRefinementFailureClassifier;
   graph?: Pick<PositionGraph, 'outgoing' | 'ensureEdge'>;
   repository?: KnowledgeRepository;
   warmTimeoutMs?: number;
@@ -115,6 +125,7 @@ export function createKnowledgeAcquisition({
   loadExplorer = loadExplorerReading as LoadExplorer,
   currentExplorer = currentExplorerReading as CurrentExplorer,
   readCachedExplorer = readCachedExplorerReading as ReadCachedExplorer,
+  classifyExplorerFailure = classifyExplorerRefinementFailure,
   graph = positionGraph,
   repository = positionRepository,
   warmTimeoutMs = SUPPLEMENTARY_EXPLORER_WARM_TIMEOUT_MS,
@@ -223,6 +234,30 @@ export function createKnowledgeAcquisition({
     return explorer;
   }
 
+  async function refineExplorerReading(
+    key: string,
+    options: ExplorerLoadOptions = {},
+  ): Promise<ExplorerRefinementRunOutcome> {
+    const canonical = canonicalPosition(key);
+    let explorer: ExplorerReading | null;
+    try {
+      explorer = await loadExplorer(canonical, options);
+    } catch (error: unknown) {
+      const outcome = classifyExplorerFailure(error);
+      if (outcome) return outcome;
+      throw error;
+    }
+    if (!explorer) return Object.freeze({ refinement: 'unavailable' as const });
+
+    const edges = await reconcileExplorerReading(canonical, explorer);
+    log('Explorer Reading reconciled', {
+      position: canonical,
+      games: totalGames(explorer),
+      edges: edges.length,
+    });
+    return Object.freeze({ refinement: 'satisfied' as const });
+  }
+
   async function warmExplorerReading(
     key: string,
     { signal }: Readonly<{ signal?: AbortSignal }> = {},
@@ -241,6 +276,7 @@ export function createKnowledgeAcquisition({
 
   return Object.freeze({
     acquireExplorerReading,
+    refineExplorerReading,
     reconcileExplorerReading,
     reconcileCachedExplorerReading,
     reconciledExplorerReadingAvailable,
@@ -250,6 +286,7 @@ export function createKnowledgeAcquisition({
 
 export const {
   acquireExplorerReading,
+  refineExplorerReading,
   reconcileExplorerReading,
   reconcileCachedExplorerReading,
   reconciledExplorerReadingAvailable,

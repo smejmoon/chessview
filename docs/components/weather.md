@@ -22,6 +22,22 @@ Weather presents the structural readiness derived by [Current View](../architect
 - The normal acknowledgement stays subtle: delayed `Updating…`, a brief `Ready`, then a persistent low-emphasis settled check.
 - Presentation failure must fail closed to a degraded/unavailable surface rather than leaving stale success feedback visible.
 
+## Development diagnostics
+
+Weather may expose several independent measures at once when Debug is enabled so lifecycle behavior can be inspected without forcing every distinction through the primary Ready/Updating state.
+
+The current diagnostic surface may include:
+
+- accepted structure lifecycle (`idle`, `loading`, `ready`, or `failed`);
+- the derived Settling boolean and Constellation Reading-frontier size;
+- current frontier participation counts for `working`, retry-waiting, satisfied, unavailable, failed, and unplanned structural obligations;
+- structurally tagged participants whose Reading is no longer present in the accepted frontier;
+- active and total supplementary refinement participation.
+
+These measures are observations, not new authorities. Showing `failed 1`, `unplanned 1`, or a nonzero frontier does not by itself decide whether Weather should be Updating; the primary state still follows Current View's structural-readiness derivation. During development the measures may deliberately expose a surprising or stuck combination so the owning contract can be corrected rather than hidden behind a cleaner label.
+
+Debug diagnostics stay aggregate. Do not expose task keys, canonical-position identities, provider names, source payloads, transport state, retry timestamps, or run/revision tokens through Weather. Normal non-Debug Weather remains the compact product status rather than becoming a permanent engineering dashboard.
+
 ## Verification
 
 Deterministic/browser contract tests should cover:
@@ -40,4 +56,6 @@ Deterministic/browser contract tests should cover:
 - obsolete completion, retry gates, and unavailable outcomes being unable to settle the current view;
 - fast cached structural work avoiding a distracting `Updating…` flash while still acknowledging successful settlement;
 - coalesced/debounced structural recomposition avoiding unnecessary visual fidgeting without concealing unresolved structural work;
+- Debug Weather reporting the aggregate frontier/phase/supplementary measures supplied by Current View without exposing per-task or per-position identity;
+- disabling Debug removing the diagnostic readout without changing structural readiness;
 - presentation failure replacing stale success feedback with a degraded/unavailable state.

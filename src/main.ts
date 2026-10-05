@@ -26,6 +26,7 @@ import { composeNodusRail } from './rail-source.js';
 import { rootTranspositionEnricher } from './root-enrichment.js';
 import { createRouteLedger } from './route-ledger.ts';
 import { preferenceStore } from './preference-store.js';
+import { decorateWeatherDiagnostics } from './weather-diagnostics.js';
 
 const RESIZE_UPDATE_DEBOUNCE_MS = 120;
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
@@ -56,7 +57,11 @@ const lichessEvalStatusPresenter = createLichessEvalStatusPresenter({
   log: (message, detail) => { debugLog(message, detail, 'error'); },
 });
 const stopLichessEvalStatus = lichessEval.subscribe(lichessEvalStatusPresenter.update);
-const presenter = createNodusPresenter({ renderer, log: (message, detail) => { debugLog(message, detail, 'error'); } });
+const presenter = createNodusPresenter({
+  renderer,
+  decorateWeather: (view) => { decorateWeatherDiagnostics(app, view, { debug: lens.debugEnabled() }); },
+  log: (message, detail) => { debugLog(message, detail, 'error'); },
+});
 
 const constraintsByMode = new Map<string, Readonly<{ lineCapacity: number; rootCapacity: number }>>();
 

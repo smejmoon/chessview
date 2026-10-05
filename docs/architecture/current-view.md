@@ -45,9 +45,9 @@ View is presently trying to improve about its accepted view.
 
 Run-local state includes cancellation/currentness, live source-work
 participation, structural provenance carried from Constellation admission,
-working/retry-waiting/satisfied/unavailable execution phases, and recomposition
-scheduling. This state is coordination state, not Nodus identity and not durable
-chess knowledge.
+working/retry-waiting/satisfied/unavailable/failed execution phases, and
+recomposition scheduling. This state is coordination state, not Nodus identity
+and not durable chess knowledge.
 
 Explicit refresh keeps the same Nodus and accepted trustworthy view while
 replacing the refinement run. Recenter or browser-history restoration to another
@@ -155,6 +155,10 @@ still awaits incorporation.
 - A material Lens capacity change recomposes the same Nodus and may admit new
   structural obligations. A presentation-only relayout redraws without changing
   composition or refinement demand.
+- Current View may publish aggregate Weather diagnostics derived from the accepted
+  Reading frontier and active-run participation. Those diagnostics expose counts
+  and phases only; task keys, Reading identities, source/provider names, and
+  revision tokens remain private.
 - Lens and renderer delegates consume the published Current View snapshot without
   keeping a second mutable copy of current-view truth.
 
@@ -168,8 +172,16 @@ contain values from several authorities, for example:
 - presentation Evidence decoration read through Evidence;
 - structural readiness derived from accepted Constellation plus the active
   refinement run;
+- aggregate Weather diagnostics such as accepted-structure lifecycle, Reading
+  frontier size, structural participation counts by phase, detached structural
+  participation, and supplementary active/total counts;
 - orientation from Lens;
 - Back availability from RouteLedger.
+
+The diagnostic aggregate is deliberately lossy. It exists so Weather/Debug can
+show several measures during development without exporting the identity or
+provider details of the refinement run and without becoming another mutable owner
+of settlement.
 
 Publishing values together does not make them share identity or lifetime.
 Internal task keys, run/revision tokens, browser-history bookkeeping, source
@@ -199,6 +211,9 @@ Deterministic/browser contract tests should cover:
 - supplementary work/failure remaining outside structural settlement;
 - obsolete completion, retry gates, and unavailable outcomes being unable to
   mutate a replacement view/run;
+- aggregate Weather diagnostics distinguishing working, retry-waiting, satisfied,
+  unavailable, failed, unplanned, detached, and supplementary participation
+  without exposing task/position identity;
 - Lens-owned orientation/presentation state and RouteLedger-owned browser state
   remaining outside accepted-view and Nodus identity;
 - Evidence remaining readable independently of Constellation;

@@ -14,6 +14,26 @@ export type Lifecycle = Readonly<{
   error: string | null;
 }>;
 
+export type WeatherStructuralMeasures = Readonly<{
+  working: number;
+  retryWaiting: number;
+  satisfied: number;
+  unavailable: number;
+  failed: number;
+  unplanned: number;
+  detached: number;
+}>;
+
+export type WeatherMeasures = Readonly<{
+  structure: LifecycleStatus;
+  frontier: number;
+  structural: WeatherStructuralMeasures;
+  supplementary: Readonly<{
+    active: number;
+    total: number;
+  }>;
+}>;
+
 export type CurrentViewSnapshot = Readonly<{
   center: string;
   mode: ViewMode;
@@ -23,6 +43,7 @@ export type CurrentViewSnapshot = Readonly<{
   evidence: Lifecycle;
   rail: Lifecycle;
   settling: boolean;
+  weather: WeatherMeasures;
 }>;
 
 export type RecenterRequest =
@@ -322,6 +343,7 @@ export class CurrentViewController {
   }
 
   get snapshot(): CurrentViewSnapshot {
+    const weather = this.#weatherMeasures();
     return Object.freeze({
       center: this.#state.nodus,
       mode: this.#state.mode,
@@ -330,7 +352,8 @@ export class CurrentViewController {
       structure: this.#state.structure,
       evidence: this.#state.evidence,
       rail: this.#state.rail,
-      settling: this.#structurallySettling(),
+      settling: this.#structurallySettling(weather),
+      weather,
     });
   }
 
@@ -464,17 +487,73 @@ export class CurrentViewController {
     );
   }
 
-  #structurallySettling(): boolean {
-    if (this.#state.structure.status !== 'ready') return false;
+  #weatherMeasures(): WeatherMeasures {
     const frontier = readingFrontier(this.#state.structure.value);
-    if (!frontier.length) return false;
+    const frontierSet = new Set(frontier);
+    const structural = {
+      working: 0,
+      retryWaiting: 0,
+      satisfied: 0,
+      unavailable: 0,
+      failed: 0,
+      unplanned: 0,
+      detached: 0,
+    };
+    const byReading = new Map<string, RefinementParticipant>();
+    let supplementaryActive = 0;
+    let supplementaryTotal = 0;
     const run = this.#run;
-    for (const position of frontier) {
-      const participant = run && [...run.participants.values()]
-        .find((candidate) => candidate.structuralReading === position);
-      if (!participant || participant.phase !== 'unavailable') return true;
+
+    if (run) {
+      for (const participant of run.participants.values()) {
+        const reading = participant.structuralReading;
+        if (reading == null) {
+          supplementaryTotal += 1;
+          if (participant.phase === 'working' || participant.phase === 'retry-waiting') {
+            supplementaryActive += 1;
+          }
+          continue;
+        }
+        if (!frontierSet.has(reading)) {
+          structural.detached += 1;
+          continue;
+        }
+        if (!byReading.has(reading)) byReading.set(reading, participant);
+      }
     }
-    return false;
+
+    for (const position of frontier) {
+      const participant = byReading.get(position);
+      if (!participant) {
+        structural.unplanned += 1;
+        continue;
+      }
+      if (participant.phase === 'working') structural.working += 1;
+      else if (participant.phase === 'retry-waiting') structural.retryWaiting += 1;
+      else if (participant.phase === 'satisfied') structural.satisfied += 1;
+      else if (participant.phase === 'unavailable') structural.unavailable += 1;
+      else structural.failed += 1;
+    }
+
+    return Object.freeze({
+      structure: this.#state.structure.status,
+      frontier: frontier.length,
+      structural: Object.freeze(structural),
+      supplementary: Object.freeze({
+        active: supplementaryActive,
+        total: supplementaryTotal,
+      }),
+    });
+  }
+
+  #structurallySettling(weather: WeatherMeasures = this.#weatherMeasures()): boolean {
+    if (weather.structure !== 'ready' || weather.frontier === 0) return false;
+    const structural = weather.structural;
+    return structural.working > 0
+      || structural.retryWaiting > 0
+      || structural.satisfied > 0
+      || structural.failed > 0
+      || structural.unplanned > 0;
   }
 
   async #commitRecenter(position: unknown): Promise<boolean> {

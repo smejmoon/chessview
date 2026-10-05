@@ -17,9 +17,25 @@ function reading(uci = 'e2e4') {
 }
 
 function repositoryStub({ record = null, merge = async () => {} } = {}) {
+  const facets = new Map();
+  const id = (position, facet) => `${facet}\u0000${position}`;
   return {
     get: async () => record,
     merge,
+    currentFacet(position, facet) { return facets.get(id(position, facet)) ?? null; },
+    admitFacet(position, facet, value, metadata = {}) {
+      const admitted = Object.freeze({ value, ...metadata });
+      facets.set(id(position, facet), admitted);
+      return admitted;
+    },
+    invalidateFacet(facet, positions) {
+      if (positions) {
+        for (const position of positions) facets.delete(id(position, facet));
+        return;
+      }
+      const prefix = `${facet}\u0000`;
+      for (const key of facets.keys()) if (key.startsWith(prefix)) facets.delete(key);
+    },
     load: async (_position, _facet, producer) => producer({
       signal: new AbortController().signal,
       priority: () => 'foreground',
@@ -101,6 +117,7 @@ test('valid fresh Masters Reading remains usable when persistence fails', async 
   });
 
   assert.strictEqual(await provider.load(CENTER), fresh);
+  assert.strictEqual(provider.current(CENTER), fresh);
   assert.ok(logs.some(([message, _detail, level]) => (
     message === 'Masters Reading persistence failed' && level === 'error'
   )));

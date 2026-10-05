@@ -8,6 +8,7 @@ globalThis.indexedDB = fakeIndexedDB;
 const { clearGraph } = await import('../src/db.js');
 const { clearExplorerCacheFields, getNode, putNode } = await import('../src/position-store.js');
 const { createExplorerProvider } = await import('../src/explorer.js');
+const { createPositionRepository } = await import('../src/position-repository.js');
 
 test('Explorer cache fields can be cleared selectively without deleting structural position data', async () => {
   await clearGraph();
@@ -32,17 +33,12 @@ test('Explorer cache fields can be cleared selectively without deleting structur
   assert.equal('explorer' in globallyCleared, false);
 });
 
-test('Explorer provider invalidation drops admitted live readings', async () => {
-  const repository = {
-    async get() { return null; },
-    async merge() {},
-    async load(position, facet, producer, options = {}) {
-      return producer({
-        signal: options.signal ?? new AbortController().signal,
-        priority: () => 'foreground',
-      });
-    },
-  };
+test('Explorer provider invalidation drops repository-owned live readings', async () => {
+  const repository = createPositionRepository({
+    read: async () => null,
+    write: async (value) => value,
+    version: () => 0,
+  });
   const provider = createExplorerProvider({
     repository,
     request: async () => ({
@@ -56,6 +52,10 @@ test('Explorer provider invalidation drops admitted live readings', async () => 
   const position = canonicalPosition(START_FEN);
   await provider.ensure(position);
   assert.ok(provider.current(position));
+  assert.ok(repository.currentFacet(position, 'explorer'));
+
   provider.invalidate([position]);
+
   assert.equal(provider.current(position), null);
+  assert.equal(repository.currentFacet(position, 'explorer'), null);
 });

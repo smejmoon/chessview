@@ -13,10 +13,29 @@ const FAILED_EVAL = '8/8/8/8/8/8/8/K5k1 w - -';
 const SHALLOW_EVAL = '8/8/8/8/8/8/8/K4k2 w - -';
 
 function repositoryStub({ record = null, merge = async () => {} } = {}) {
+  const facets = new Map();
+  const id = (position, facet) => `${facet}\u0000${position}`;
   return {
     get: async () => record,
     merge,
-    load: async (_position, _facet, producer) => producer({ signal: new AbortController().signal }),
+    currentFacet(position, facet) { return facets.get(id(position, facet)) ?? null; },
+    admitFacet(position, facet, value, metadata = {}) {
+      const admitted = Object.freeze({ value, ...metadata });
+      facets.set(id(position, facet), admitted);
+      return admitted;
+    },
+    invalidateFacet(facet, positions) {
+      if (positions) {
+        for (const position of positions) facets.delete(id(position, facet));
+        return;
+      }
+      const prefix = `${facet}\u0000`;
+      for (const key of facets.keys()) if (key.startsWith(prefix)) facets.delete(key);
+    },
+    load: async (_position, _facet, producer) => producer({
+      signal: new AbortController().signal,
+      priority: () => 'foreground',
+    }),
   };
 }
 
@@ -87,20 +106,28 @@ test('invalid cloud eval JSON is a source-data issue rather than a network issue
   assert.equal(lichessEval.status.issue?.kind, 'invalid-data');
 });
 
-test('usable cloud eval survives local cache-write failure and reports storage issue', async () => {
+test('usable cloud eval survives local cache-write failure and reuses repository-current value', async () => {
   const value = { depth: 22, pvs: [{ cp: 18, moves: 'a1a2' }] };
+  let requests = 0;
   const lichessEval = createLichessEval({
     repository: repositoryStub({
       merge: async () => { throw new Error('quota exceeded'); },
     }),
     gateway: {
-      request: async () => ({ ok: true, status: 200, json: async () => value }),
+      request: async () => {
+        requests += 1;
+        return { ok: true, status: 200, json: async () => value };
+      },
     },
+    now: () => 5_000,
   });
 
   assert.equal(await lichessEval.get(FAILED_EVAL), value);
   assert.equal(lichessEval.status.activity, 'idle');
   assert.equal(lichessEval.status.issue?.kind, 'storage');
+
+  assert.equal(await lichessEval.get(FAILED_EVAL), value);
+  assert.equal(requests, 1);
 });
 
 test('status presentation failure cannot interrupt cloud eval acquisition', async () => {

@@ -28,7 +28,7 @@ A material change in effective capacities requests same-Nodus recomposition. A p
 
 Same-Nodus structural, Evidence, Rail, and Weather publications must leave the accepted center Chessground interactive. Replacing the center board is reserved for a presentation change that actually requires a new board surface.
 
-Visible connector thickness continues to use current relationship Evidence game count on one visible scale. Missing Evidence falls back to the minimum stroke without inventing durable Graph Edge statistics.
+Visible connector thickness continues to use current relationship Evidence game count on one visible scale, normalized against the heaviest visible relationship and bounded below by a legible minimum stroke. Missing Evidence uses that same minimum without inventing durable Graph Edge statistics.
 
 Mobile-specific polish is not a completion dependency. `backlog/2026-10-01-constellation-zoom.md` should vary this same presentation/capacity model rather than create another geometry system. The exploratory star-map outcome may later change node representations, but it should be able to reuse the same separation between composition capacity and topology-aware placement.
 
@@ -42,7 +42,7 @@ Constellation receives only abstract capacities and chooses the coherent visible
 
 Changing effective capacities or Root-context visibility can change Constellation membership without changing durable graph knowledge or Rail Line inventory; presentation-only relayout leaves membership and settlement unchanged.
 
-Connector rendering follows the final positioned nodes. Connector thickness is monotonic with current relationship Evidence game count on one visible scale shared by Root and Line relationships.
+Connector rendering follows the final positioned nodes. Connector thickness is monotonic with current relationship Evidence game count, normalized against the heaviest visible relationship, and bounded below by a legible minimum stroke on one scale shared by Root and Line relationships.
 
 The accepted Nodus remains playable during `Updating…`; same-Nodus publications do not reconstruct its Chessground under user interaction.
 

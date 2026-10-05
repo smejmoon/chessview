@@ -11,6 +11,7 @@
     "src/position-graph.ts",
     "src/move-materialization.ts",
     "src/lens.ts",
+    "src/current-view-controller.ts",
     "src/nodus-controller.ts",
     "src/nodus-refinement.ts",
     "src/constellation-lookahead.ts",

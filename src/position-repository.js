@@ -16,7 +16,12 @@ export function createPositionRepository({
   const reads = new Map();
   const mutations = new Map();
   const loads = new Map();
+  const facets = new Map();
   let observedVersion = version();
+
+  function facetId(position, facet) {
+    return `${facet}\u0000${canonicalPosition(position)}`;
+  }
 
   function syncVersion() {
     const current = version();
@@ -103,6 +108,27 @@ export function createPositionRepository({
     });
   }
 
+  function currentFacet(position, facet) {
+    return facets.get(facetId(position, facet)) ?? null;
+  }
+
+  function admitFacet(position, facet, value, metadata = {}) {
+    const admitted = Object.freeze({ value, ...metadata });
+    facets.set(facetId(position, facet), admitted);
+    return admitted;
+  }
+
+  function invalidateFacet(facet, positions) {
+    if (positions) {
+      for (const position of positions) facets.delete(facetId(position, facet));
+      return;
+    }
+    const prefix = `${facet}\u0000`;
+    for (const id of facets.keys()) {
+      if (id.startsWith(prefix)) facets.delete(id);
+    }
+  }
+
   function effectivePriority(load) {
     for (const subscriber of load.subscribers) {
       if (priorityValue(subscriber.priority) === 'foreground') return 'foreground';
@@ -176,7 +202,16 @@ export function createPositionRepository({
     }, priority);
   }
 
-  return Object.freeze({ get, put, merge, ensure, load });
+  return Object.freeze({
+    get,
+    put,
+    merge,
+    ensure,
+    currentFacet,
+    admitFacet,
+    invalidateFacet,
+    load,
+  });
 }
 
 export const positionRepository = createPositionRepository();

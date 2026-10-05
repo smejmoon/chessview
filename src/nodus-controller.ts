@@ -95,7 +95,6 @@ export type NodusControllerOptions = {
     view?: unknown;
     mode?: unknown;
     orientation?: unknown;
-    navDepth?: unknown;
   };
   canonicalize: (value: unknown) => string;
   routeLedger?: Partial<RouteLedger> | null;
@@ -119,7 +118,6 @@ type ProjectionState = {
 type ControllerState = {
   center: string;
   mode: ViewMode;
-  navDepth: number;
   projections: Record<ViewMode, ProjectionState>;
   rail: Lifecycle;
   settling: boolean;
@@ -142,7 +140,6 @@ type RestoreRoute = {
   center?: unknown;
   view?: unknown;
   mode?: unknown;
-  navDepth?: unknown;
 };
 
 const MODES: readonly ViewMode[] = Object.freeze(['roots', 'lines']);
@@ -168,10 +165,6 @@ function localLens(initialOrientation: unknown): OrientationLens {
       return orientation;
     },
   });
-}
-
-function normalizeDepth(depth: unknown): number {
-  return typeof depth === 'number' && Number.isFinite(depth) && depth >= 0 ? depth : 0;
 }
 
 function errorMessage(error: unknown): string | null {
@@ -300,7 +293,6 @@ export class NodusController {
     this.#state = {
       center: canonicalize(initial?.center),
       mode: normalizeMode(initial?.mode ?? initial?.view),
-      navDepth: normalizeDepth(initial?.navDepth),
       projections: projections(),
       rail: lifecycle('idle'),
       settling: false,
@@ -322,7 +314,7 @@ export class NodusController {
       center: this.#state.center,
       mode: this.#state.mode,
       orientation: this.#lens.orientation(),
-      navigation: Object.freeze({ canGoBack: this.#state.navDepth > 0 }),
+      navigation: Object.freeze({ canGoBack: this.#routeLedger.canGoBack?.() ?? false }),
       structure: active.structure,
       evidence: active.evidence,
       rail: this.#state.rail,
@@ -381,7 +373,6 @@ export class NodusController {
     if (this.#disposed) return false;
     this.#state.center = this.#canonicalize(route.center ?? this.#state.center);
     this.#state.mode = normalizeMode(route.view ?? route.mode ?? this.#state.mode);
-    this.#state.navDepth = normalizeDepth(route.navDepth);
     this.#log('history restored', this.#route());
     await this.#startView('restore');
     return true;
@@ -410,9 +401,8 @@ export class NodusController {
   }
 
   back(): boolean {
-    if (this.#disposed || this.#state.navDepth <= 0) return false;
-    this.#routeLedger.back?.();
-    return true;
+    if (this.#disposed) return false;
+    return this.#routeLedger.back?.() ?? false;
   }
 
   async refresh(): Promise<boolean> {
@@ -456,7 +446,7 @@ export class NodusController {
   }
 
   #route(): Route {
-    return { center: this.#state.center, view: this.#state.mode, navDepth: this.#state.navDepth };
+    return { center: this.#state.center, view: this.#state.mode };
   }
 
   #isCurrent(run: Run | null): run is Run {
@@ -483,9 +473,8 @@ export class NodusController {
     if (next === this.#state.center) return false;
     const previous = this.#state.center;
     this.#state.center = next;
-    this.#state.navDepth += 1;
     this.#routeLedger.push?.(this.#route());
-    this.#log('recenter', { from: previous, to: next, mode: this.#state.mode, navDepth: this.#state.navDepth });
+    this.#log('recenter', { from: previous, to: next, mode: this.#state.mode });
     await this.#startView('recenter');
     return true;
   }

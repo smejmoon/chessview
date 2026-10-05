@@ -133,6 +133,9 @@ export function createMastersProvider({
         return admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
       }
 
+      const live = repository.currentFacet(key, 'masters');
+      if (live && !live.persisted && now() - live.fetchedAt < MASTERS_TTL_MS) return live.value;
+
       const url = new URL(MASTERS_ENDPOINT);
       url.searchParams.set('fen', toPlayableFen(key));
       url.searchParams.set('moves', '30');

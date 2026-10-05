@@ -67,19 +67,24 @@ export function createMastersProvider({
   now = () => Date.now(),
   log = debugLog,
 } = {}) {
-  const latest = new Map();
-
   function report(message, detail, level = 'info') {
     Reflect.apply(log, undefined, [message, detail, level]);
   }
 
-  function admit(key, value) {
-    if (value) latest.set(key, value);
+  function admit(key, value, { fetchedAt = 0, persisted = true } = {}) {
+    if (!value) return value;
+    repository.admitFacet(key, 'masters', value, { fetchedAt, persisted });
     return value;
   }
 
+  function markPersisted(key, value, fetchedAt) {
+    const admitted = repository.currentFacet(key, 'masters');
+    if (!admitted || admitted.value !== value || admitted.fetchedAt !== fetchedAt) return;
+    repository.admitFacet(key, 'masters', value, { fetchedAt, persisted: true });
+  }
+
   function current(positionKey) {
-    return latest.get(canonicalPosition(positionKey)) ?? null;
+    return repository.currentFacet(canonicalPosition(positionKey), 'masters')?.value ?? null;
   }
 
   async function readCached(positionKey) {
@@ -91,24 +96,26 @@ export function createMastersProvider({
     return current(positionKey) ?? await readCached(positionKey);
   }
 
-  function staleOrAbsent(error, cachedValue, signal, key) {
+  function staleOrAbsent(error, cachedValue, cachedFetchedAt, signal, key) {
     if (isObsoleteWork(error, signal)) throw error;
     report('Masters refresh failed', {
       position: key,
       error: error?.message ?? String(error),
       fallback: cachedValue ? 'cached' : null,
     }, 'warn');
-    return admit(key, cachedValue);
+    return admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
   }
 
-  async function persistMastersReading(key, value) {
+  async function persistMastersReading(key, value, fetchedAt) {
     try {
-      await repository.merge(key, { mastersExplorer: value, mastersFetchedAt: now() });
+      await repository.merge(key, { mastersExplorer: value, mastersFetchedAt: fetchedAt });
+      return true;
     } catch (error) {
       report('Masters Reading persistence failed', {
         position: key,
         error: error?.message ?? String(error),
       }, 'error');
+      return false;
     }
   }
 
@@ -121,8 +128,9 @@ export function createMastersProvider({
     return repository.load(key, 'masters', async ({ signal: requestSignal, priority: requestPriority }) => {
       const cached = await repository.get(key);
       const cachedValue = cachedMastersReading(cached);
-      if (cachedValue && cached?.mastersFetchedAt && now() - cached.mastersFetchedAt < MASTERS_TTL_MS) {
-        return admit(key, cachedValue);
+      const cachedFetchedAt = cached?.mastersFetchedAt ?? 0;
+      if (cachedValue && cachedFetchedAt && now() - cachedFetchedAt < MASTERS_TTL_MS) {
+        return admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
       }
 
       const url = new URL(MASTERS_ENDPOINT);
@@ -140,11 +148,12 @@ export function createMastersProvider({
         if (!response.ok) throw httpError(response.status, `Lichess masters explorer returned ${response.status}`);
         value = parseMastersReading(await response.json());
       } catch (error) {
-        return staleOrAbsent(error, cachedValue, requestSignal, key);
+        return staleOrAbsent(error, cachedValue, cachedFetchedAt, requestSignal, key);
       }
 
-      admit(key, value);
-      await persistMastersReading(key, value);
+      const fetchedAt = now();
+      admit(key, value, { fetchedAt, persisted: false });
+      if (await persistMastersReading(key, value, fetchedAt)) markPersisted(key, value, fetchedAt);
       return value;
     }, { signal, priority });
   }

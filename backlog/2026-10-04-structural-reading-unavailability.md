@@ -185,7 +185,7 @@ then prove that:
 - a supplementary-unavailable attempt does not pre-discharge a structural
   obligation admitted only later in the same run;
 - the unavailable discharge is not persisted as graph, Evidence, repository,
-  provider, Lens, RouteLedger, Nodus, or accepted-Con\-stellation truth;
+  provider, Lens, RouteLedger, Nodus, or accepted Constellation truth;
 - a replacement refinement run is free to acquire the Reading again under normal
   source policy, including refresh while the same position remains the Nodus;
 - replacing the Nodus/current view makes obsolete failures, retry gates, or

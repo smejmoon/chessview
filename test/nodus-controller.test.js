@@ -17,10 +17,20 @@ function fixture(overrides = {}) {
   const calls = [];
   const publications = [];
   let restoreHandler = null;
+  let orientation = 'white';
+  let canGoBack = false;
   const routeLedger = {
-    push(route) { calls.push(['push', route]); },
+    push(route) {
+      canGoBack = true;
+      calls.push(['push', route]);
+    },
     replace(route) { calls.push(['replace', route]); },
-    back() { calls.push(['back']); },
+    canGoBack() { return canGoBack; },
+    back() {
+      if (!canGoBack) return false;
+      calls.push(['back']);
+      return true;
+    },
     onRestore(handler) {
       restoreHandler = handler;
       return () => {
@@ -31,7 +41,14 @@ function fixture(overrides = {}) {
   };
   const preferences = {
     setView(view) { calls.push(['setViewPreference', view]); },
-    setOrientation(orientation) { calls.push(['setOrientationPreference', orientation]); },
+  };
+  const lens = {
+    orientation() { return orientation; },
+    flipOrientation() {
+      orientation = orientation === 'white' ? 'black' : 'white';
+      calls.push(['flipOrientation', orientation]);
+      return orientation;
+    },
   };
   const presenter = {
     start(view, actions) {
@@ -44,10 +61,11 @@ function fixture(overrides = {}) {
     },
   };
   const controller = new NodusController({
-    initial: { center: 'A', view: 'roots', orientation: 'white', navDepth: 0 },
+    initial: { center: 'A', view: 'roots' },
     canonicalize: (value) => String(value).toUpperCase(),
     routeLedger,
     preferences,
+    lens,
     structure: async ({ center, mode }) => {
       calls.push(['structure', center, mode]);
       return { composition: { center, direction: mode }, marker: `${center}:${mode}`, settling: false };
@@ -63,11 +81,14 @@ function fixture(overrides = {}) {
     controller,
     calls,
     publications,
-    restoreRoute(route) { return restoreHandler?.(route); },
+    restoreRoute(route, backAvailable = canGoBack) {
+      canGoBack = backAvailable;
+      return restoreHandler?.(route);
+    },
   };
 }
 
-test('commands update one immutable current view while RouteLedger and preferences receive effects', async () => {
+test('commands update one immutable current view while RouteLedger, preferences, and Lens receive effects', async () => {
   const { controller, calls } = fixture();
   await controller.start();
   assert.equal(controller.snapshot.center, 'A');
@@ -79,7 +100,9 @@ test('commands update one immutable current view while RouteLedger and preferenc
   await controller.recenter({ target: 'b' });
   assert.equal(controller.snapshot.center, 'B');
   assert.equal(controller.snapshot.navigation.canGoBack, true);
-  assert.deepEqual(calls.find(([name]) => name === 'push')?.[1], { center: 'B', view: 'roots', navDepth: 1 });
+  assert.deepEqual(calls.find(([name]) => name === 'push')?.[1], { center: 'B', view: 'roots' });
+  assert.equal(controller.back(), true);
+  assert.equal(calls.at(-1)[0], 'back');
 
   await controller.setMode('lines');
   assert.equal(controller.snapshot.mode, 'lines');
@@ -87,7 +110,7 @@ test('commands update one immutable current view while RouteLedger and preferenc
 
   await controller.flip();
   assert.equal(controller.snapshot.orientation, 'black');
-  assert.ok(calls.some(([name, value]) => name === 'setOrientationPreference' && value === 'black'));
+  assert.ok(calls.some(([name, value]) => name === 'flipOrientation' && value === 'black'));
   assert.equal(Object.hasOwn(controller.snapshot, 'generation'), false);
   assert.equal(Object.hasOwn(controller.snapshot, 'navDepth'), false);
   assert.equal(Object.hasOwn(controller.snapshot, 'view'), false);
@@ -140,7 +163,7 @@ test('RouteLedger restoration is owned by the controller and does not write anot
   const { controller, calls, restoreRoute } = fixture();
   await controller.start();
   calls.length = 0;
-  restoreRoute({ center: 'c', view: 'lines', navDepth: 4 });
+  restoreRoute({ center: 'c', view: 'lines' }, true);
   await flush(16);
   assert.deepEqual(
     { center: controller.snapshot.center, mode: controller.snapshot.mode, canGoBack: controller.snapshot.navigation.canGoBack },
@@ -150,7 +173,7 @@ test('RouteLedger restoration is owned by the controller and does not write anot
 
   controller.dispose();
   assert.ok(calls.some(([name]) => name === 'stopRestore'));
-  restoreRoute({ center: 'd', view: 'roots', navDepth: 0 });
+  restoreRoute({ center: 'd', view: 'roots' }, false);
   await flush();
   assert.equal(controller.snapshot.center, 'C');
 });

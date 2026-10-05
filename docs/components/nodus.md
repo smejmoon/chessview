@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Own the current canonical position, the position-centered navigation behavior organized around it, and the current-Nodus refinement demand implied by its active and sibling Constellations.
+Own the current canonical position, Recenter semantics organized around it, and the current-Nodus refinement demand implied by its active and sibling Constellations.
 
-The Nodus is presented as the primary playable board, but its product meaning is broader than that rendering: it is the position the current view, URL, history state, Rail, and Constellation are organized around.
+The Nodus is presented as the primary playable board, but its product meaning is broader than that rendering: it is the position the current view, URL, Rail, and Constellation are organized around. Browser URL/history mechanics are owned separately by `RouteLedger`.
 
 ## Refinement demand
 
@@ -36,11 +36,12 @@ Failure of supplementary work reduces what can be learned from that work; it doe
 - Promotion is part of completing the user's legal Move. Cancelling promotion does not Recenter.
 - Clicking another navigable canonical position requests a Recenter to that known target.
 - Recenter is the application-level operation that selects another Nodus. A caller may supply a known canonical target or a Move that must first be resolved and materialized.
-- Browser-history restoration is distinct from Recenter: it restores recorded position-centered state without creating another history entry.
+- `RouteLedger` owns browser address/history mechanics: the shareable URL carries the canonical center and Root/Line mode, while private browser-entry metadata determines whether Chessview Back is available. Nodus/current-view state does not store browser-history depth.
+- Browser-history restoration is distinct from Recenter: it restores the recorded Nodus address without creating another history entry.
 - Recenter and browser-history restoration start a new current-view run for the resulting Nodus. View-local Candidates, Constellation structure, and current-Nodus refinement demand are rebuilt from durable graph knowledge plus currently available source facts rather than carrying forward a frozen prior projection.
 - Explicit refresh starts a replacement run for the same Nodus while keeping the established trustworthy snapshot visible until replacement derivation is accepted. Refresh does not bypass source-provider freshness policy.
 - Root/Line mode switching selects between sibling projections within the same Nodus run; it is not a Recenter and does not itself restart source acquisition. After a mode switch, structural settlement follows the newly active Constellation and live demand priority may follow the newly active projection without changing demand ownership.
-- The URL identifies the canonical Nodus rather than the move path used to reach it.
+- The URL identifies the canonical Nodus and selected Root/Line mode rather than the move path used to reach it.
 - Stale asynchronous Move materialization or refinement from an obsolete run must not Recenter, publish into, or settle a replacement Nodus.
 - Changing the Nodus does not redefine graph identity; `ChartedGraph` remains durable across Recenter operations.
 
@@ -48,7 +49,7 @@ Failure of supplementary work reduces what can be learned from that work; it doe
 
 Deterministic/browser contract tests should cover:
 
-- URL round-tripping for canonical positions;
+- URL round-tripping for canonical positions and Root/Line mode;
 - Recenter to a known target;
 - Recenter after a legal played Move, including a move outside automatic Constellation selection;
 - all legal promotion choices and cancellation behavior;
@@ -64,7 +65,7 @@ Deterministic/browser contract tests should cover:
 - refinement failure preserving an already trustworthy Nodus when the failed work is supplementary;
 - explicit refresh preserving the established same-Nodus snapshot during replacement derivation;
 - stale Move materialization/refinement being unable to affect a replacement Nodus;
-- browser back/forward restoration without adding another history entry;
+- browser back/forward restoration without adding another history entry, with Back availability owned by `RouteLedger` rather than Nodus state;
 - Recenter/history restoration rebuilding view-local projection state rather than restoring frozen Candidate/Constellation state;
 - Root/Line mode switching staying inside the same Nodus run while settlement follows the newly active projection;
 - durable graph identity remaining unchanged by Recenter.

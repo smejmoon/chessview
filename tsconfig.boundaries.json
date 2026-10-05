@@ -10,6 +10,7 @@
     "src/route-ledger.ts",
     "src/position-graph.ts",
     "src/move-materialization.ts",
+    "src/lens.ts",
     "src/nodus-controller.ts",
     "src/nodus-refinement.ts",
     "src/constellation-lookahead.ts",

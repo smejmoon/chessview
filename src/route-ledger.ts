@@ -5,14 +5,14 @@ export type ViewMode = 'roots' | 'lines';
 export interface Route {
   center: string;
   view: ViewMode;
-  navDepth: number;
 }
 
 export interface RouteLedger {
-  read(historyState?: unknown): Route;
+  read(): Route;
   push(route: Route): void;
   replace(route: Route): void;
-  back(): void;
+  canGoBack(): boolean;
+  back(): boolean;
   onRestore(handler: (route: Route) => void | Promise<void>): () => void;
 }
 
@@ -54,13 +54,31 @@ function resolve<T>(value: MaybeFactory<T>): T {
   return typeof value === 'function' ? (value as () => T)() : value;
 }
 
-function normalizeDepth(depth: unknown): number {
-  return typeof depth === 'number' && Number.isFinite(depth) && depth >= 0 ? depth : 0;
-}
-
 function normalizeView(view: unknown, fallback: unknown): ViewMode {
   if (view === 'roots' || view === 'lines') return view;
   return fallback === 'roots' ? 'roots' : 'lines';
+}
+
+function stateRecord(state: unknown): Record<string, unknown> {
+  return state && typeof state === 'object' ? state as Record<string, unknown> : {};
+}
+
+function hasChessviewParent(state: unknown): boolean {
+  const record = stateRecord(state);
+  if (record.cvHasParent === true) return true;
+  const legacyDepth = record.cvDepth;
+  return typeof legacyDepth === 'number'
+    && Number.isFinite(legacyDepth)
+    && legacyDepth > 0;
+}
+
+function navigationState(state: unknown, hasParent: boolean): Record<string, unknown> {
+  const next = { ...stateRecord(state) };
+  delete next.fen;
+  delete next.cvDepth;
+  delete next.cvHasParent;
+  next.cvHasParent = hasParent;
+  return next;
 }
 
 export function createRouteLedger({
@@ -89,32 +107,35 @@ export function createRouteLedger({
     return `${url.pathname}${url.search}${url.hash}`;
   }
 
-  function read(historyState: unknown = currentHistory().state): Route {
+  function read(): Route {
     const current = currentLocation();
     const params = new URLSearchParams(current.search ?? new URL(current.href).search);
-    const state = historyState && typeof historyState === 'object'
-      ? historyState as Record<string, unknown>
-      : null;
     return Object.freeze({
       center: parseCenter(params.toString() ? `?${params.toString()}` : ''),
       view: normalizeView(params.get('view'), preferences?.getView?.()),
-      navDepth: normalizeDepth(state?.cvDepth),
     });
   }
 
   function write(method: 'pushState' | 'replaceState', route: Route): void {
     const target = currentHistory();
-    target[method](
-      { ...(target.state ?? {}), fen: route.center, cvDepth: normalizeDepth(route.navDepth) },
-      '',
-      routeUrl(route),
-    );
+    const hasParent = method === 'pushState' || hasChessviewParent(target.state);
+    target[method](navigationState(target.state, hasParent), '', routeUrl(route));
+  }
+
+  function canGoBack(): boolean {
+    return hasChessviewParent(currentHistory().state);
+  }
+
+  function back(): boolean {
+    if (!canGoBack()) return false;
+    currentHistory().back();
+    return true;
   }
 
   function onRestore(handler: (route: Route) => void | Promise<void>): () => void {
     const target = resolve(events);
     if (!target?.addEventListener) throw new Error('RouteLedger requires an event target for restoration');
-    const listener: RestoreListener = (event) => { void handler(read(event.state)); };
+    const listener: RestoreListener = () => { void handler(read()); };
     target.addEventListener('popstate', listener);
     return () => target.removeEventListener?.('popstate', listener);
   }
@@ -123,7 +144,8 @@ export function createRouteLedger({
     read,
     push(route: Route) { write('pushState', route); },
     replace(route: Route) { write('replaceState', route); },
-    back() { currentHistory().back(); },
+    canGoBack,
+    back,
     onRestore,
   });
 }

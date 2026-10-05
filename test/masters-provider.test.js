@@ -17,9 +17,25 @@ function reading(uci = 'e2e4') {
 }
 
 function repositoryStub({ record = null, merge = async () => {} } = {}) {
+  const facets = new Map();
+  const id = (position, facet) => `${facet}\u0000${position}`;
   return {
     get: async () => record,
     merge,
+    currentFacet(position, facet) { return facets.get(id(position, facet)) ?? null; },
+    admitFacet(position, facet, value, metadata = {}) {
+      const admitted = Object.freeze({ value, ...metadata });
+      facets.set(id(position, facet), admitted);
+      return admitted;
+    },
+    invalidateFacet(facet, positions) {
+      if (positions) {
+        for (const position of positions) facets.delete(id(position, facet));
+        return;
+      }
+      const prefix = `${facet}\u0000`;
+      for (const key of facets.keys()) if (key.startsWith(prefix)) facets.delete(key);
+    },
     load: async (_position, _facet, producer) => producer({
       signal: new AbortController().signal,
       priority: () => 'foreground',
@@ -88,19 +104,26 @@ test('malformed fresh Masters data falls back to a usable stale cached Reading',
   )));
 });
 
-test('valid fresh Masters Reading remains usable when persistence fails', async () => {
+test('valid fresh Masters Reading remains usable and is reused when persistence fails', async () => {
   const fresh = reading();
   const logs = [];
+  let requests = 0;
   const provider = createMastersProvider({
     repository: repositoryStub({
       merge: async () => { throw new Error('storage unavailable'); },
     }),
-    request: async () => response(fresh),
+    request: async () => {
+      requests += 1;
+      return response(fresh);
+    },
     now: () => 3_000,
     log: (...args) => logs.push(args),
   });
 
   assert.strictEqual(await provider.load(CENTER), fresh);
+  assert.strictEqual(provider.current(CENTER), fresh);
+  assert.strictEqual(await provider.load(CENTER), fresh);
+  assert.equal(requests, 1);
   assert.ok(logs.some(([message, _detail, level]) => (
     message === 'Masters Reading persistence failed' && level === 'error'
   )));

@@ -2,7 +2,7 @@
 
 Own the application boundary that decides which asynchronous domain results are allowed to become part of the current Nodus-centered view.
 
-This architecture coordinates product components without owning their product meaning. [Nodus](../components/nodus.md) owns Recenter semantics and current-Nodus refinement demand, [Constellation](../components/constellation.md) owns visible-subgraph composition and admission of structural obligations that can still change its shape, [Evidence](../components/evidence.md) owns independently addressable semantic evidence by position/Graph Edge, [Rail](../components/rail.md) owns the supporting Line inventory/evidence surface, [Weather](../components/weather.md) presents structural settlement/readiness, and [Interface](../components/interface.md) owns two-dimensional presentation.
+This architecture coordinates product components without owning their product meaning. [Nodus](../components/nodus.md) owns Recenter semantics and current-Nodus refinement demand, [Constellation](../components/constellation.md) owns visible-subgraph composition and admission of structural obligations that can still change its shape, [Evidence](../components/evidence.md) owns independently addressable semantic evidence by position/Graph Edge, [Rail](../components/rail.md) owns the supporting Line inventory/evidence surface, [Weather](../components/weather.md) presents structural settlement/readiness, [Lens](../components/lens.md) owns how accepted product state is presented and interacted with, including presentation preferences/environment and derived geometry/constraints, and `RouteLedger` owns browser address/history mechanics.
 
 ## Settlement coordination
 
@@ -20,10 +20,11 @@ When coordinated refinement finishes, current-view requests recomposition. A com
 
 ## Publication boundary
 
-- Current-view commands enter `NodusController`; contributors return values; the controller publishes immutable current-view values; presentation consumes them.
+- Current-view commands enter `NodusController`; contributors return values; the controller publishes immutable current-view values; Lens and its renderer delegates consume them.
 - `NodusController` is the sole owner allowed to make an asynchronous domain result current. Internal revision identity and publication decisions stay private to that boundary.
+- `RouteLedger` owns browser address/history mechanics. The shareable address is only the canonical center plus Root/Line mode and is serialized in the URL; private browser-entry metadata answers whether Chessview Back is available. `NodusController` asks `RouteLedger` to push, replace, restore, or go back and may publish `canGoBack` as an affordance, but it does not store navigation depth/history metadata or make them part of Nodus-session identity.
 - One Nodus-centered run carries one Constellation projection. Forward Lines and optional Root/sibling context are composition roles inside that value rather than sibling Root/Line projections.
-- Root-context visibility is a current-view presentation preference. Changing it alone does not replace the Nodus or restart the run, but it changes Constellation composition inputs and therefore requests same-Nodus recomposition.
+- Root/Line mode is current-Nodus state, not a Lens preference. Lens consumes the active mode when deriving geometry and capacities; a mode change can therefore change Constellation composition inputs and request same-Nodus recomposition without making presentation the owner of that mode.
 - Constellation requests Evidence while deriving Candidates. Rail requests Evidence for the Graph Edges in its independent Line inventory. A presentation adapter may join independently read Evidence onto currently visible relationship IDs for rendering. That adapter depends on both presentation structure and Evidence; Evidence itself depends on neither Constellation nor relationship identity.
 - Structure and Rail contributors may read durable graph/source facts or request semantic Evidence, but they do not start source acquisition or subscribe to source notifications as part of derivation.
 - Nodus refinement demand may request work such as Explorer acquisition/reconciliation, cloud evaluation, Masters retrieval, or Root enrichment. Constellation Reading-frontier demand carries structural provenance because Constellation admitted it as capable of changing current shape; other useful Nodus demand remains supplementary unless a Constellation contract admits it structurally.
@@ -34,14 +35,14 @@ When coordinated refinement finishes, current-view requests recomposition. A com
 - Missing cloud evaluation is outside structural settlement. Engine Evidence already available when composition is derived may affect selection, but supplementary cloud-evaluation acquisition does not keep or reopen an otherwise Settled Constellation by itself.
 - Rail inventory is a Nodus-level current-view value, independent of Constellation presentation capacity and Root-context visibility. Rail is recomputed from available graph/source facts and requested Evidence rather than owning hydration itself.
 - Publication and settlement are separate decisions. A trustworthy value may publish while the Constellation is Settling; supplementary Rail or Evidence presentation may also become richer after structural settlement.
-- One run may publish successive accepted immutable values as trustworthy structural or Rail facts become available. Presentation may independently redecorate those accepted values from currently available Evidence without making Evidence itself part of Constellation identity.
-- A material change to effective presentation capacities or Root-context visibility invalidates the Constellation derivation for the same Nodus without starting a replacement run. The previous accepted structure remains usable while recomposition proceeds; any newly admitted structural obligations may make the Nodus Settling again. A presentation-only redraw does not recompose Constellation or create settlement work.
+- One run may publish successive accepted immutable values as trustworthy structural or Rail facts become available. Lens may independently redecorate those accepted values from currently available Evidence without making Evidence itself part of Constellation identity.
+- Lens derives effective presentation capacities from its preferences/environment and the active mode. A material capacity change invalidates the Constellation derivation for the same Nodus without starting a replacement run. The previous accepted structure remains usable while recomposition proceeds; any newly admitted structural obligations may make the Nodus Settling again. A Lens change that affects only placement or presentation requests redraw instead of recomposition.
 - Explicit refresh starts a replacement run for the same Nodus but preserves the established trustworthy snapshot while the replacement derivation proceeds. Refresh is not a command to bypass provider freshness policy.
 - Recenter or history restoration to another recorded Nodus starts a replacement run. Before accepting any result or settlement state, the controller checks that it still belongs to that run. Obsolete completion cannot mutate, refine, or settle the replacement view.
-- Every user Recenter command enters the controller through Nodus behavior. A known canonical target may be accepted directly; a played Move is first materialized into [ChartedGraph](../components/charted-graph.md). `NodusController` also owns the RouteLedger restoration subscription for its lifetime.
-- The published current view exposes the current Nodus, Root-context visibility, Constellation, Nodus-level Rail, presentation Evidence decoration where useful, and structural settlement/Weather state. Internal task keys, revision tokens, request scheduling, persistence mechanics, DOM handles, and Chessground instances stay private.
-- Presentation-only preferences such as orientation, Guide, or Debug may redraw already-current state without becoming a replacement Nodus run. Root-context visibility is distinct because it changes Constellation membership.
-- Presentation consumes the published current view without keeping a second mutable copy of current-view truth.
+- Every user Recenter command enters the controller through Nodus behavior. A known canonical target may be accepted directly; a played Move is first materialized into [ChartedGraph](../components/charted-graph.md). `NodusController` also owns the `RouteLedger` restoration subscription for its lifetime.
+- The published current view exposes the current Nodus, Root/Line mode, Constellation, Nodus-level Rail, presentation Evidence decoration where useful, structural settlement/Weather state, and navigation affordances derived from `RouteLedger`. Browser-history bookkeeping itself stays private to `RouteLedger`; internal task keys, revision tokens, request scheduling, persistence mechanics, DOM handles, and Chessground instances stay private.
+- Lens owns presentation-only preferences/state such as orientation, Guide, and Debug. `NodusController` may publish the current Lens orientation as part of the renderer-facing snapshot and invoke Lens operations such as flip, but it does not maintain a second orientation truth or make those preferences part of Nodus-session identity.
+- Lens and its renderer delegates consume the published current view without keeping a second mutable copy of current-view truth.
 
 ## Reusable producer lifetime
 
@@ -72,14 +73,16 @@ Deterministic/browser contract tests should cover:
 - unchanged recomputation producing no redundant current-view publication;
 - supplementary failure preserving established trustworthy values without becoming a structural failure;
 - explicit refresh retaining the established same-Nodus snapshot until a replacement value is accepted;
-- changed effective presentation capacities recomposing the Constellation in the same Nodus run, with a newly exposed Reading frontier able to make it Settling again;
-- Root-context visibility changes recomposing the same Constellation without starting a replacement Nodus run;
-- presentation-only redraw leaving Constellation derivation and acquisition unchanged;
+- Lens-derived capacity changes recomposing the Constellation in the same Nodus run, with a newly exposed Reading frontier able to make it Settling again;
+- Root/Line mode remaining current-Nodus state while Lens consumes it as presentation context;
+- presentation-only Lens changes redrawing without changing Constellation derivation or acquisition;
+- Lens owning orientation without `NodusController` maintaining a duplicate live orientation value;
+- `RouteLedger` owning URL/history metadata and Back availability without `NodusController` maintaining navigation depth/history state;
 - Rail deriving graph/source Line inventory and requesting Evidence without owning acquisition, progress callbacks, or provider subscriptions;
 - Constellation exposing missing graph-bearing facts as a Reading frontier rather than fetching them during composition;
 - a Reading-frontier structural completion being incorporated before settlement is claimed while that obligation remains relevant;
 - accepted Constellation lookahead remaining supplementary to structural settlement;
 - obsolete run completion being unable to mutate, refine, publish, or settle a replacement Nodus;
-- RouteLedger restoration entering through `NodusController` without creating another history entry and being detached on disposal;
-- published current-view values containing product state rather than task keys, generation tokens, source transport state, or DOM identity;
+- `RouteLedger` restoration entering through `NodusController` without creating another history entry and being detached on disposal;
+- published current-view values containing product state and derived navigation affordances rather than task keys, generation tokens, browser-history bookkeeping, source transport state, or DOM identity;
 - current-view relevance and structural settlement remaining separate from reusable producer/cache lifetime.

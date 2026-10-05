@@ -7,16 +7,15 @@ import './debug.css';
 
 import { canonicalPosition } from './graph.js';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
+import { CurrentViewController } from './current-view-controller.ts';
+import type { RefinementTask } from './current-view-controller.ts';
 import { debugLog } from './debug.js';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { acquireExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
 import { createLens } from './lens.ts';
 import { loadMasters } from './masters.js';
 import { materializeMove } from './move-materialization.ts';
-import { NodusController } from './nodus-controller.ts';
-import type { RefinementTask } from './nodus-controller.ts';
-import { deriveNodusRefinementDemand, nodusRefinementPriority } from './nodus-refinement.ts';
-import type { NodusRefinementTarget } from './nodus-refinement.ts';
+import { deriveCurrentViewRefinementDemand } from './nodus-refinement.ts';
 import { composeNodusStructure } from './nodus-structure.js';
 import { projectVisibleEvidence } from './evidence-presentation.js';
 import { lichessEval } from './lichess-eval.js';
@@ -33,7 +32,7 @@ const routeLedger = createRouteLedger({ preferences: preferenceStore });
 const initialRoute = routeLedger.read();
 const app = document.querySelector('#app');
 const lens = createLens({ app, preferences: preferenceStore });
-let controller: NodusController;
+let controller: CurrentViewController;
 
 async function clearExplorerAndReload(positions?: readonly string[]): Promise<void> {
   debugLog(positions ? 'Refetching current view' : 'Clearing Explorer cache', {
@@ -67,21 +66,48 @@ function constraintsFor(mode: 'roots' | 'lines') {
   return constraints;
 }
 
-function refinementPriority(demand: NodusRefinementTarget) {
-  if (demand.nodusWide) return 'foreground' as const;
-  return () => nodusRefinementPriority(demand, controller.snapshot.mode);
-}
-
-async function tasksForCurrentNodus({ center, structures, signal }): Promise<readonly RefinementTask[]> {
-  const demand = deriveNodusRefinementDemand({ center, structures });
+async function tasksForCurrentView({ center, mode, structure }): Promise<readonly RefinementTask[]> {
+  const demand = deriveCurrentViewRefinementDemand({ center, mode, structure });
   const tasks = new Map<string, RefinementTask>();
-  function add(key: string, run: () => unknown | Promise<unknown>) {
-    if (!tasks.has(key)) tasks.set(key, Object.freeze({ key, run }));
+
+  function add(task: RefinementTask) {
+    if (!tasks.has(task.key)) tasks.set(task.key, Object.freeze(task));
   }
-  add(`root-transpositions:${demand.rootTransposition}`, () => rootTranspositionEnricher.ensure(demand.rootTransposition, { signal }));
-  for (const target of demand.explorer) add(`explorer:${target.position}`, () => acquireExplorerReading(target.position, { signal, priority: refinementPriority(target) }));
-  for (const target of demand.cloudEval) add(`cloud-eval:${target.position}`, () => lichessEval.get(target.position, { signal, priority: refinementPriority(target) }));
-  for (const target of demand.masters) add(`masters:${target.position}`, () => loadMasters(target.position, { signal, priority: refinementPriority(target) }));
+
+  add({
+    key: `root-transpositions:${demand.rootTransposition}`,
+    nodusWide: true,
+    run: ({ signal }) => rootTranspositionEnricher.ensure(demand.rootTransposition, { signal }),
+  });
+
+  for (const target of demand.explorer) {
+    add({
+      key: `explorer:${target.position}`,
+      modes: target.modes,
+      nodusWide: target.nodusWide,
+      structuralReading: target.structuralModes.includes(mode) ? target.position : null,
+      run: ({ signal, priority }) => acquireExplorerReading(target.position, { signal, priority }),
+    });
+  }
+
+  for (const target of demand.cloudEval) {
+    add({
+      key: `cloud-eval:${target.position}`,
+      modes: target.modes,
+      nodusWide: target.nodusWide,
+      run: ({ signal, priority }) => lichessEval.get(target.position, { signal, priority }),
+    });
+  }
+
+  for (const target of demand.masters) {
+    add({
+      key: `masters:${target.position}`,
+      modes: target.modes,
+      nodusWide: target.nodusWide,
+      run: ({ signal, priority }) => loadMasters(target.position, { signal, priority }),
+    });
+  }
+
   return Object.freeze([...tasks.values()]);
 }
 
@@ -90,7 +116,7 @@ async function warmLookahead({ center, structure, signal }) {
   await Promise.all(nominations.map((position) => warmExplorerReading(position, { signal })));
 }
 
-controller = new NodusController({
+controller = new CurrentViewController({
   initial: initialRoute,
   canonicalize: canonicalPosition,
   routeLedger,
@@ -111,7 +137,7 @@ controller = new NodusController({
   },
   evidence: ({ center, mode, structure, signal }) => projectVisibleEvidence({ center, mode, structure, signal }),
   rail: composeNodusRail,
-  refine: tasksForCurrentNodus,
+  refine: tasksForCurrentView,
   lookahead: warmLookahead,
   materializeMove,
   presenter,

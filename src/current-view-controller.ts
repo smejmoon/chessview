@@ -1,10 +1,12 @@
 import type { Lens, Orientation } from './lens.ts';
 import type { MaterializeMoveInput, MaterializeMoveResult, Move } from './move-materialization.ts';
-import type { Route, RouteLedger, ViewMode } from './route-ledger.ts';
 import { isObsoleteWork } from './obsolete-work.js';
+import type { Route, RouteLedger, ViewMode } from './route-ledger.ts';
 
 export type { Orientation } from './lens.ts';
 export type LifecycleStatus = 'idle' | 'loading' | 'ready' | 'failed';
+export type RefinementPriority = 'foreground' | 'background';
+export type RefinementPhase = 'working' | 'retry-waiting' | 'satisfied' | 'unavailable' | 'failed';
 
 export type Lifecycle = Readonly<{
   status: LifecycleStatus;
@@ -12,7 +14,7 @@ export type Lifecycle = Readonly<{
   error: string | null;
 }>;
 
-export type NodusSnapshot = Readonly<{
+export type CurrentViewSnapshot = Readonly<{
   center: string;
   mode: ViewMode;
   orientation: Orientation;
@@ -27,7 +29,7 @@ export type RecenterRequest =
   | Readonly<{ target: string; move?: never }>
   | Readonly<{ move: Move; target?: never }>;
 
-export type NodusActions = Readonly<{
+export type CurrentViewActions = Readonly<{
   recenter(request: RecenterRequest): Promise<boolean>;
   setMode(mode: ViewMode): Promise<boolean>;
   flip(): Promise<boolean>;
@@ -55,14 +57,28 @@ export type RailInput = Readonly<{
   signal: AbortSignal;
 }>;
 
+export type RefinementTaskInput = Readonly<{
+  signal: AbortSignal;
+  priority: () => RefinementPriority;
+}>;
+
+export type RefinementOutcome =
+  | Readonly<{ refinement: 'satisfied' }>
+  | Readonly<{ refinement: 'unavailable' }>
+  | Readonly<{ refinement: 'retryable'; retry: PromiseLike<unknown> }>;
+
 export type RefinementTask = Readonly<{
   key: string;
-  run(): unknown | Promise<unknown>;
+  modes?: readonly ViewMode[];
+  nodusWide?: boolean;
+  structuralReading?: string | null;
+  run(input: RefinementTaskInput): unknown | Promise<unknown>;
 }>;
 
 export type RefinementInput = Readonly<{
   center: string;
-  structures: Readonly<Record<ViewMode, unknown | null>>;
+  mode: ViewMode;
+  structure: unknown | null;
   signal: AbortSignal;
 }>;
 
@@ -85,11 +101,11 @@ type Preferences = {
 };
 
 type Presenter = {
-  start(view: NodusSnapshot, actions: NodusActions): unknown | Promise<unknown>;
-  update(view: NodusSnapshot, actions: NodusActions): unknown | Promise<unknown>;
+  start(view: CurrentViewSnapshot, actions: CurrentViewActions): unknown | Promise<unknown>;
+  update(view: CurrentViewSnapshot, actions: CurrentViewActions): unknown | Promise<unknown>;
 };
 
-export type NodusControllerOptions = {
+export type CurrentViewControllerOptions = {
   initial?: {
     center?: unknown;
     view?: unknown;
@@ -110,27 +126,33 @@ export type NodusControllerOptions = {
   log?: Log;
 };
 
-type ProjectionState = {
+type AcceptedViewState = {
+  nodus: string;
+  mode: ViewMode;
   structure: Lifecycle;
   evidence: Lifecycle;
-};
-
-type ControllerState = {
-  center: string;
-  mode: ViewMode;
-  projections: Record<ViewMode, ProjectionState>;
   rail: Lifecycle;
-  settling: boolean;
 };
 
-type Run = {
+type RefinementParticipant = {
+  key: string;
+  task: RefinementTask;
+  modes: readonly ViewMode[];
+  nodusWide: boolean;
+  structuralReading: string | null;
+  phase: RefinementPhase;
+  controller: AbortController | null;
+  retryToken: number;
+};
+
+type RefinementRun = {
   revision: number;
   abortController: AbortController;
   lookaheadController: AbortController | null;
-  structureTails: Record<ViewMode, Promise<boolean>>;
-  evidenceTails: Record<ViewMode, Promise<boolean>>;
+  structureTail: Promise<boolean>;
+  evidenceTail: Promise<boolean>;
   railTail: Promise<boolean>;
-  refinementKeys: Set<string>;
+  participants: Map<string, RefinementParticipant>;
   settlementDirty: boolean;
   settlementDraining: boolean;
   settlementReady: boolean;
@@ -141,12 +163,6 @@ type RestoreRoute = {
   view?: unknown;
   mode?: unknown;
 };
-
-const MODES: readonly ViewMode[] = Object.freeze(['roots', 'lines']);
-
-function otherMode(mode: ViewMode): ViewMode {
-  return mode === 'roots' ? 'lines' : 'roots';
-}
 
 function normalizeMode(mode: unknown): ViewMode {
   return mode === 'roots' ? 'roots' : 'lines';
@@ -209,37 +225,34 @@ function sameValue(left: unknown, right: unknown): boolean {
   return false;
 }
 
-function structureSettling(value: unknown): boolean {
-  return isPlainRecord(value) && value.settling === true;
-}
-
 function lifecycle(status: LifecycleStatus, value: unknown = null, error: unknown = null): Lifecycle {
   return Object.freeze({ status, value: immutable(value), error: errorMessage(error) });
 }
 
-function projection(): ProjectionState {
-  return {
-    structure: lifecycle('idle'),
-    evidence: lifecycle('idle'),
-  };
+function readingFrontier(value: unknown): readonly string[] {
+  if (!isPlainRecord(value) || !Array.isArray(value.readingFrontier)) return Object.freeze([]);
+  return Object.freeze(value.readingFrontier.filter((position): position is string => typeof position === 'string'));
 }
 
-function projections(): Record<ViewMode, ProjectionState> {
-  return {
-    roots: projection(),
-    lines: projection(),
-  };
+function refinementOutcome(value: unknown): RefinementOutcome | null {
+  if (!isPlainRecord(value)) return null;
+  if (value.refinement === 'satisfied') return value as RefinementOutcome;
+  if (value.refinement === 'unavailable') return value as RefinementOutcome;
+  if (value.refinement === 'retryable' && value.retry && typeof (value.retry as PromiseLike<unknown>).then === 'function') {
+    return value as RefinementOutcome;
+  }
+  return null;
 }
 
-function tails(): Record<ViewMode, Promise<boolean>> {
-  return {
-    roots: Promise.resolve(false),
-    lines: Promise.resolve(false),
-  };
+export const refinementSatisfied: RefinementOutcome = Object.freeze({ refinement: 'satisfied' });
+export const refinementUnavailable: RefinementOutcome = Object.freeze({ refinement: 'unavailable' });
+
+export function refinementRetryable(retry: PromiseLike<unknown>): RefinementOutcome {
+  return Object.freeze({ refinement: 'retryable', retry });
 }
 
-export class NodusController {
-  #actions: NodusActions;
+export class CurrentViewController {
+  #actions: CurrentViewActions;
   #canonicalize: (value: unknown) => string;
   #disposed = false;
   #evidence: Contributor<EvidenceInput> | null;
@@ -253,8 +266,8 @@ export class NodusController {
   #refine: RefinementPlanner | null;
   #revision = 0;
   #routeLedger: Partial<RouteLedger>;
-  #run: Run | null = null;
-  #state: ControllerState;
+  #run: RefinementRun | null = null;
+  #state: AcceptedViewState;
   #stopRouteRestore: (() => void) | null = null;
   #structure: Contributor<StructureInput>;
 
@@ -272,11 +285,11 @@ export class NodusController {
     materializeMove = null,
     presenter,
     log = () => {},
-  }: NodusControllerOptions) {
-    if (typeof canonicalize !== 'function') throw new TypeError('NodusController requires canonicalize');
-    if (typeof structure !== 'function') throw new TypeError('NodusController requires structure');
+  }: CurrentViewControllerOptions) {
+    if (typeof canonicalize !== 'function') throw new TypeError('CurrentViewController requires canonicalize');
+    if (typeof structure !== 'function') throw new TypeError('CurrentViewController requires structure');
     if (typeof presenter?.start !== 'function' || typeof presenter?.update !== 'function') {
-      throw new TypeError('NodusController requires presenter.start and presenter.update');
+      throw new TypeError('CurrentViewController requires presenter.start and presenter.update');
     }
     this.#canonicalize = canonicalize;
     this.#routeLedger = routeLedger ?? {};
@@ -291,11 +304,11 @@ export class NodusController {
     this.#presenter = presenter;
     this.#log = log;
     this.#state = {
-      center: canonicalize(initial?.center),
+      nodus: canonicalize(initial?.center),
       mode: normalizeMode(initial?.mode ?? initial?.view),
-      projections: projections(),
+      structure: lifecycle('idle'),
+      evidence: lifecycle('idle'),
       rail: lifecycle('idle'),
-      settling: false,
     };
     this.#actions = Object.freeze({
       recenter: (request: RecenterRequest) => this.recenter(request),
@@ -308,17 +321,16 @@ export class NodusController {
     });
   }
 
-  get snapshot(): NodusSnapshot {
-    const active = this.#state.projections[this.#state.mode];
+  get snapshot(): CurrentViewSnapshot {
     return Object.freeze({
-      center: this.#state.center,
+      center: this.#state.nodus,
       mode: this.#state.mode,
       orientation: this.#lens.orientation(),
       navigation: Object.freeze({ canGoBack: this.#routeLedger.canGoBack?.() ?? false }),
-      structure: active.structure,
-      evidence: active.evidence,
+      structure: this.#state.structure,
+      evidence: this.#state.evidence,
       rail: this.#state.rail,
-      settling: this.#state.settling,
+      settling: this.#structurallySettling(),
     });
   }
 
@@ -328,7 +340,7 @@ export class NodusController {
       this.#stopRouteRestore = this.#routeLedger.onRestore((route: Route) => { void this.restore(route); }) ?? null;
     }
     this.#routeLedger.replace?.(this.#route());
-    await this.#startView('start');
+    await this.#startRun('start');
     return true;
   }
 
@@ -342,7 +354,7 @@ export class NodusController {
     if (typeof this.#materializeMove !== 'function') return false;
 
     const run = this.#run;
-    const source = this.#state.center;
+    const source = this.#state.nodus;
     const requestedMove = candidate?.move as Partial<Move> | undefined;
     const move = Object.freeze({
       from: requestedMove?.from,
@@ -354,14 +366,14 @@ export class NodusController {
     try {
       result = await this.#materializeMove(Object.freeze({ source, move }));
     } catch (error: unknown) {
-      if (this.#isCurrent(run) && this.#state.center === source) {
+      if (this.#isCurrent(run) && this.#state.nodus === source) {
         this.#log('move materialization failed', { source, move, error: errorMessage(error) });
         await this.#presentCurrent('update');
       }
       return false;
     }
 
-    if (!this.#isCurrent(run) || this.#state.center !== source) return false;
+    if (!this.#isCurrent(run) || this.#state.nodus !== source) return false;
     if (!result?.target) {
       await this.#presentCurrent('update');
       return false;
@@ -371,10 +383,10 @@ export class NodusController {
 
   async restore(route: RestoreRoute = {}): Promise<boolean> {
     if (this.#disposed) return false;
-    this.#state.center = this.#canonicalize(route.center ?? this.#state.center);
+    this.#state.nodus = this.#canonicalize(route.center ?? this.#state.nodus);
     this.#state.mode = normalizeMode(route.view ?? route.mode ?? this.#state.mode);
     this.#log('history restored', this.#route());
-    await this.#startView('restore');
+    await this.#startRun('restore');
     return true;
   }
 
@@ -382,15 +394,20 @@ export class NodusController {
     if (this.#disposed) return false;
     const next = normalizeMode(mode);
     if (next === this.#state.mode) return false;
+    const run = this.#run;
+    if (!this.#isCurrent(run)) return false;
+
+    run.lookaheadController?.abort();
+    run.lookaheadController = null;
     this.#state.mode = next;
-    this.#syncSettlingFromActiveStructure();
+    this.#state.structure = lifecycle('loading');
+    this.#state.evidence = lifecycle('idle');
     this.#preferences.setView?.(next);
     this.#routeLedger.replace?.(this.#route());
-    this.#log('view mode changed', { mode: next, center: this.#state.center });
+    this.#log('view mode changed', { mode: next, center: this.#state.nodus });
     await this.#presentCurrent('update');
-    const run = this.#run;
-    if (this.#isCurrent(run)) this.#refreshLookahead(run, next);
-    return true;
+    await this.#settleProjection(run, { preserveEstablished: false, publish: true });
+    return this.#isCurrent(run);
   }
 
   async flip(): Promise<boolean> {
@@ -407,7 +424,7 @@ export class NodusController {
 
   async refresh(): Promise<boolean> {
     if (this.#disposed) return false;
-    await this.#startView('refresh');
+    await this.#startRun('refresh');
     return true;
   }
 
@@ -415,19 +432,8 @@ export class NodusController {
     if (this.#disposed) return false;
     const run = this.#run;
     if (!this.#isCurrent(run)) return false;
-    const activeMode = this.#state.mode;
-
-    this.#state.settling = true;
-    await this.#presentCurrent('update');
-
-    await this.#settleProjection(run, activeMode);
-    if (!this.#isCurrent(run)) return false;
-
-    this.#syncSettlingFromActiveStructure();
-    await this.#presentCurrent('update');
-
-    void this.#settleProjection(run, otherMode(activeMode));
-    return true;
+    await this.#settleProjection(run, { preserveEstablished: true, publish: true });
+    return this.#isCurrent(run);
   }
 
   async redraw(): Promise<boolean> {
@@ -440,16 +446,15 @@ export class NodusController {
     this.#disposed = true;
     this.#stopRouteRestore?.();
     this.#stopRouteRestore = null;
-    this.#run?.lookaheadController?.abort();
-    this.#run?.abortController.abort();
+    this.#disposeRun(this.#run);
     this.#run = null;
   }
 
   #route(): Route {
-    return { center: this.#state.center, view: this.#state.mode };
+    return { center: this.#state.nodus, view: this.#state.mode };
   }
 
-  #isCurrent(run: Run | null): run is Run {
+  #isCurrent(run: RefinementRun | null): run is RefinementRun {
     return Boolean(
       run
       && !this.#disposed
@@ -459,23 +464,27 @@ export class NodusController {
     );
   }
 
-  #isActiveMode(mode: ViewMode): boolean {
-    return this.#state.mode === mode;
-  }
-
-  #syncSettlingFromActiveStructure(): void {
-    const structure = this.#state.projections[this.#state.mode].structure;
-    this.#state.settling = structure.status === 'ready' && structureSettling(structure.value);
+  #structurallySettling(): boolean {
+    if (this.#state.structure.status !== 'ready') return false;
+    const frontier = readingFrontier(this.#state.structure.value);
+    if (!frontier.length) return false;
+    const run = this.#run;
+    for (const position of frontier) {
+      const participant = run && [...run.participants.values()]
+        .find((candidate) => candidate.structuralReading === position);
+      if (!participant || participant.phase !== 'unavailable') return true;
+    }
+    return false;
   }
 
   async #commitRecenter(position: unknown): Promise<boolean> {
     const next = this.#canonicalize(position);
-    if (next === this.#state.center) return false;
-    const previous = this.#state.center;
-    this.#state.center = next;
+    if (next === this.#state.nodus) return false;
+    const previous = this.#state.nodus;
+    this.#state.nodus = next;
     this.#routeLedger.push?.(this.#route());
     this.#log('recenter', { from: previous, to: next, mode: this.#state.mode });
-    await this.#startView('recenter');
+    await this.#startRun('recenter');
     return true;
   }
 
@@ -485,18 +494,25 @@ export class NodusController {
     return true;
   }
 
-  async #startView(reason: 'start' | 'restore' | 'recenter' | 'refresh'): Promise<void> {
-    this.#run?.lookaheadController?.abort();
-    this.#run?.abortController.abort();
+  #disposeRun(run: RefinementRun | null): void {
+    if (!run) return;
+    run.lookaheadController?.abort();
+    run.abortController.abort();
+    for (const participant of run.participants.values()) participant.controller?.abort();
+    run.participants.clear();
+  }
+
+  async #startRun(reason: 'start' | 'restore' | 'recenter' | 'refresh'): Promise<void> {
+    this.#disposeRun(this.#run);
     this.#revision += 1;
-    const run: Run = {
+    const run: RefinementRun = {
       revision: this.#revision,
       abortController: new AbortController(),
       lookaheadController: null,
-      structureTails: tails(),
-      evidenceTails: tails(),
+      structureTail: Promise.resolve(false),
+      evidenceTail: Promise.resolve(false),
       railTail: Promise.resolve(false),
-      refinementKeys: new Set(),
+      participants: new Map(),
       settlementDirty: false,
       settlementDraining: false,
       settlementReady: false,
@@ -505,71 +521,52 @@ export class NodusController {
 
     const preserveEstablished = reason === 'refresh';
     if (!preserveEstablished) {
-      this.#state.projections = {
-        roots: { structure: lifecycle('loading'), evidence: lifecycle('idle') },
-        lines: { structure: lifecycle('loading'), evidence: lifecycle('idle') },
-      };
+      this.#state.structure = lifecycle('loading');
+      this.#state.evidence = lifecycle('idle');
       this.#state.rail = typeof this.#rail === 'function' ? lifecycle('loading') : lifecycle('idle');
     }
-    this.#state.settling = preserveEstablished;
-    this.#log('Nodus view started', { revision: run.revision, center: this.#state.center, mode: this.#state.mode, reason });
+    this.#log('Current View refinement run started', {
+      revision: run.revision,
+      center: this.#state.nodus,
+      mode: this.#state.mode,
+      reason,
+    });
     await this.#presentCurrent('start');
 
     if (typeof this.#rail === 'function') {
       void this.#queueRail(run, { preserveEstablished, publish: true });
     }
 
-    const activeMode = this.#state.mode;
-    const activeReady = await this.#queueStructure(run, activeMode, {
-      preserveEstablished,
-      publish: true,
-    });
+    const ready = await this.#queueStructure(run, { preserveEstablished, publish: true });
     if (!this.#isCurrent(run)) return;
 
-    if (activeReady && typeof this.#evidence === 'function') {
-      void this.#queueEvidence(run, activeMode, { preserveEstablished, publish: true });
+    if (ready && typeof this.#evidence === 'function') {
+      void this.#queueEvidence(run, { preserveEstablished, publish: true });
     }
 
     await this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
-    this.#syncSettlingFromActiveStructure();
     run.settlementReady = true;
     await this.#presentCurrent('update');
-    this.#refreshLookahead(run, activeMode);
-
-    void this.#prepareProjection(run, otherMode(activeMode), preserveEstablished);
+    this.#refreshLookahead(run);
     if (run.settlementDirty) this.#queueSettlement(run);
   }
 
-  async #prepareProjection(run: Run, mode: ViewMode, preserveEstablished: boolean): Promise<void> {
-    if (!this.#isCurrent(run)) return;
-    const before = this.snapshot;
-    const ready = await this.#queueStructure(run, mode, { preserveEstablished, publish: true });
-    if (!this.#isCurrent(run)) return;
-    if (ready && typeof this.#evidence === 'function') {
-      void this.#queueEvidence(run, mode, { preserveEstablished, publish: true });
-    }
-    await this.#planRefinements(run);
-    if (!this.#isCurrent(run)) return;
-    if (this.#isActiveMode(mode)) this.#refreshLookahead(run, mode);
-    const after = this.snapshot;
-    if (!sameValue(before, after)) await this.#presentCurrent('update');
-  }
-
-  #refreshLookahead(run: Run, mode: ViewMode): void {
+  #refreshLookahead(run: RefinementRun): void {
     run.lookaheadController?.abort();
     run.lookaheadController = null;
     const lookahead = this.#lookahead;
-    if (!this.#isCurrent(run) || !this.#isActiveMode(mode) || typeof lookahead !== 'function') return;
-    const structure = this.#state.projections[mode].structure;
-    if (structure.status !== 'ready') return;
+    if (!this.#isCurrent(run) || typeof lookahead !== 'function') return;
+    if (this.#state.structure.status !== 'ready') return;
 
+    const center = this.#state.nodus;
+    const mode = this.#state.mode;
     const controller = new AbortController();
     run.lookaheadController = controller;
     void Promise.resolve(lookahead(Object.freeze({
-      center: this.#state.center,
+      center,
       mode,
-      structure: structure.value,
+      structure: this.#state.structure.value,
       signal: controller.signal,
     }))).catch((error: unknown) => {
       if (controller.signal.aborted || isObsoleteWork(error, controller.signal) || !this.#isCurrent(run)) return;
@@ -578,31 +575,29 @@ export class NodusController {
   }
 
   #queueStructure(
-    run: Run,
-    mode: ViewMode,
+    run: RefinementRun,
     options: { preserveEstablished?: boolean; publish?: boolean } = {},
   ): Promise<boolean> {
-    const tail = run.structureTails[mode]
+    const tail = run.structureTail
       .catch(() => false)
-      .then(() => this.#composeMode(run, mode, options));
-    run.structureTails[mode] = tail;
+      .then(() => this.#composeCurrent(run, options));
+    run.structureTail = tail;
     return tail;
   }
 
   #queueEvidence(
-    run: Run,
-    mode: ViewMode,
+    run: RefinementRun,
     options: { preserveEstablished?: boolean; publish?: boolean } = {},
   ): Promise<boolean> {
-    const tail = run.evidenceTails[mode]
+    const tail = run.evidenceTail
       .catch(() => false)
-      .then(() => this.#deriveEvidence(run, mode, options));
-    run.evidenceTails[mode] = tail;
+      .then(() => this.#deriveEvidence(run, options));
+    run.evidenceTail = tail;
     return tail;
   }
 
   #queueRail(
-    run: Run,
+    run: RefinementRun,
     options: { preserveEstablished?: boolean; publish?: boolean } = {},
   ): Promise<boolean> {
     const tail = run.railTail
@@ -612,157 +607,268 @@ export class NodusController {
     return tail;
   }
 
-  async #composeMode(
-    run: Run,
-    mode: ViewMode,
+  async #composeCurrent(
+    run: RefinementRun,
     { preserveEstablished = false, publish = true }: { preserveEstablished?: boolean; publish?: boolean } = {},
   ): Promise<boolean> {
     if (!this.#isCurrent(run)) return false;
-    const projectionState = this.#state.projections[mode];
-    const previous = projectionState.structure;
+    const center = this.#state.nodus;
+    const mode = this.#state.mode;
+    const previous = this.#state.structure;
     let value: unknown;
     try {
-      value = await this.#structure(Object.freeze({ center: this.#state.center, mode, signal: run.abortController.signal }));
+      value = await this.#structure(Object.freeze({ center, mode, signal: run.abortController.signal }));
     } catch (structureError: unknown) {
       if (!this.#isCurrent(run) || isObsoleteWork(structureError, run.abortController.signal)) return false;
+      if (this.#state.nodus !== center || this.#state.mode !== mode) return false;
       if (preserveEstablished && previous.status === 'ready') {
-        this.#log('Nodus structure refinement failed; keeping established structure', {
+        this.#log('Current View structure refinement failed; keeping established structure', {
           mode,
           error: errorMessage(structureError),
         });
         return false;
       }
-      projectionState.structure = lifecycle('failed', null, structureError);
-      projectionState.evidence = lifecycle('idle');
-      if (this.#isActiveMode(mode)) this.#syncSettlingFromActiveStructure();
-      this.#log('Nodus structure failed', { mode, error: errorMessage(structureError) });
-      if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
+      this.#state.structure = lifecycle('failed', null, structureError);
+      this.#state.evidence = lifecycle('idle');
+      this.#log('Current View structure failed', { mode, error: errorMessage(structureError) });
+      if (publish) await this.#presentCurrent('update');
       return false;
     }
-    if (!this.#isCurrent(run)) return false;
-    projectionState.structure = lifecycle('ready', value);
-    if (this.#isActiveMode(mode)) this.#syncSettlingFromActiveStructure();
-    if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
+    if (!this.#isCurrent(run) || this.#state.nodus !== center || this.#state.mode !== mode) return false;
+    this.#state.structure = lifecycle('ready', value);
+    if (publish) await this.#presentCurrent('update');
     return true;
   }
 
   async #deriveEvidence(
-    run: Run,
-    mode: ViewMode,
+    run: RefinementRun,
     { preserveEstablished = false, publish = true }: { preserveEstablished?: boolean; publish?: boolean } = {},
   ): Promise<boolean> {
     if (!this.#isCurrent(run) || typeof this.#evidence !== 'function') return false;
-    const projectionState = this.#state.projections[mode];
-    if (projectionState.structure.status !== 'ready') return false;
-    const previous = projectionState.evidence;
+    if (this.#state.structure.status !== 'ready') return false;
+    const center = this.#state.nodus;
+    const mode = this.#state.mode;
+    const structure = this.#state.structure.value;
+    const previous = this.#state.evidence;
     try {
       const value = await this.#evidence(Object.freeze({
-        center: this.#state.center,
+        center,
         mode,
-        structure: projectionState.structure.value,
+        structure,
         signal: run.abortController.signal,
       }));
-      if (!this.#isCurrent(run)) return false;
-      projectionState.evidence = lifecycle('ready', value);
-      if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
+      if (!this.#isCurrent(run) || this.#state.nodus !== center || this.#state.mode !== mode) return false;
+      this.#state.evidence = lifecycle('ready', value);
+      if (publish) await this.#presentCurrent('update');
       return true;
     } catch (error: unknown) {
       if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return false;
+      if (this.#state.nodus !== center || this.#state.mode !== mode) return false;
       if (preserveEstablished && previous.status === 'ready') {
-        this.#log('Nodus evidence refinement failed; keeping established evidence', {
+        this.#log('Current View evidence refinement failed; keeping established evidence', {
           mode,
           error: errorMessage(error),
         });
         return false;
       }
-      projectionState.evidence = lifecycle('failed', null, error);
-      this.#log('Nodus evidence failed', { mode, error: errorMessage(error) });
-      if (publish && this.#isActiveMode(mode)) await this.#presentCurrent('update');
+      this.#state.evidence = lifecycle('failed', null, error);
+      this.#log('Current View evidence failed', { mode, error: errorMessage(error) });
+      if (publish) await this.#presentCurrent('update');
       return false;
     }
   }
 
   async #deriveRail(
-    run: Run,
+    run: RefinementRun,
     { preserveEstablished = false, publish = true }: { preserveEstablished?: boolean; publish?: boolean } = {},
   ): Promise<boolean> {
     if (!this.#isCurrent(run) || typeof this.#rail !== 'function') return false;
+    const center = this.#state.nodus;
     const previous = this.#state.rail;
     try {
-      const value = await this.#rail(Object.freeze({
-        center: this.#state.center,
-        signal: run.abortController.signal,
-      }));
-      if (!this.#isCurrent(run)) return false;
+      const value = await this.#rail(Object.freeze({ center, signal: run.abortController.signal }));
+      if (!this.#isCurrent(run) || this.#state.nodus !== center) return false;
       this.#state.rail = lifecycle('ready', value);
       if (publish) await this.#presentCurrent('update');
       return true;
     } catch (error: unknown) {
       if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return false;
+      if (this.#state.nodus !== center) return false;
       if (preserveEstablished && previous.status === 'ready') {
-        this.#log('Nodus Rail refinement failed; keeping established Rail', error);
+        this.#log('Current View Rail refinement failed; keeping established Rail', error);
         return false;
       }
       this.#state.rail = lifecycle('failed', null, error);
-      this.#log('Nodus Rail failed', error);
+      this.#log('Current View Rail failed', error);
       if (publish) await this.#presentCurrent('update');
       return false;
     }
   }
 
-  async #planRefinements(run: Run): Promise<void> {
-    if (!this.#isCurrent(run) || typeof this.#refine !== 'function') return;
+  async #planRefinements(run: RefinementRun): Promise<void> {
+    if (!this.#isCurrent(run)) return;
+    if (typeof this.#refine !== 'function') {
+      this.#reconcileParticipants(run, []);
+      return;
+    }
     let tasks: readonly RefinementTask[];
     try {
       tasks = await this.#refine(Object.freeze({
-        center: this.#state.center,
-        structures: Object.freeze({
-          roots: this.#state.projections.roots.structure.status === 'ready'
-            ? this.#state.projections.roots.structure.value
-            : null,
-          lines: this.#state.projections.lines.structure.status === 'ready'
-            ? this.#state.projections.lines.structure.value
-            : null,
-        }),
+        center: this.#state.nodus,
+        mode: this.#state.mode,
+        structure: this.#state.structure.status === 'ready' ? this.#state.structure.value : null,
         signal: run.abortController.signal,
       }));
     } catch (error: unknown) {
       if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return;
-      this.#log('Nodus refinement planning failed', { error: errorMessage(error) });
+      this.#log('Current View refinement planning failed', { error: errorMessage(error) });
       return;
     }
     if (!this.#isCurrent(run)) return;
+    this.#reconcileParticipants(run, tasks ?? []);
+  }
 
-    for (const task of tasks ?? []) {
+  #reconcileParticipants(run: RefinementRun, tasks: readonly RefinementTask[]): void {
+    if (!this.#isCurrent(run)) return;
+    const planned = new Map<string, RefinementTask>();
+    for (const task of tasks) {
       if (!task || typeof task.key !== 'string' || !task.key || typeof task.run !== 'function') continue;
-      if (run.refinementKeys.has(task.key)) continue;
-      run.refinementKeys.add(task.key);
+      if (!planned.has(task.key)) planned.set(task.key, task);
+    }
 
-      void Promise.resolve()
-        .then(() => task.run())
-        .catch((error: unknown) => {
-          if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return;
-          this.#log('Nodus refinement unavailable', { key: task.key, error: errorMessage(error) });
-        })
-        .finally(() => {
-          if (!this.#isCurrent(run)) return;
-          this.#queueSettlement(run);
-        });
+    for (const [key, participant] of run.participants) {
+      if (planned.has(key)) continue;
+      participant.retryToken += 1;
+      participant.controller?.abort();
+      run.participants.delete(key);
+    }
+
+    for (const [key, task] of planned) {
+      const modes = Object.freeze([...(task.modes ?? [])]);
+      const structuralReading = typeof task.structuralReading === 'string' ? task.structuralReading : null;
+      const existing = run.participants.get(key);
+      if (!existing) {
+        const participant: RefinementParticipant = {
+          key,
+          task,
+          modes,
+          nodusWide: task.nodusWide === true,
+          structuralReading,
+          phase: 'working',
+          controller: null,
+          retryToken: 0,
+        };
+        run.participants.set(key, participant);
+        this.#startParticipant(run, participant);
+        continue;
+      }
+
+      const priorStructuralReading = existing.structuralReading;
+      existing.task = task;
+      existing.modes = modes;
+      existing.nodusWide = task.nodusWide === true;
+      existing.structuralReading = structuralReading;
+
+      if (existing.phase === 'unavailable' && priorStructuralReading == null && structuralReading != null) {
+        existing.phase = 'working';
+        this.#startParticipant(run, existing);
+      }
     }
   }
 
-  #queueSettlement(run: Run): void {
+  #participantPriority(participant: RefinementParticipant): RefinementPriority {
+    return participant.nodusWide || participant.modes.includes(this.#state.mode) ? 'foreground' : 'background';
+  }
+
+  #startParticipant(run: RefinementRun, participant: RefinementParticipant): void {
+    if (!this.#isCurrent(run) || run.participants.get(participant.key) !== participant) return;
+    participant.controller?.abort();
+    const controller = new AbortController();
+    participant.controller = controller;
+    participant.phase = 'working';
+    const attempt = participant.retryToken + 1;
+    participant.retryToken = attempt;
+
+    void Promise.resolve()
+      .then(() => participant.task.run(Object.freeze({
+        signal: controller.signal,
+        priority: () => this.#participantPriority(participant),
+      })))
+      .then((value) => {
+        if (!this.#participantCurrent(run, participant, controller, attempt)) return;
+        participant.controller = null;
+        const outcome = refinementOutcome(value);
+        if (outcome?.refinement === 'retryable') {
+          participant.phase = 'retry-waiting';
+          this.#waitForRetry(run, participant, attempt, outcome.retry);
+          this.#queueSettlement(run);
+          return;
+        }
+        participant.phase = outcome?.refinement === 'unavailable' ? 'unavailable' : 'satisfied';
+        this.#queueSettlement(run);
+      })
+      .catch((error: unknown) => {
+        if (!this.#participantCurrent(run, participant, controller, attempt)) return;
+        if (controller.signal.aborted || isObsoleteWork(error, controller.signal)) return;
+        participant.controller = null;
+        participant.phase = 'failed';
+        this.#log('Current View refinement failed', { key: participant.key, error: errorMessage(error) });
+        this.#queueSettlement(run);
+      });
+  }
+
+  #participantCurrent(
+    run: RefinementRun,
+    participant: RefinementParticipant,
+    controller: AbortController,
+    attempt: number,
+  ): boolean {
+    return Boolean(
+      this.#isCurrent(run)
+      && run.participants.get(participant.key) === participant
+      && participant.controller === controller
+      && participant.retryToken === attempt,
+    );
+  }
+
+  #waitForRetry(
+    run: RefinementRun,
+    participant: RefinementParticipant,
+    attempt: number,
+    retry: PromiseLike<unknown>,
+  ): void {
+    void Promise.resolve(retry)
+      .then(() => {
+        if (!this.#isCurrent(run)) return;
+        if (run.participants.get(participant.key) !== participant) return;
+        if (participant.phase !== 'retry-waiting' || participant.retryToken !== attempt) return;
+        this.#startParticipant(run, participant);
+      })
+      .catch((error: unknown) => {
+        if (!this.#isCurrent(run)) return;
+        if (run.participants.get(participant.key) !== participant) return;
+        if (participant.phase !== 'retry-waiting' || participant.retryToken !== attempt) return;
+        participant.phase = 'failed';
+        this.#log('Current View refinement retry gate failed', {
+          key: participant.key,
+          error: errorMessage(error),
+        });
+        this.#queueSettlement(run);
+      });
+  }
+
+  #queueSettlement(run: RefinementRun): void {
     if (!this.#isCurrent(run)) return;
     run.settlementDirty = true;
     if (!run.settlementReady || run.settlementDraining) return;
     run.settlementDraining = true;
     void this.#drainSettlement(run).catch((error: unknown) => {
       if (!this.#isCurrent(run)) return;
-      this.#log('Nodus settlement failed', { error: errorMessage(error) });
+      this.#log('Current View settlement failed', { error: errorMessage(error) });
     });
   }
 
-  async #drainSettlement(run: Run): Promise<void> {
+  async #drainSettlement(run: RefinementRun): Promise<void> {
     try {
       await Promise.resolve();
       while (this.#isCurrent(run) && run.settlementReady && run.settlementDirty) {
@@ -777,68 +883,48 @@ export class NodusController {
     }
   }
 
-  async #settle(run: Run): Promise<void> {
+  async #settle(run: RefinementRun): Promise<void> {
     if (!this.#isCurrent(run)) return;
-    const activeMode = this.#state.mode;
     const before = this.snapshot;
     const beforeStructure = before.structure.value;
 
-    await this.#queueStructure(run, activeMode, {
-      preserveEstablished: true,
-      publish: false,
-    });
+    await this.#queueStructure(run, { preserveEstablished: true, publish: false });
     if (!this.#isCurrent(run)) return;
 
-    const projectionState = this.#state.projections[activeMode];
     const refinements: Promise<boolean>[] = [];
-    if (projectionState.structure.status === 'ready' && typeof this.#evidence === 'function') {
-      refinements.push(this.#queueEvidence(run, activeMode, {
-        preserveEstablished: true,
-        publish: false,
-      }));
+    if (this.#state.structure.status === 'ready' && typeof this.#evidence === 'function') {
+      refinements.push(this.#queueEvidence(run, { preserveEstablished: true, publish: false }));
     }
     if (typeof this.#rail === 'function') {
-      refinements.push(this.#queueRail(run, {
-        preserveEstablished: true,
-        publish: false,
-      }));
+      refinements.push(this.#queueRail(run, { preserveEstablished: true, publish: false }));
     }
     await Promise.all(refinements);
     if (!this.#isCurrent(run)) return;
 
     await this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
-    this.#syncSettlingFromActiveStructure();
 
     const after = this.snapshot;
-    if (!sameValue(beforeStructure, after.structure.value)) this.#refreshLookahead(run, this.#state.mode);
+    if (!sameValue(beforeStructure, after.structure.value)) this.#refreshLookahead(run);
     if (!sameValue(before, after)) await this.#presentCurrent('update');
-
-    void this.#settleProjection(run, otherMode(activeMode));
   }
 
-  async #settleProjection(run: Run, mode: ViewMode): Promise<void> {
+  async #settleProjection(
+    run: RefinementRun,
+    { preserveEstablished, publish }: { preserveEstablished: boolean; publish: boolean },
+  ): Promise<void> {
     if (!this.#isCurrent(run)) return;
     const before = this.snapshot;
-    const ready = await this.#queueStructure(run, mode, {
-      preserveEstablished: true,
-      publish: false,
-    });
+    const ready = await this.#queueStructure(run, { preserveEstablished, publish: false });
     if (!this.#isCurrent(run)) return;
     if (ready && typeof this.#evidence === 'function') {
-      await this.#queueEvidence(run, mode, {
-        preserveEstablished: true,
-        publish: false,
-      });
+      await this.#queueEvidence(run, { preserveEstablished, publish: false });
     }
     if (!this.#isCurrent(run)) return;
     await this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
-    if (this.#isActiveMode(mode)) {
-      this.#syncSettlingFromActiveStructure();
-      this.#refreshLookahead(run, mode);
-    }
+    this.#refreshLookahead(run);
     const after = this.snapshot;
-    if (!sameValue(before, after)) await this.#presentCurrent('update');
+    if (publish && !sameValue(before, after)) await this.#presentCurrent('update');
   }
 }

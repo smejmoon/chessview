@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createLens } from '../src/lens.js';
-import { NodusController } from '../src/nodus-controller.js';
+import { CurrentViewController } from '../src/current-view-controller.js';
 
 function fixture() {
   let orientation = 'black';
@@ -63,10 +63,10 @@ test('Lens derives presentation geometry and composition constraints from the re
   });
 });
 
-test('NodusController publishes Lens orientation without owning a second orientation state', async () => {
+test('CurrentViewController publishes Lens orientation without owning a second orientation state', async () => {
   const { lens } = fixture();
   const publications = [];
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: String,
     lens,

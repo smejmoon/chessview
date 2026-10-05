@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { NodusController } from '../src/nodus-controller.js';
+import { CurrentViewController } from '../src/current-view-controller.js';
 
 function deferred() {
   let resolve;
@@ -19,17 +19,17 @@ async function flush(turns = 24) {
 test('same-run recomposition can admit structural work after presentation constraints change', async () => {
   const reading = deferred();
   const publications = [];
-  const compositions = { roots: 0, lines: 0 };
+  let compositions = 0;
   let roomy = false;
   let incorporated = false;
   let starts = 0;
 
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
     structure: async ({ center, mode }) => {
-      compositions[mode] += 1;
-      const readingFrontier = mode === 'lines' && roomy && !incorporated ? ['B'] : [];
+      compositions += 1;
+      const readingFrontier = roomy && !incorporated ? ['B'] : [];
       return {
         composition: {
           center,
@@ -37,13 +37,13 @@ test('same-run recomposition can admit structural work after presentation constr
           nodes: roomy ? [{ key: 'B' }] : [],
         },
         readingFrontier,
-        settling: readingFrontier.length > 0,
         marker: `${mode}:${roomy}:${incorporated}`,
       };
     },
-    refine: ({ structures }) => structures.lines?.readingFrontier?.includes('B')
+    refine: ({ structure }) => structure?.readingFrontier?.includes('B')
       ? [{
           key: 'explorer:B',
+          structuralReading: 'B',
           run: async () => {
             await reading.promise;
             incorporated = true;
@@ -67,7 +67,7 @@ test('same-run recomposition can admit structural work after presentation constr
   assert.equal(starts, 1);
   assert.equal(controller.snapshot.structure.value.marker, 'lines:false:false');
   assert.equal(controller.snapshot.settling, false);
-  const before = { ...compositions };
+  const before = compositions;
   const publishedBefore = publications.length;
 
   roomy = true;
@@ -75,8 +75,7 @@ test('same-run recomposition can admit structural work after presentation constr
   await flush();
 
   assert.equal(starts, 1);
-  assert.ok(compositions.lines > before.lines);
-  assert.ok(compositions.roots > before.roots);
+  assert.ok(compositions > before);
   assert.equal(controller.snapshot.structure.value.marker, 'lines:true:false');
   assert.equal(controller.snapshot.settling, true);
   assert.ok(publications.slice(publishedBefore).some(({ settling }) => settling === true));
@@ -89,30 +88,29 @@ test('same-run recomposition can admit structural work after presentation constr
   assert.equal(controller.snapshot.settling, false);
 });
 
-test('refinement completion after structure derivation keeps the intermediate replacement Settling and drains another pass', async () => {
+test('refinement completion during evidence derivation keeps an intermediate replacement Settling and drains another pass', async () => {
   const first = deferred();
   const second = deferred();
   const evidenceGate = deferred();
   const evidenceEntered = deferred();
   const publications = [];
   let fact = 0;
-  let lineCompositions = 0;
+  let compositions = 0;
 
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
     structure: async ({ center, mode }) => {
-      if (mode !== 'lines') return { composition: { center, direction: mode }, marker: `${mode}:${fact}`, settling: false };
-      lineCompositions += 1;
+      compositions += 1;
       const observed = fact;
       return {
         composition: { center, direction: mode },
+        readingFrontier: observed < 2 ? ['B'] : [],
         marker: `lines:${observed}`,
-        settling: observed < 2,
       };
     },
-    evidence: async ({ mode, structure }) => {
-      if (mode === 'lines' && structure.marker === 'lines:1') {
+    evidence: async ({ structure }) => {
+      if (structure.marker === 'lines:1') {
         evidenceEntered.resolve();
         await evidenceGate.promise;
       }
@@ -154,7 +152,7 @@ test('refinement completion after structure derivation keeps the intermediate re
 
   assert.equal(controller.snapshot.structure.value.marker, 'lines:2');
   assert.equal(controller.snapshot.settling, false);
-  assert.ok(lineCompositions >= 3);
+  assert.ok(compositions >= 3);
 
   const intermediate = publications.filter(({ structure }) => structure.value?.marker === 'lines:1');
   assert.ok(intermediate.length > 0);
@@ -162,20 +160,20 @@ test('refinement completion after structure derivation keeps the intermediate re
   assert.ok(publications.some(({ structure, settling }) => structure.value?.marker === 'lines:2' && settling === false));
 });
 
-test('accepted unchanged recomposition discharges completion without redundant publication', async () => {
+test('accepted unchanged recomposition discharges supplementary completion without redundant publication', async () => {
   const work = deferred();
   const publications = [];
-  let lineCompositions = 0;
+  let compositions = 0;
 
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
     structure: async ({ center, mode }) => {
-      if (mode === 'lines') lineCompositions += 1;
+      compositions += 1;
       return {
         composition: { center, direction: mode },
+        readingFrontier: [],
         marker: `${mode}:stable`,
-        settling: false,
       };
     },
     refine: () => [{ key: 'supplementary', run: () => work.promise }],
@@ -188,12 +186,12 @@ test('accepted unchanged recomposition discharges completion without redundant p
   await controller.start();
   await flush(16);
   const publishedBefore = publications.length;
-  const composedBefore = lineCompositions;
+  const composedBefore = compositions;
 
   work.resolve();
   await flush(40);
 
-  assert.ok(lineCompositions > composedBefore);
+  assert.ok(compositions > composedBefore);
   assert.equal(controller.snapshot.structure.value.marker, 'lines:stable');
   assert.equal(controller.snapshot.settling, false);
   assert.equal(publications.length, publishedBefore);

@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { NodusController } from '../src/nodus-controller.js';
+import { CurrentViewController } from '../src/current-view-controller.js';
 
 function deferred() {
   let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
-  return { promise, resolve, reject };
+  const promise = new Promise((res) => { resolve = res; });
+  return { promise, resolve };
 }
 
 async function flush(turns = 8) {
@@ -24,18 +23,14 @@ function structure(center, mode) {
   };
 }
 
-function modesCalled(structureCalls) {
-  return structureCalls.map(([, mode]) => mode).sort();
-}
-
-test('same-Nodus mode switch selects the sibling projection without recomputing or changing Rail', async () => {
+test('same-Nodus mode switch recomposes the one accepted Constellation and keeps Rail', async () => {
   const roots = deferred();
   const structureCalls = [];
   const railValue = {
     rootsCount: 4,
     lines: [{ edge: { uci: 'a1a2', target: 'B' } }],
   };
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value).toUpperCase(),
     structure: async ({ center, mode }) => {
@@ -49,34 +44,36 @@ test('same-Nodus mode switch selects the sibling projection without recomputing 
 
   await controller.start();
   await flush();
+  assert.equal(controller.snapshot.center, 'A');
   assert.equal(controller.snapshot.mode, 'lines');
   assert.equal(controller.snapshot.structure.value.marker, 'A:lines');
-  assert.equal(controller.snapshot.rail.value.rootsCount, 4);
-  assert.equal(controller.snapshot.rail.value.lines.length, 1);
-  assert.deepEqual(modesCalled(structureCalls), ['lines', 'roots']);
+  assert.deepEqual(structureCalls, [['A', 'lines']]);
+  assert.deepEqual(controller.snapshot.rail.value, railValue);
 
-  await controller.setMode('roots');
+  const switching = controller.setMode('roots');
+  await flush();
+  assert.equal(controller.snapshot.center, 'A');
   assert.equal(controller.snapshot.mode, 'roots');
   assert.equal(controller.snapshot.structure.status, 'loading');
-  assert.equal(controller.snapshot.rail.value.rootsCount, 4);
-  assert.equal(controller.snapshot.rail.value.lines.length, 1);
-  assert.deepEqual(modesCalled(structureCalls), ['lines', 'roots']);
+  assert.deepEqual(controller.snapshot.rail.value, railValue);
+  assert.deepEqual(structureCalls, [['A', 'lines'], ['A', 'roots']]);
 
   roots.resolve(structure('A', 'roots'));
-  await flush();
+  await switching;
   assert.equal(controller.snapshot.structure.status, 'ready');
   assert.equal(controller.snapshot.structure.value.marker, 'A:roots');
-  assert.deepEqual(modesCalled(structureCalls), ['lines', 'roots']);
+  assert.deepEqual(controller.snapshot.rail.value, railValue);
 
   await controller.setMode('lines');
+  assert.equal(controller.snapshot.center, 'A');
   assert.equal(controller.snapshot.structure.value.marker, 'A:lines');
   assert.deepEqual(controller.snapshot.rail.value, railValue);
-  assert.deepEqual(modesCalled(structureCalls), ['lines', 'roots']);
+  assert.deepEqual(structureCalls, [['A', 'lines'], ['A', 'roots'], ['A', 'lines']]);
 });
 
-test('recenter starts fresh Nodus-level Rail state without waiting for Rail before accepting the new Nodus', async () => {
+test('recenter starts fresh Rail state without waiting for Rail before accepting the new Nodus', async () => {
   const nextRail = deferred();
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value).toUpperCase(),
     structure: async ({ center, mode }) => structure(center, mode),

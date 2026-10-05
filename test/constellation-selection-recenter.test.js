@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { NodusController } from '../src/nodus-controller.js';
+import { CurrentViewController } from '../src/current-view-controller.js';
 
 test('Recenter rebuilds structure without carrying the previous Candidate set into the new Nodus', async () => {
   const inputs = [];
   const candidateSetsByCenter = new Map();
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines', orientation: 'white', navDepth: 0 },
     canonicalize: (value) => String(value).toUpperCase(),
     routeLedger: {

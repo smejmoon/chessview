@@ -2,7 +2,7 @@ import { Chessground } from '@lichess-org/chessground';
 import './chessground-overrides.css';
 import './presentation-geometry.css';
 import { legalDestinations, toPlayableFen } from './graph.js';
-import type { NodusActions } from './nodus-controller.ts';
+import type { CurrentViewActions } from './current-view-controller.ts';
 import { createLens } from './lens.ts';
 import type { Lens, Orientation } from './lens.ts';
 import type { ViewMode } from './route-ledger.ts';
@@ -150,7 +150,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     });
   }
 
-  function bindStaticControls(actions: NodusActions): void {
+  function bindStaticControls(actions: CurrentViewActions): void {
     app.querySelector('#back')?.addEventListener('click', actions.back);
     app.querySelector('#flip')?.addEventListener('click', actions.flip);
     app.querySelector('#guide-toggle')?.addEventListener('click', () => { lens.toggleGuide(); void actions.redraw(); });
@@ -165,7 +165,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     });
   }
 
-  function bindDynamicControls(actions: NodusActions, rootContext: boolean, view: RendererView): void {
+  function bindDynamicControls(actions: CurrentViewActions, rootContext: boolean, view: RendererView): void {
     app.querySelector('#root-context-toggle')?.addEventListener('click', () => actions.setMode(rootContext ? 'lines' : 'roots'));
     app.querySelectorAll('[data-nav-key]').forEach((button) => bindRecenterTarget(button, actions, () => (button as HTMLElement).dataset.navKey));
     app.querySelector('#debug-clear')?.addEventListener('click', () => {
@@ -190,7 +190,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     bindDebugScroll();
   }
 
-  function renderSatellite(item: RendererPosition, slot: PresentationSlot, view: RendererView, structure: RendererStructure, actions: NodusActions): void {
+  function renderSatellite(item: RendererPosition, slot: PresentationSlot, view: RendererView, structure: RendererStructure, actions: CurrentViewActions): void {
     const host = app.querySelector('#satellites');
     if (!host) return;
     const node = item.record ?? {};
@@ -214,7 +214,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     } as ChessgroundConfig));
   }
 
-  function renderSatellites(view: RendererView, structure: RendererStructure, actions: NodusActions, presentation: PresentationGeometry): void {
+  function renderSatellites(view: RendererView, structure: RendererStructure, actions: CurrentViewActions, presentation: PresentationGeometry): void {
     const all = [...(structure.positions ?? [])];
     const lines = all.filter((item) => !isRootContext(item)).slice(0, presentation.lineCapacity);
     const roots = all.filter(isRootContext).slice(0, presentation.rootCapacity);
@@ -292,7 +292,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     if (rail) rail.innerHTML = railHtml(view, centerNode, turn, debug);
   }
 
-  function createCenterBoard(view: RendererView, actions: NodusActions, rootContext: boolean, turn: Orientation): void {
+  function createCenterBoard(view: RendererView, actions: CurrentViewActions, rootContext: boolean, turn: Orientation): void {
     const centerBoard = app.querySelector('#center-board') as HTMLElement | null;
     if (!centerBoard) throw new Error('Nodus renderer could not create the center board');
     const api = Chessground(centerBoard, {
@@ -306,7 +306,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     centerBoardState = Object.freeze({ api, center: view.center, orientation: view.orientation, rootContext });
   }
 
-  function render(view: RendererView, actions: NodusActions, presentation = 'hidden'): void {
+  function render(view: RendererView, actions: CurrentViewActions, presentation = 'hidden'): void {
     const structure = view.structure.value ?? emptyStructure(view.center);
     const centerNode = structure.centerNode ?? { key: view.center };
     const status = viewStatusSpec(presentation);
@@ -342,7 +342,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     promotionChooser.sync({ center: view.center, orientation: view.orientation, color: turn });
   }
 
-  function renderFailure(view: RendererView | null | undefined, actions: NodusActions, error: unknown, presentation = 'failed'): void {
+  function renderFailure(view: RendererView | null | undefined, actions: CurrentViewActions, error: unknown, presentation = 'failed'): void {
     promotionChooser.cancel(); disposeBoards();
     const status = viewStatusSpec(presentation); const detail = errorMessage(error);
     app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view?.navigation?.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button" id="presentation-retry" type="button">Retry</button></div></header><div class="workspace"><section class="map"><div class="toast" title="${escapeHtml(detail)}">Chessview could not present this view.</div></section></div></main>`;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { NodusController } from '../src/nodus-controller.js';
+import { CurrentViewController } from '../src/current-view-controller.js';
 
 function deferred() {
   let resolve;
@@ -14,7 +14,7 @@ function fixture(materializeMove = null) {
     start() {},
     update() {},
   };
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: 'A', view: 'roots', orientation: 'white', navDepth: 0 },
     canonicalize: (value) => String(value).toUpperCase(),
     routeLedger: {

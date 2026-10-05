@@ -1,4 +1,4 @@
-import type { NodusActions } from './nodus-controller.ts';
+import type { CurrentViewActions } from './current-view-controller.ts';
 
 export type PromotionPiece = 'q' | 'r' | 'b' | 'n';
 
@@ -6,13 +6,13 @@ export function promotionChoices(source: string, from: string, to: string): Prom
 
 export function bindRecenterTarget(
   element: Element,
-  actions: NodusActions,
+  actions: CurrentViewActions,
   target: string | (() => string | undefined),
 ): (() => unknown) | null;
 
 export function createBoardMoveRecenterHandler(options: Readonly<{
   source: string;
-  actions: NodusActions;
+  actions: CurrentViewActions;
   choosePromotion?: (
     choices: readonly PromotionPiece[],
     move: Readonly<{ from: string; to: string }>,

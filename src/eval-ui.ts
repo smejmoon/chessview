@@ -1,6 +1,6 @@
 import './eval-ui.css';
 import { bindRecenterTarget } from './recenter-input.js';
-import type { NodusActions } from './nodus-controller.ts';
+import type { CurrentViewActions } from './current-view-controller.ts';
 
 type MoveEvaluation = Readonly<{ lossCp: number; quality: string }>;
 type PositionEvaluation = Readonly<{ cp?: number | null; mate?: number | null; depth?: number | null }>;
@@ -89,7 +89,7 @@ function railRowHtml(row: RailLine): string {
   const mismatch = `${humanMarkerHtml(row.mastersMismatch, 'masters')}${humanMarkerHtml(row.lichessMismatch, 'lichess')}` || '<span class="human-none">—</span>';
   return `<button class="eval-rail-row eval-${quality}" type="button" data-eval-nav="${escapeHtml(row.edge.target)}"><span class="eval-rail-move">${escapeHtml(row.edge.san ?? row.edge.uci)}${share ? ` · ${share}` : ''}</span><span class="eval-badge">${row.moveEval ? lossLabel(row.moveEval) : '—'}</span><span class="eval-human-cell">${mismatch}</span><span class="eval-play">›</span></button>`;
 }
-function decorateLineRail(root: Element, view: EvidencePresentationView, actions: NodusActions): void {
+function decorateLineRail(root: Element, view: EvidencePresentationView, actions: CurrentViewActions): void {
   const list = root.querySelector('.analysis-rail .rail-explorer .explorer-list'); if (!list) return;
   const rows = railValue(view)?.lines ?? []; list.classList.add('eval-rail-list');
   list.innerHTML = rows.length ? `<div class="eval-rail-head"><span>Move</span><span>Loss</span><span>Human</span><span></span></div>${rows.map(railRowHtml).join('')}` : '<div class="rail-empty">No Lichess Lines yet.</div>';
@@ -99,7 +99,7 @@ function showPresentationFailure(root: Element, error?: string | null): void {
   const rail = root.querySelector('.analysis-rail .rail-explorer'); if (!rail || rail.querySelector('.evidence-presentation-failure')) return;
   const note = (root.ownerDocument ?? globalThis.document).createElement('div'); note.className = 'rail-empty evidence-presentation-failure'; note.textContent = 'Supplementary evidence is temporarily unavailable.'; note.title = error || 'Evidence presentation failed'; rail.appendChild(note);
 }
-export function decorateEvidencePresentation(root: Element, view: EvidencePresentationView, actions: NodusActions, { showGuide = false }: PresentationOptions = {}): void {
+export function decorateEvidencePresentation(root: Element, view: EvidencePresentationView, actions: CurrentViewActions, { showGuide = false }: PresentationOptions = {}): void {
   renderGuide(root, showGuide); const lifecycle = evidenceLifecycle(view);
   if (lifecycle.status === 'failed') { showPresentationFailure(root, lifecycle.error); return; }
   if (lifecycle.status !== 'ready' || !lifecycle.value) return;

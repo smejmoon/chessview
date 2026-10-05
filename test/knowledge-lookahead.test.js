@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { nominateConstellationLookahead } from '../src/constellation-lookahead.js';
 import { createKnowledgeAcquisition } from '../src/knowledge-acquisition.js';
-import { NodusController } from '../src/nodus-controller.js';
+import { CurrentViewController } from '../src/current-view-controller.js';
 import { createPositionRepository } from '../src/position-repository.js';
 import { START_FEN, canonicalPosition } from '../src/graph.js';
 
@@ -229,7 +229,7 @@ test('a warmed Explorer Reading can later reconcile from cache without another s
 test('current-view lookahead participation is private, replaceable, and detached on recenter', async () => {
   const lookahead = [];
   const publications = [];
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: 'A', view: 'roots' },
     canonicalize: (value) => String(value).toUpperCase(),
     structure: async ({ center: position, mode }) => ({

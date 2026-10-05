@@ -4,11 +4,11 @@
 
 ## Core experience
 
-Chessview is a position-centered spatial map. The current Nodus is the reference point, meaningful Roots provide upstream context, meaningful Lines provide downstream possibilities, the Constellation keeps those relationships coherent, and the Rail supports inspection and navigation without becoming the map itself.
+Chessview is a position-centered spatial map. The Nodus is the reference point, meaningful Roots provide upstream context, meaningful Lines provide downstream possibilities, the Constellation keeps those relationships coherent, and the Rail supports inspection and navigation without becoming the map itself.
 
 A user should be able to:
 
-- understand where the current position came from and where play can go without reconstructing a move tree mentally;
+- understand where the Nodus came from and where play can go without reconstructing a move tree mentally;
 - select a surrounding board or navigable Rail row and recenter on that canonical position;
 - recognize transpositions as convergence on the same place rather than duplicated positions;
 - move through positions without losing the sense that they are exploring one connected chess space;
@@ -21,11 +21,11 @@ The visible Constellation adapts to the available presentation space and the sha
 
 Chessview shows the best trustworthy current view it can establish instead of waiting for every useful refinement to finish.
 
-While an admitted structural obligation can still change the active Constellation, or a completed structural result still has to be incorporated, the trustworthy current view remains visible and navigable while Weather shows that the Constellation is [Settling](glossary.md#settling). Incorporating those results may add, remove, or rearrange visible boards and relationships without first blanking the usable view.
+While a Constellation-admitted structural obligation still has a live progress path, is waiting for its legitimate retry gate, or has completed but still needs incorporation, the trustworthy current view remains visible and navigable while Weather shows `Updating…`. Incorporating those results may add, remove, or rearrange visible boards and relationships without first blanking the usable view.
 
-If source acquisition ends without usable information, that absence remains unknown rather than being converted into positive or negative chess evidence. A trustworthy view already established from available knowledge remains usable. The product becomes globally degraded only when Chessview cannot establish trustworthy current structure at all.
+If source acquisition ends without usable information, that absence remains unknown rather than being converted into positive or negative chess evidence. Once lower-owned fallback/recovery policy is exhausted, that unavailable outcome need not keep the accepted view permanently Updating for the same refinement attempt. A later refresh may try the same unknown again. A trustworthy view already established from available knowledge remains usable; the product becomes globally degraded only when Chessview cannot establish trustworthy current structure at all.
 
-Work that can only enrich an already established view — for example supplementary engine or Masters evidence or presentation detail — may continue after the active Constellation is [Settled](glossary.md#settled) and must not keep or make Weather unsettled by itself.
+Work that can only enrich an already established view — for example supplementary engine or Masters evidence or presentation detail — may continue after structural readiness and must not keep or make Weather unsettled by itself.
 
 ## Evidence experience
 
@@ -39,11 +39,11 @@ Evidence should make the map easier to understand without overstating what Chess
 
 ## Weather
 
-Weather presents structural settlement of the current view; it does not define what Settled means.
+Weather presents structural readiness of the accepted current view; it does not define chess knowledge or source failure policy.
 
-- `Updating…` means the active Constellation is Settling: an admitted structural obligation can still change its shape, or a completed structural result still has to be incorporated. The trustworthy current view may remain visible and interactive.
-- Normal `Ready` / subtle check means the active Constellation is Settled, including a legitimate empty or absent result where appropriate. Supplementary enrichment may still continue.
-- A degraded or unavailable state means Chessview could not establish trustworthy current structure. Failure of supplementary work does not replace an already trustworthy view with a global failure state.
+- `Updating…` means a Constellation-admitted structural obligation still blocks the current refinement run: it can still make progress, is waiting for its lower-owned retry gate, or has completed but still has to be incorporated. The trustworthy accepted view may remain visible and interactive.
+- Normal `Ready` / subtle check means no admitted structural obligation still blocks this accepted view in the active refinement run. Unknown source facts may remain unknown, and a replacement refinement run may try them again.
+- A degraded or unavailable state means Chessview could not establish trustworthy current structure. Failure of supplementary work or failure to improve an already trustworthy accepted view does not replace that view with a global failure state.
 
 ## Product-wide invariants
 

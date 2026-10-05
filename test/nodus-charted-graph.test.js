@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import { canonicalPosition, resolveMove, START_FEN } from '../src/graph.js';
-import { NodusController } from '../src/nodus-controller.js';
+import { CurrentViewController } from '../src/current-view-controller.js';
 
 globalThis.indexedDB = fakeIndexedDB;
 
@@ -27,7 +27,7 @@ test('a played legal move outside current Constellation selection recenters with
   await clearGraph();
   const resolved = resolveMove(START, { uci: 'e2e4' });
   const compositions = [];
-  const controller = new NodusController({
+  const controller = new CurrentViewController({
     initial: { center: START, view: 'roots', orientation: 'white', navDepth: 0 },
     canonicalize: canonicalPosition,
     routeLedger: { replace() {}, push() {} },

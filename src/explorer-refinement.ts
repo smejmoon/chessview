@@ -28,10 +28,12 @@ export function createExplorerRefinementFailureClassifier({
     if (isObsoleteWork(error)) return null;
     if (httpStatus(error) === 429) {
       const retryAfterMs = Math.max(0, cooldownUntil() - now());
-      return Object.freeze({
-        refinement: 'retryable' as const,
-        retry: sleep(retryAfterMs),
-      });
+      if (retryAfterMs > 0) {
+        return Object.freeze({
+          refinement: 'retryable' as const,
+          retry: sleep(retryAfterMs),
+        });
+      }
     }
     return Object.freeze({ refinement: 'unavailable' as const });
   };

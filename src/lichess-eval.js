@@ -133,6 +133,9 @@ export function createLichessEval({
         && now() - cachedFetchedAt < LICHESS_EVAL_TTL_MS;
       if (fresh) return admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
 
+      const live = repository.currentFacet(key, 'cloud-eval');
+      if (live && !live.persisted && now() - live.fetchedAt < LICHESS_EVAL_TTL_MS) return live.value;
+
       const url = new URL(ENDPOINT);
       url.searchParams.set('fen', toPlayableFen(key));
       url.searchParams.set('variant', 'standard');

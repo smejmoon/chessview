@@ -72,6 +72,10 @@ Endpoint clients retain responsibility for request parameters, parsing, source v
 - A supported cloud-eval `404` is successful absence and may be cached as such.
 - A transport or HTTP failure is not successful absence.
 - A non-null stale source value may be used when its endpoint client still judges it usable and a refresh fails.
+- Explorer structural refinement classifies source failure only after the Explorer provider has exhausted its own fresh/live/stale fallback path. It never manufactures an empty or negative Reading from failure.
+- An Explorer HTTP 429 is retryable for the active refinement run only when `LichessGateway` exposes a future cooldown end. That cooldown is the semantic retry gate; Current View does not reconstruct the delay from the HTTP status.
+- If no future retry gate exists, or another Explorer source failure remains after fallback, that source attempt is unavailable-for-this-run. A replacement refinement run may try again under normal freshness/source policy.
+- Explorer source classification stops at the source-load boundary. Failure after a usable Reading has been obtained—such as graph reconciliation/persistence failure—is not source unavailability and remains retryable/visible through Knowledge Acquisition.
 - Cloud-eval retrieval details are not exposed as evaluation values. `LichessEval` returns usable evaluation or absence and exposes request/failure activity separately through its operational status channel.
 - `LichessSession` owns invalidating a visitor access token rejected with HTTP 401; endpoint/domain code still owns source-specific fallback, diagnostics, and user-facing interpretation of that response.
 
@@ -92,6 +96,11 @@ Deterministic tests should cover:
 - queued foreground work receiving the next available transport slot ahead of queued background work without preempting an in-flight request;
 - live shared-producer demand promoting and demoting the effective urgency seen by queued transport;
 - a 429 from one client delaying later traffic from another client;
+- Explorer refinement exposing that future cooldown as a retry gate instead of immediately replaying the request;
+- a 429 without a future cooldown gate not creating a busy retry loop;
+- exhausted Explorer source failure becoming unavailable-for-this-run only after stale fallback has failed;
+- Explorer source failure remaining unknown rather than producing synthetic chess Evidence;
+- graph reconciliation failure after a usable Explorer Reading not being reclassified as source unavailability;
 - cancellation of queued obsolete work before it reaches the network;
 - an in-flight abort-shaped browser rejection becoming `ObsoleteWork` when its exact request signal is aborted;
 - an abort-shaped transport failure with a live request signal remaining a genuine failure;

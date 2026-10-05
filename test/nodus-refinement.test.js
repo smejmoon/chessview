@@ -1,31 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  deriveNodusRefinementDemand,
-  nodusRefinementPriority,
+  currentViewRefinementPriority,
+  deriveCurrentViewRefinementDemand,
 } from '../src/nodus-refinement.js';
 
 function target(items, position) {
   return items.find((item) => item.position === position);
 }
 
-test('Nodus derives refinement demand while preserving Constellation structural Reading admission', () => {
-  const demand = deriveNodusRefinementDemand({
+test('Current View derives refinement demand from its one accepted Constellation', () => {
+  const demand = deriveCurrentViewRefinementDemand({
     center: 'A',
-    structures: {
-      roots: {
-        readingFrontier: ['A', 'B'],
-        composition: {
-          nodes: [{ key: 'B' }, { key: 'C' }],
-          relationships: [{ edge: { source: 'C', target: 'D' } }],
-        },
-      },
-      lines: {
-        readingFrontier: ['E'],
-        composition: {
-          nodes: [{ key: 'A' }],
-          relationships: [{ edge: { source: 'F', target: 'G' } }],
-        },
+    mode: 'roots',
+    structure: {
+      readingFrontier: ['A', 'B'],
+      composition: {
+        nodes: [{ key: 'B' }, { key: 'C' }],
+        relationships: [{ edge: { source: 'C', target: 'D' } }],
       },
     },
   });
@@ -33,7 +25,7 @@ test('Nodus derives refinement demand while preserving Constellation structural 
   assert.equal(demand.rootTransposition, 'A');
 
   const center = target(demand.explorer, 'A');
-  assert.deepEqual(center?.modes, ['roots', 'lines']);
+  assert.deepEqual(center?.modes, ['roots']);
   assert.deepEqual(center?.structuralModes, ['roots']);
   assert.equal(center?.nodusWide, true);
 
@@ -45,31 +37,26 @@ test('Nodus derives refinement demand while preserving Constellation structural 
   assert.deepEqual(visibleOnly?.modes, ['roots']);
   assert.deepEqual(visibleOnly?.structuralModes, []);
 
-  const lineFrontier = target(demand.explorer, 'E');
-  assert.deepEqual(lineFrontier?.structuralModes, ['lines']);
-
   assert.deepEqual(target(demand.cloudEval, 'D')?.modes, ['roots']);
-  assert.deepEqual(target(demand.masters, 'F')?.modes, ['lines']);
+  assert.deepEqual(target(demand.masters, 'C')?.modes, ['roots']);
   assert.equal(target(demand.cloudEval, 'A')?.nodusWide, true);
   assert.equal(target(demand.masters, 'A')?.nodusWide, true);
 
   assert.equal(Object.hasOwn(target(demand.cloudEval, 'D') ?? {}, 'structuralModes'), false);
-  assert.equal(Object.hasOwn(target(demand.masters, 'F') ?? {}, 'structuralModes'), false);
+  assert.equal(Object.hasOwn(target(demand.masters, 'C') ?? {}, 'structuralModes'), false);
   assert.ok(Object.isFrozen(demand));
   assert.ok(Object.isFrozen(demand.explorer));
 });
 
-test('Nodus demand priority follows the live active projection while Nodus-wide demand stays foreground', () => {
-  const demand = deriveNodusRefinementDemand({
+test('Current View demand priority follows active mode while Nodus-wide demand stays foreground', () => {
+  const demand = deriveCurrentViewRefinementDemand({
     center: 'A',
-    structures: {
-      roots: {
-        composition: {
-          nodes: [{ key: 'B' }],
-          relationships: [],
-        },
+    mode: 'roots',
+    structure: {
+      composition: {
+        nodes: [{ key: 'B' }],
+        relationships: [],
       },
-      lines: null,
     },
   });
 
@@ -78,7 +65,7 @@ test('Nodus demand priority follows the live active projection while Nodus-wide 
   assert.ok(center);
   assert.ok(roots);
 
-  assert.equal(nodusRefinementPriority(center, 'lines'), 'foreground');
-  assert.equal(nodusRefinementPriority(roots, 'roots'), 'foreground');
-  assert.equal(nodusRefinementPriority(roots, 'lines'), 'background');
+  assert.equal(currentViewRefinementPriority(center, 'lines'), 'foreground');
+  assert.equal(currentViewRefinementPriority(roots, 'roots'), 'foreground');
+  assert.equal(currentViewRefinementPriority(roots, 'lines'), 'background');
 });

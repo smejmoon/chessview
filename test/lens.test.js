@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createLens } from '../src/lens.js';
+import { NodusController } from '../src/nodus-controller.js';
 
 function fixture() {
   let orientation = 'black';
@@ -60,4 +61,25 @@ test('Lens derives presentation geometry and composition constraints from the re
     lineCapacity: roots.lineCapacity,
     rootCapacity: roots.rootCapacity,
   });
+});
+
+test('NodusController publishes Lens orientation without owning a second orientation state', async () => {
+  const { lens } = fixture();
+  const publications = [];
+  const controller = new NodusController({
+    initial: { center: 'A', view: 'lines' },
+    canonicalize: String,
+    lens,
+    structure: () => ({}),
+    presenter: {
+      start: (view) => publications.push(view.orientation),
+      update: (view) => publications.push(view.orientation),
+    },
+  });
+
+  assert.equal(controller.snapshot.orientation, 'black');
+  await controller.flip();
+  assert.equal(lens.orientation(), 'white');
+  assert.equal(controller.snapshot.orientation, 'white');
+  assert.deepEqual(publications, ['white']);
 });

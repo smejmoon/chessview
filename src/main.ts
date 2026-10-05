@@ -91,13 +91,13 @@ async function warmLookahead({ center, structure, signal }) {
 }
 
 controller = new NodusController({
-  initial: { ...initialRoute, orientation: lens.orientation() },
+  initial: initialRoute,
   canonicalize: canonicalPosition,
   routeLedger,
   preferences: {
     setView: (view) => { preferenceStore.setView(view); },
-    setOrientation: (orientation) => { lens.setOrientation(orientation); },
   },
+  lens,
   structure: ({ center, mode, signal }) => {
     const constraints = constraintsFor(mode);
     return composeNodusStructure({

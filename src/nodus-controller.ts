@@ -1,8 +1,9 @@
+import type { Lens, Orientation } from './lens.ts';
 import type { MaterializeMoveInput, MaterializeMoveResult, Move } from './move-materialization.ts';
 import type { Route, RouteLedger, ViewMode } from './route-ledger.ts';
 import { isObsoleteWork } from './obsolete-work.js';
 
-export type Orientation = 'white' | 'black';
+export type { Orientation } from './lens.ts';
 export type LifecycleStatus = 'idle' | 'loading' | 'ready' | 'failed';
 
 export type Lifecycle = Readonly<{
@@ -77,10 +78,10 @@ type RefinementPlanner = (input: RefinementInput) => readonly RefinementTask[] |
 type LookaheadContributor = (input: LookaheadInput) => unknown | Promise<unknown>;
 type MaterializeMove = (input: MaterializeMoveInput) => Promise<MaterializeMoveResult | null>;
 type Log = (message: string, detail?: unknown) => void;
+type OrientationLens = Pick<Lens, 'orientation' | 'flipOrientation'>;
 
 type Preferences = {
   setView?(view: ViewMode): void;
-  setOrientation?(orientation: Orientation): void;
 };
 
 type Presenter = {
@@ -99,6 +100,7 @@ export type NodusControllerOptions = {
   canonicalize: (value: unknown) => string;
   routeLedger?: Partial<RouteLedger> | null;
   preferences?: Preferences | null;
+  lens?: OrientationLens | null;
   structure: Contributor<StructureInput>;
   evidence?: Contributor<EvidenceInput> | null;
   rail?: Contributor<RailInput> | null;
@@ -117,7 +119,6 @@ type ProjectionState = {
 type ControllerState = {
   center: string;
   mode: ViewMode;
-  orientation: Orientation;
   navDepth: number;
   projections: Record<ViewMode, ProjectionState>;
   rail: Lifecycle;
@@ -156,6 +157,17 @@ function normalizeMode(mode: unknown): ViewMode {
 
 function normalizeOrientation(orientation: unknown): Orientation {
   return orientation === 'black' ? 'black' : 'white';
+}
+
+function localLens(initialOrientation: unknown): OrientationLens {
+  let orientation = normalizeOrientation(initialOrientation);
+  return Object.freeze({
+    orientation: () => orientation,
+    flipOrientation: () => {
+      orientation = orientation === 'white' ? 'black' : 'white';
+      return orientation;
+    },
+  });
 }
 
 function normalizeDepth(depth: unknown): number {
@@ -238,6 +250,7 @@ export class NodusController {
   #canonicalize: (value: unknown) => string;
   #disposed = false;
   #evidence: Contributor<EvidenceInput> | null;
+  #lens: OrientationLens;
   #log: Log;
   #lookahead: LookaheadContributor | null;
   #materializeMove: MaterializeMove | null;
@@ -257,6 +270,7 @@ export class NodusController {
     canonicalize,
     routeLedger,
     preferences,
+    lens,
     structure,
     evidence = null,
     rail = null,
@@ -274,6 +288,7 @@ export class NodusController {
     this.#canonicalize = canonicalize;
     this.#routeLedger = routeLedger ?? {};
     this.#preferences = preferences ?? {};
+    this.#lens = lens ?? localLens(initial?.orientation);
     this.#structure = structure;
     this.#evidence = evidence;
     this.#rail = rail;
@@ -285,7 +300,6 @@ export class NodusController {
     this.#state = {
       center: canonicalize(initial?.center),
       mode: normalizeMode(initial?.mode ?? initial?.view),
-      orientation: normalizeOrientation(initial?.orientation),
       navDepth: normalizeDepth(initial?.navDepth),
       projections: projections(),
       rail: lifecycle('idle'),
@@ -307,7 +321,7 @@ export class NodusController {
     return Object.freeze({
       center: this.#state.center,
       mode: this.#state.mode,
-      orientation: this.#state.orientation,
+      orientation: this.#lens.orientation(),
       navigation: Object.freeze({ canGoBack: this.#state.navDepth > 0 }),
       structure: active.structure,
       evidence: active.evidence,
@@ -390,8 +404,7 @@ export class NodusController {
 
   async flip(): Promise<boolean> {
     if (this.#disposed) return false;
-    this.#state.orientation = this.#state.orientation === 'white' ? 'black' : 'white';
-    this.#preferences.setOrientation?.(this.#state.orientation);
+    this.#lens.flipOrientation();
     await this.#presentCurrent('update');
     return true;
   }

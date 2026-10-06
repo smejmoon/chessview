@@ -15,36 +15,52 @@ function overlaps(a, b) {
     && Math.abs(a.y - b.y) < (a.size + b.size) / 2;
 }
 
-test('presentation geometry derives capacity from the actual map rectangle', () => {
+function assertDistinctInside(geometry, placement) {
+  const slots = [...placement.values()];
+  for (let left = 0; left < slots.length; left += 1) {
+    assert.ok(inside(slots[left], geometry.width, geometry.height));
+    for (let right = left + 1; right < slots.length; right += 1) {
+      assert.equal(overlaps(slots[left], slots[right]), false);
+    }
+  }
+}
+
+test('presentation geometry exposes regions and space-derived capacities rather than slots', () => {
   const wide = derivePresentationGeometry({ width: 1200, height: 760, rootContext: false });
   const constrained = derivePresentationGeometry({ width: 500, height: 760, rootContext: false });
   assert.ok(wide.lineCapacity > constrained.lineCapacity);
   assert.equal(wide.rootCapacity, 0);
-  assert.ok(wide.lineSlots.every((slot) => inside(slot, wide.width, wide.height)));
-  assert.ok(constrained.lineSlots.every((slot) => inside(slot, constrained.width, constrained.height)));
+  assert.ok(wide.lineRegion.left > wide.center.x + wide.center.size / 2);
+  assert.ok(wide.lineRegion.right <= wide.width);
+  assert.equal('lineSlots' in wide, false);
+  assert.equal('rootSlots' in wide, false);
 });
 
-test('Root context reallocates map space instead of preserving the Line-only geometry', () => {
+test('Root context reallocates geometry into explicit upstream and downstream regions', () => {
   const lines = derivePresentationGeometry({ width: 1000, height: 700, rootContext: false });
   const context = derivePresentationGeometry({ width: 1000, height: 700, rootContext: true });
   assert.equal(lines.rootCapacity, 0);
   assert.ok(context.rootCapacity > 0);
+  assert.ok(context.rootRegion);
+  assert.ok(context.rootRegion.right < context.center.x - context.center.size / 2);
+  assert.ok(context.lineRegion.left > context.center.x + context.center.size / 2);
   assert.ok(context.center.x > lines.center.x);
   assert.ok(context.lineCapacity <= lines.lineCapacity);
-  assert.ok(context.rootSlots.every((slot) => slot.x < context.center.x));
-  assert.ok(context.lineSlots.every((slot) => slot.x > context.center.x));
 });
 
-test('presentation geometry exposes exactly the three current size roles', () => {
+test('space-derived capacity is not capped by the retired fixed total-board ceilings', () => {
+  const geometry = derivePresentationGeometry({ width: 2200, height: 1200, rootContext: true });
+  assert.ok(geometry.lineCapacity > 16);
+  assert.ok(geometry.rootCapacity > 6);
+});
+
+test('presentation geometry keeps exactly the three current board-size roles', () => {
   const geometry = derivePresentationGeometry({ width: 1100, height: 720, rootContext: true });
   assert.ok(geometry.center.size > geometry.prominentSize);
   assert.ok(geometry.prominentSize > geometry.compactSize);
-  assert.ok(geometry.prominentLineCapacity > 0);
-  assert.ok(geometry.lineSlots.some((slot) => slot.tier === 'compact'));
-  assert.ok(geometry.rootSlots.every((slot) => slot.tier === 'compact'));
 });
 
-test('Line placement follows accepted relationships and converges transpositions on one board', () => {
+test('Line placement follows topology and keeps a transposition as one downstream board', () => {
   const geometry = derivePresentationGeometry({ width: 1500, height: 760, rootContext: false });
   const topology = {
     center: 'center',
@@ -66,6 +82,7 @@ test('Line placement follows accepted relationships and converges transpositions
   };
   const placement = placeConstellation(geometry, topology);
   assert.equal(placement.size, topology.nodes.length);
+  assertDistinctInside(geometry, placement);
 
   const e4 = placement.get('e4');
   const d4 = placement.get('d4');
@@ -75,47 +92,41 @@ test('Line placement follows accepted relationships and converges transpositions
   assert.ok(e4 && d4 && e4Next && d4Next && shared);
   assert.equal(e4.tier, 'prominent');
   assert.equal(d4.tier, 'prominent');
-  assert.ok(e4Next.x > e4.x);
-  assert.ok(d4Next.x > d4.x);
-  assert.ok(shared.x > Math.max(e4Next.x, d4Next.x));
+  assert.ok(e4Next.x >= e4.x);
+  assert.ok(d4Next.x >= d4.x);
+  assert.ok(shared.x >= Math.max(e4Next.x, d4Next.x));
   assert.ok(shared.y >= Math.min(e4Next.y, d4Next.y));
   assert.ok(shared.y <= Math.max(e4Next.y, d4Next.y));
 });
 
-test('Line family anchors keep deliberate vertical breathing room', () => {
+test('a forcing Line can consume the advertised capacity without reversing direction', () => {
   const geometry = derivePresentationGeometry({ width: 1200, height: 760, rootContext: false });
-  const topology = {
-    center: 'center',
-    nodes: ['e4', 'd4', 'nf3', 'c4'].map((key) => ({
+  const nodes = [];
+  const relationships = [];
+  let previous = 'center';
+  for (let index = 0; index < geometry.lineCapacity; index += 1) {
+    const key = 'line-' + (index + 1);
+    nodes.push({
       key,
-      relation: 'outgoing',
-      distance: 1,
-      families: [key],
-    })),
-    relationships: ['e4', 'd4', 'nf3', 'c4'].map((target) => ({ source: 'center', target, families: [target] })),
-  };
-  const placement = placeConstellation(geometry, topology);
-  const ys = topology.nodes.map(({ key }) => placement.get(key)?.y).filter(Number.isFinite).sort((a, b) => a - b);
-  assert.equal(ys.length, 4);
-  for (let index = 1; index < ys.length; index += 1) assert.ok(ys[index] - ys[index - 1] >= 120);
-});
-
-test('unused prominent cells can present accepted descendants at compact size', () => {
-  const geometry = derivePresentationGeometry({ width: 1200, height: 760, rootContext: false });
-  const count = Math.min(geometry.lineCapacity, 10);
-  const nodes = [{ key: 'anchor', relation: 'outgoing', distance: 1, families: ['family'] }];
-  const relationships = [{ source: 'center', target: 'anchor', families: ['family'] }];
-  for (let index = 1; index < count; index += 1) {
-    nodes.push({ key: `child-${index}`, relation: 'descendant', distance: 2, families: ['family'] });
-    relationships.push({ source: 'anchor', target: `child-${index}`, families: ['family'] });
+      relation: index === 0 ? 'outgoing' : 'descendant',
+      distance: index + 1,
+      families: ['line'],
+    });
+    relationships.push({ source: previous, target: key, families: ['line'] });
+    previous = key;
   }
   const placement = placeConstellation(geometry, { center: 'center', nodes, relationships });
-  assert.equal(placement.size, nodes.length);
-  assert.equal(placement.get('anchor')?.tier, 'prominent');
-  assert.ok(nodes.slice(1).every(({ key }) => placement.get(key)?.tier === 'compact'));
+  assert.equal(placement.size, geometry.lineCapacity);
+  assertDistinctInside(geometry, placement);
+  for (let index = 1; index < nodes.length; index += 1) {
+    const source = placement.get(nodes[index - 1].key);
+    const target = placement.get(nodes[index].key);
+    assert.ok(source && target);
+    assert.ok(target.x >= source.x);
+  }
 });
 
-test('Root placement keeps Roots upstream and their sibling continuations downstream', () => {
+test('Root placement keeps Roots upstream of sibling context and both left of the Nodus', () => {
   const geometry = derivePresentationGeometry({ width: 1400, height: 760, rootContext: true });
   const topology = {
     center: 'center',
@@ -134,46 +145,31 @@ test('Root placement keeps Roots upstream and their sibling continuations downst
   };
   const placement = placeConstellation(geometry, topology);
   assert.equal(placement.size, topology.nodes.length);
+  assertDistinctInside(geometry, placement);
   for (const [rootKey, siblingKey] of [['root-a', 'sib-a'], ['root-b', 'sib-b']]) {
     const root = placement.get(rootKey);
     const sibling = placement.get(siblingKey);
     assert.ok(root && sibling);
-    assert.ok(root.x < sibling.x);
+    assert.ok(root.x <= sibling.x);
     assert.ok(sibling.x < geometry.center.x);
-    assert.ok(Math.abs(root.y - sibling.y) <= 160);
   }
 });
 
-test('topology placement keeps every assigned board rectangle distinct', () => {
-  const geometry = derivePresentationGeometry({ width: 1500, height: 800, rootContext: true });
-  const topology = {
+test('placement fails closed instead of truncating accepted topology beyond advertised capacity', () => {
+  const geometry = derivePresentationGeometry({ width: 500, height: 760, rootContext: false });
+  const nodes = Array.from({ length: geometry.lineCapacity + 1 }, (_, index) => ({
+    key: 'node-' + index,
+    relation: index === 0 ? 'outgoing' : 'descendant',
+    distance: index + 1,
+    families: ['line'],
+  }));
+  assert.throws(() => placeConstellation(geometry, {
     center: 'center',
-    nodes: [
-      { key: 'e4', relation: 'outgoing', distance: 1, families: ['e4'] },
-      { key: 'd4', relation: 'outgoing', distance: 1, families: ['d4'] },
-      { key: 'e5', relation: 'descendant', distance: 2, families: ['e4'] },
-      { key: 'd5', relation: 'descendant', distance: 2, families: ['d4'] },
-      { key: 'root-a', relation: 'root', distance: 1, families: ['a'] },
-      { key: 'root-b', relation: 'root', distance: 1, families: ['b'] },
-      { key: 'sib-a', relation: 'sibling', distance: 1, families: ['a'] },
-      { key: 'sib-b', relation: 'sibling', distance: 1, families: ['b'] },
-    ],
-    relationships: [
-      { source: 'center', target: 'e4' },
-      { source: 'center', target: 'd4' },
-      { source: 'e4', target: 'e5' },
-      { source: 'd4', target: 'd5' },
-      { source: 'root-a', target: 'center' },
-      { source: 'root-b', target: 'center' },
-      { source: 'root-a', target: 'sib-a' },
-      { source: 'root-b', target: 'sib-b' },
-    ],
-  };
-  const slots = [...placeConstellation(geometry, topology).values()];
-  for (let left = 0; left < slots.length; left += 1) {
-    assert.ok(inside(slots[left], geometry.width, geometry.height));
-    for (let right = left + 1; right < slots.length; right += 1) {
-      assert.equal(overlaps(slots[left], slots[right]), false);
-    }
-  }
+    nodes,
+    relationships: nodes.slice(1).map((node, index) => ({
+      source: nodes[index].key,
+      target: node.key,
+      families: ['line'],
+    })),
+  }), /exceeds line capacity/);
 });

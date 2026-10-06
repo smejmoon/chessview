@@ -82,7 +82,6 @@ button { color: inherit; }
   transition: transform 190ms cubic-bezier(.2,.8,.2,1), filter 160ms ease;
 }
 .satellite:hover, .satellite:focus-visible { transform: translate(-50%, -50%) scale(1.34); z-index: 24; outline: none; filter: brightness(1.09); }
-.satellite.tier-2:hover, .satellite.tier-2:focus-visible { transform: translate(-50%, -50%) scale(1.85); z-index: 28; }
 .satellite .mini-board { width: 100%; border-radius: 2px; overflow: hidden; box-shadow: 0 9px 24px rgba(0,0,0,.31), 0 0 0 1px rgba(255,255,255,.045); pointer-events: none; }
 .satellite:hover .mini-board, .satellite:focus-visible .mini-board { box-shadow: 0 18px 42px rgba(0,0,0,.5), 0 0 0 1px rgba(179,210,103,.18); }
 .mini-label { display: flex; align-items: baseline; gap: 5px; min-height: 18px; color: #bdbab5; font-size: 10px; white-space: nowrap; text-shadow: 0 1px 5px #000; }
@@ -148,7 +147,6 @@ cg-board piece { will-change: transform; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(190px, 34vh); }
   .map { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.055); }
   .satellite:hover, .satellite:focus-visible { transform: translate(-50%, -50%) scale(1.26); }
-  .satellite.tier-2:hover, .satellite.tier-2:focus-visible { transform: translate(-50%, -50%) scale(1.6); }
   .opening-label { display: none; }
   .mini-label { min-height: 14px; font-size: 8px; }
   .mini-label strong { font-size: 9px; }

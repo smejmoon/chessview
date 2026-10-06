@@ -13,7 +13,7 @@ import { decorateRootPresentation } from './root-presentation.js';
 import { createPromotionChooser } from './promotion-chooser.js';
 import { bindRecenterTarget, createBoardMoveRecenterHandler } from './recenter-input.js';
 import { placeConstellation } from './presentation-geometry.js';
-import type { PresentationGeometry, PresentationSlot } from './presentation-geometry.ts';
+import type { NodePlacement, PresentationGeometry } from './presentation-geometry.ts';
 import { viewStatusSpec } from './view-status.js';
 
 type ChessgroundConfig = NonNullable<Parameters<typeof Chessground>[1]>;
@@ -27,7 +27,6 @@ type RendererPosition = Readonly<{
   key: string;
   distance: number;
   relation?: string;
-  branch?: string;
   families?: readonly string[];
   edge?: DisplayEdge;
   record?: PositionRecord;
@@ -81,7 +80,6 @@ function relationLabel(item: RendererPosition): string {
   if (item.relation === 'sibling') return 'sibling';
   return item.distance > 1 ? `+${item.distance}` : 'line';
 }
-function familyFor(item: RendererPosition): string { return item.branch ?? item.families?.[0] ?? item.edge?.uci ?? item.key; }
 function moveCueShapes(item: RendererPosition, structure: RendererStructure) {
   const uci = item.edge?.uci;
   if (typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8]/.test(uci)) return [];
@@ -191,18 +189,17 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     bindDebugScroll();
   }
 
-  function renderSatellite(item: RendererPosition, slot: PresentationSlot, view: RendererView, structure: RendererStructure, actions: CurrentViewActions): void {
+  function renderSatellite(item: RendererPosition, placement: NodePlacement, view: RendererView, structure: RendererStructure, actions: CurrentViewActions): void {
     const host = app.querySelector('#satellites');
     if (!host) return;
     const node = item.record ?? {};
     const wrapper = document.createElement('button');
     wrapper.type = 'button';
-    wrapper.className = `satellite position tier-${slot.tier} relation-${item.relation ?? 'line'}`;
+    wrapper.className = `satellite position tier-${placement.tier} relation-${item.relation ?? 'line'}`;
     wrapper.dataset.key = item.key;
-    wrapper.dataset.family = familyFor(item);
-    wrapper.style.setProperty('--x', `${slot.x}px`);
-    wrapper.style.setProperty('--y', `${slot.y}px`);
-    wrapper.style.setProperty('--size', `${slot.size}px`);
+    wrapper.style.setProperty('--x', `${placement.x}px`);
+    wrapper.style.setProperty('--y', `${placement.y}px`);
+    wrapper.style.setProperty('--size', `${placement.size}px`);
     wrapper.innerHTML = `<span class="mini-label"><span class="relation">${relationLabel(item)}</span><strong>${escapeHtml(item.edge?.san ?? '')}</strong></span><span class="mini-board board-frame"></span>${node.opening?.name ? `<span class="opening-label">${escapeHtml(node.opening.name)}</span>` : ''}`;
     bindRecenterTarget(wrapper, actions, item.key);
     host.appendChild(wrapper);

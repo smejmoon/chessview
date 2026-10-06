@@ -76,7 +76,7 @@ Constellation optimizes for a coherent, understandable structure rather than max
 
 The amount shown is constrained by available presentation space and legibility, not by a fixed product-level board count or opening-depth cap. Lens supplies abstract capacities for the forward-Line region and, when enabled, the Root-context region. Those capacities are derived from the actual map presentation area and the board-size regime; pixel coordinates and DOM measurements do not cross into Constellation.
 
-The current presentation uses three board-size tiers: the Nodus, prominent high-priority immediate Lines, and the remaining surrounding boards. Exact sizes and how many prominent slots fit are Lens concerns; Constellation membership remains governed by the supplied capacities and structural priorities.
+The current presentation uses three board-size tiers: the Nodus, prominent high-priority immediate Lines, and the remaining surrounding boards. Exact sizes and how many immediate Lines can use the prominent tier are Lens concerns; Constellation membership remains governed by the supplied capacities and structural priorities. Those capacities are region-derived abstract counts, not rows, columns, slots, or opening-depth limits.
 
 A material change to effective capacities or Root-context visibility invalidates the previous composition as the fixed point for the new inputs and requires same-Nodus recomposition. That recomposition may expose or remove Reading-frontier obligations; if no admitted structural obligation remains, the new shape may be Settled immediately. A presentation-only relayout that leaves the effective composition inputs unchanged does not recompose Constellation.
 

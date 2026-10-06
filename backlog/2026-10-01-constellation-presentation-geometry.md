@@ -2,7 +2,7 @@
 
 Finish Constellation presentation geometry around one Lens-owned spatial model.
 
-Keep presentation capacity separate from final placement. Lens derives the Nodus rectangle, board-size regime, usable Root/Line presentation space, and abstract Constellation capacities from the actual rendered map rectangle. After Constellation chooses the coherent visible subgraph, presentation places that accepted topology so structural direction, depth, family continuity, and transpositions remain legible.
+Keep presentation capacity separate from final placement. Lens derives the Nodus rectangle, board-size regime, usable Root/Line presentation regions, and abstract Constellation capacities from the actual rendered map rectangle without precomputing board slots or imposing fixed total-board ceilings. After Constellation chooses the coherent visible subgraph, presentation places that accepted topology so structural direction, depth, family continuity, and transpositions remain legible.
 
 Remove competing coordinate ownership, then review representative desktop map rectangles and Rail allocations. Correct presentation defects demonstrated by that review: overlap, clipping, unreadable graph flow, ambiguous family structure, misleading connector weight, or interrupted Nodus interaction.
 
@@ -10,7 +10,7 @@ Remove competing coordinate ownership, then review representative desktop map re
 
 `docs/components/constellation.md` requires one coherent surroundings projection whose amount shown is constrained by available presentation space and legibility. `docs/components/lens.md` makes Lens the presentation owner: it derives geometry and effective composition constraints while Constellation owns which canonical positions and relationships belong in the current surroundings.
 
-Capacity and placement are different decisions. Available space determines how much surrounding structure Constellation may select; the accepted Constellation topology determines how that selected structure should occupy the space. Presentation structure should not become the spatial meaning of the graph.
+Capacity and placement are different decisions. Available space determines how much surrounding structure Constellation may select; the accepted Constellation topology determines how that selected structure should occupy the space. Region dimensions and board-size policy may be reduced to abstract counts before composition, but rows, columns, slots, and coordinates are placement machinery and must not become Constellation inputs. Presentation structure should not become the spatial meaning of the graph.
 
 The relationship graph should carry family and transposition structure wherever possible. Explicit family decoration is not a completion requirement; add it only if deployed review shows that topology-aware placement and connectors are insufficient to make those relationships readable.
 
@@ -36,9 +36,9 @@ This outcome does not change ChartedGraph identity, Candidate eligibility, Knowl
 
 # Complete:
 
-One Lens-owned presentation model derives the Nodus rectangle, surrounding usable space, board-size regime, and abstract Root/Line capacities from the actual rendered map rectangle. CSS and renderer code do not independently own competing board coordinates.
+One Lens-owned presentation model derives the Nodus rectangle, surrounding usable regions, board-size regime, and abstract Root/Line capacities from the actual rendered map rectangle. Those capacities are space-derived rather than fixed total-board ceilings, and the geometry model exposes no precomputed board slots. CSS and renderer code do not independently own competing board coordinates.
 
-Constellation receives only abstract capacities and chooses the coherent visible subgraph. Final placement then uses the accepted Constellation's structural relationships so Roots remain upstream, Lines downstream, related continuations read together, and genuine transpositions remain one visible canonical position with every selected relationship still intelligible.
+Constellation receives only abstract capacities and chooses the coherent visible subgraph. Final placement then lays out that accepted topology globally inside the Lens-owned regions so visible relationships never reverse structural direction, Roots remain upstream, Lines downstream, related continuations read together, and genuine transpositions remain one visible canonical position with every selected relationship still intelligible. Placement must fail closed rather than silently truncate accepted membership if its own capacity accounting is violated.
 
 Changing effective capacities or Root-context visibility can change Constellation membership without changing durable graph knowledge or Rail Line inventory; presentation-only relayout leaves membership and settlement unchanged.
 

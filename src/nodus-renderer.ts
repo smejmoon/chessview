@@ -19,8 +19,7 @@ import { viewStatusSpec } from './view-status.js';
 type ChessgroundConfig = NonNullable<Parameters<typeof Chessground>[1]>;
 type BoardApi = ReturnType<typeof Chessground>;
 type DisplayEdge = Readonly<{ target?: string; san?: string; uci?: string; share?: number; games?: number }>;
-type Opening = Readonly<{ eco?: string; name?: string }>;
-type PositionRecord = Readonly<{ key?: string; fen?: string; games?: number; opening?: Opening }>;
+type PositionRecord = Readonly<{ key?: string; fen?: string; games?: number }>;
 type CompositionNode = Readonly<{ key: string; relation?: string; merge?: boolean }>;
 type CompositionRelationship = Readonly<{ source: string; target: string; families?: readonly string[] }>;
 type RendererPosition = Readonly<{
@@ -126,7 +125,7 @@ function rootContextButton(
 }
 function railHtml(view: RendererView, centerNode: PositionRecord, turn: Orientation, debug: boolean): string {
   const lineCount = view.rail?.value?.lines?.length ?? 0;
-  return `<div class="rail-title">Rail</div><div class="rail-position rail-current-details"><div class="eyebrow">${centerNode.opening ? `${escapeHtml(centerNode.opening.eco ?? '')} · opening` : 'current position'}</div><h1>${escapeHtml(centerNode.opening?.name ?? 'Explore from here')}</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(debug)}`;
+  return `<div class="rail-title">Rail</div><div class="rail-position rail-current-details"><div class="eyebrow">current position</div><h1>Explore from here</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(debug)}`;
 }
 
 export function createNodusRenderer({ app: appOption = null, lens: lensOption = null, maintenance = {} }: NodusRendererOptions = {}) {
@@ -217,7 +216,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     wrapper.style.setProperty('--x', `${placement.x}px`);
     wrapper.style.setProperty('--y', `${placement.y}px`);
     wrapper.style.setProperty('--size', `${placement.size}px`);
-    wrapper.innerHTML = `<span class="mini-label"><span class="relation">${relationLabel(item)}</span><strong>${escapeHtml(item.edge?.san ?? '')}</strong></span><span class="mini-board board-frame"></span>${node.opening?.name ? `<span class="opening-label">${escapeHtml(node.opening.name)}</span>` : ''}`;
+    wrapper.innerHTML = `<span class="mini-label"><span class="relation">${relationLabel(item)}</span><strong>${escapeHtml(item.edge?.san ?? '')}</strong></span><span class="mini-board board-frame"></span>`;
     bindRecenterTarget(wrapper, actions, item.key);
     host.appendChild(wrapper);
     const miniBoard = wrapper.querySelector('.mini-board') as HTMLElement | null;

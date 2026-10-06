@@ -86,7 +86,6 @@ button { color: inherit; }
 .mini-label { display: flex; align-items: baseline; gap: 5px; min-height: 18px; color: #bdbab5; font-size: 10px; white-space: nowrap; text-shadow: 0 1px 5px #000; }
 .mini-label .relation { color: #77746f; text-transform: uppercase; font-size: 8px; letter-spacing: .08em; }
 .mini-label strong { color: #e0ddd7; font-size: 11px; }
-.opening-label { display: block; margin-top: 4px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8f8c87; font-size: 9px; }
 .analysis-rail { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: linear-gradient(to bottom, rgba(24,23,21,.96), rgba(18,17,16,.96)); overflow: hidden; }
 .rail-position { padding: 18px 18px 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: .13em; font-size: 10px; font-weight: 800; }
@@ -134,8 +133,7 @@ cg-board piece { will-change: transform; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(190px, 34vh); }
   .map { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.055); }
   .satellite:hover, .satellite:focus-visible { transform: translate(-50%, -50%) scale(1.26); }
-  .opening-label { display: none; }
-  .mini-label { min-height: 14px; font-size: 8px; }
+.mini-label { min-height: 14px; font-size: 8px; }
   .mini-label strong { font-size: 9px; }
   .mini-label .relation { display: none; }
   .analysis-rail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, 44%); grid-template-rows: auto 1fr; }

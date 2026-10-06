@@ -41,7 +41,6 @@ type ParsedExplorerReading = ExplorerReading & Readonly<{
 
 type PositionRecord = Readonly<{
   fen?: string;
-  opening?: unknown;
   explorer?: unknown;
   explorerFetchedAt?: number;
   [field: string]: unknown;
@@ -253,7 +252,6 @@ export function createExplorerProvider({
     try {
       await repository.merge(canonical, {
         fen: cached?.fen ?? toPlayableFen(canonical),
-        opening: explorer.opening ?? cached?.opening ?? null,
         explorer,
         explorerFetchedAt: fetchedAt,
         games: totalGames(explorer),

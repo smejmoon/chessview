@@ -31,6 +31,7 @@ Rail richness is independent from structural readiness. Engine or Masters facts 
 ## Requirements
 
 - The Rail shows Nodus context and an exhaustive immediate-Line inventory.
+- Opening names/ECO codes are not canonical Nodus identity. A position-level Explorer opening label must not be presented as though it were the historical route by which the user reached a transposition-capable canonical position.
 - The Rail lists every current Source Line plus explicit-only navigable outgoing Graph Edges not already represented by that source inventory. It may scroll rather than truncate.
 - Root inventory, Root counts, and Root/Line mode switching are not Rail responsibilities. Root and sibling visibility is controlled on the map.
 - Rail inventory is independent of Constellation presentation capacity and Root-context visibility.

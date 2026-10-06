@@ -10,6 +10,8 @@ One repository record is keyed by the [canonical position](../glossary.md#canoni
 
 A source facet is identified by `(canonical position, facet)`, for example rated Explorer, Masters, or cloud evaluation. Facet identity is generic repository infrastructure; the repository does not interpret what the facet value means.
 
+Route-dependent source annotations are not canonical position-record fields. In particular, an Explorer `opening` label remains inside the Explorer observation; it must not be mirrored to the top-level position record because one canonical position may be reached through multiple opening histories. The low-level position store also ignores legacy top-level `opening` fields so stale browser cache cannot reintroduce that false identity.
+
 ## Record lifetime
 
 The repository keeps one in-memory persisted-record view per canonical key when it has been read or written during the current page lifetime. On a cache miss it reads the persisted node from IndexedDB. Writes update IndexedDB and the in-memory record together.
@@ -95,4 +97,6 @@ Deterministic tests should cover:
 - replacement callers being able to start fresh work after a cancelled producer is detached;
 - source-client freshness remaining independent per facet;
 - source-facet eviction leaving `ChartedGraph` topology unchanged;
-- an incompatible node-cache schema clearing nodes without invalidating an independently compatible Graph Edge cache.
+- an incompatible node-cache schema clearing nodes without invalidating an independently compatible Graph Edge cache;
+- route-dependent Explorer opening metadata remaining source-local rather than becoming canonical position-record identity;
+- legacy top-level opening labels being ignored at the persisted position-store boundary.

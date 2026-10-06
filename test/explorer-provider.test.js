@@ -154,3 +154,34 @@ test('explicit Explorer refresh bypasses a fresh cached Reading to obtain repres
   assert.deepEqual(sampled.recentGames, [{ id: 'ijklmnop' }]);
   assert.strictEqual(provider.current(CENTER), sampled);
 });
+
+
+test('Explorer opening metadata stays source-local instead of becoming canonical position identity', async () => {
+  const repository = createPositionRepository({
+    read: async () => null,
+    write: async (value) => value,
+    version: () => 0,
+  });
+  const provider = createExplorerProvider({
+    repository,
+    request: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ...explorerReading(),
+        opening: { eco: 'B14', name: 'Caro-Kann Defense: Panov Attack' },
+      }),
+      text: async () => '',
+    }),
+    now: () => 3_000,
+    cooldownUntil: () => 0,
+    log: () => {},
+  });
+
+  const reading = await provider.ensure(CENTER);
+  assert.equal(reading.opening.name, 'Caro-Kann Defense: Panov Attack');
+
+  const stored = await repository.get(CENTER);
+  assert.equal(Object.hasOwn(stored, 'opening'), false);
+  assert.equal(stored.explorer.opening.name, 'Caro-Kann Defense: Panov Attack');
+});

@@ -59,3 +59,20 @@ test('Explorer provider invalidation drops repository-owned live readings', asyn
   assert.equal(provider.current(position), null);
   assert.equal(repository.currentFacet(position, 'explorer'), null);
 });
+
+
+test('canonical position storage strips legacy top-level opening identity', async () => {
+  await clearGraph();
+  const position = canonicalPosition(START_FEN);
+  const stored = await putNode({
+    key: position,
+    fen: START_FEN,
+    opening: { eco: 'B14', name: 'Caro-Kann Defense: Panov Attack' },
+    structural: 'keep',
+  });
+
+  assert.equal(Object.hasOwn(stored, 'opening'), false);
+  const reread = await getNode(position);
+  assert.equal(Object.hasOwn(reread, 'opening'), false);
+  assert.equal(reread.structural, 'keep');
+});

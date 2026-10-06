@@ -162,3 +162,26 @@ test('same-Nodus updates preserve the playable center Chessground', async () => 
   assert.equal(app.centerBoard, firstCenterElement);
   assert.equal(secondCenterCalls.length, 1);
 }));
+
+
+test('canonical Nodus presentation does not claim a route-dependent opening identity', async () => withRenderer(async (createNodusRenderer) => {
+  const document = new FakeDocument();
+  const app = new FakeApp(document, { id: 'app' });
+  const center = canonicalPosition(START_FEN);
+  const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() {} };
+  const renderer = createNodusRenderer({ app, preferences: {} });
+
+  const view = viewFor(center);
+  view.structure.value.centerNode = {
+    key: center,
+    games: 1234,
+    opening: { eco: 'B14', name: 'Caro-Kann Defense: Panov Attack' },
+  };
+
+  renderer.render(view, actions, 'ready');
+  renderer.render(view, actions, 'ready');
+
+  assert.match(app.rail.innerHTML, /current position/);
+  assert.match(app.rail.innerHTML, /Explore from here/);
+  assert.doesNotMatch(app.rail.innerHTML, /Panov|B14/);
+}));

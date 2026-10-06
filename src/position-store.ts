@@ -20,14 +20,18 @@ export function invalidateNodeStore(): void {
   nodeVersion += 1;
 }
 
+function withoutLegacyOpening(node: StoredPosition): StoredPosition {
+  const { opening: _opening, ...rest } = node;
+  return rest;
+}
+
 function withoutExplorerCache(node: StoredPosition): StoredPosition {
   const {
     explorer: _explorer,
     explorerFetchedAt: _explorerFetchedAt,
     games: _games,
-    opening: _opening,
     ...rest
-  } = node;
+  } = withoutLegacyOpening(node);
   return rest;
 }
 
@@ -65,16 +69,18 @@ export async function clearExplorerCacheFields(keys?: readonly string[]): Promis
 
 export async function getNode(key: string): Promise<StoredPosition | undefined> {
   const db = await openDb();
-  return requestAsPromise<StoredPosition | undefined>(
+  const value = await requestAsPromise<StoredPosition | undefined>(
     db.transaction(NODES_STORE).objectStore(NODES_STORE).get(key),
   );
+  return value ? withoutLegacyOpening(value) : undefined;
 }
 
 export async function putNode<T extends StoredPosition>(node: T): Promise<T> {
   const db = await openDb();
+  const sanitized = withoutLegacyOpening(node) as T;
   const transaction = db.transaction(NODES_STORE, 'readwrite');
-  transaction.objectStore(NODES_STORE).put(node);
+  transaction.objectStore(NODES_STORE).put(sanitized);
   await transactionAsPromise(transaction);
   invalidateNodeStore();
-  return node;
+  return sanitized;
 }

@@ -19,7 +19,7 @@ Follow `chatgpt/branch-preview.md` for publication mechanics and lifecycle. This
 | Scenario | Stress | FEN | Default view |
 | --- | --- | --- | --- |
 | Sparse endgame smoke | fast cold-acquisition sanity check with little or no branching | `8/8/8/8/8/4k3/4P3/4K3 w - - 0 1` | `lines` |
-| Panov Attack | dense transpositions / move-order context | `rnbqkb1r/pp3ppp/4pn2/3p4/2PP4/2N5/PP3PPP/R1BQKBNR w KQkq - 0 6` | `roots` |
+| Panov Attack | dense transpositions / move-order context | `rnbqkbnr/pp2pppp/8/3p4/2PP4/8/PP3PPP/RNBQKBNR b KQkq - 0 4` | `roots` |
 | QGD / English transposition | alternate move orders converging into one structure | `rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4` | `roots` |
 | Réti → Catalan structure | flank-opening transposition into a queen-pawn family | `rnbq1rk1/ppp1bppp/4pn2/3p4/2PP4/5NP1/PP2PPBP/RNBQ1RK1 b - - 0 6` | `roots` |
 | Marshall Attack | long forcing continuation | `r1bq1rk1/2p1bppp/p1n2n2/1p1pp3/4P3/1BP2N2/PP1P1PPP/RNBQR1K1 w - - 0 9` | `lines` |

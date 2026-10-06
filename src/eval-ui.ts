@@ -7,7 +7,7 @@ type PositionEvaluation = Readonly<{ cp?: number | null; mate?: number | null; d
 type Frequency = Readonly<{ games?: number; share?: number }>;
 type HumanMismatch = Readonly<{ direction: 'up' | 'down' }>;
 type PresentationRelationship = Readonly<{ id: string; source: string; target: string }>;
-type PresentationNode = Readonly<{ key: string; relation?: string }>;
+type PresentationNode = Readonly<{ key: string; relationships?: readonly string[]; edge?: Readonly<{ id?: string }> }>;
 type PresentationStructure = Readonly<{ composition?: Readonly<{ nodes?: readonly PresentationNode[]; relationships?: readonly PresentationRelationship[] }> }>;
 type EvidenceRelationship = Readonly<{ id: string; moveEval?: MoveEvaluation | null; rarity?: string | null }>;
 type EvidenceValue = Readonly<{ center?: Readonly<{ evaluation?: PositionEvaluation | null }> | null; relationships?: readonly EvidenceRelationship[] }>;
@@ -63,11 +63,12 @@ function decorateCenter(root: Element, evidence: EvidenceValue): void {
 function relationshipForSatellite(element: HTMLElement, view: EvidencePresentationView): PresentationRelationship | null {
   const key = element.dataset.key; const composition = structureValue(view)?.composition; if (!key || !composition) return null;
   const node = composition.nodes?.find((item) => item.key === key);
-  if (node?.relation === 'root') {
-    const outgoing = relationshipsFor(composition, key, { incoming: false });
-    return outgoing.find((relationship) => !composition.nodes?.some((item) => item.key === relationship.target)) ?? outgoing[0] ?? null;
+  const preferredId = node?.edge?.id ?? node?.relationships?.[0];
+  if (preferredId) {
+    const preferred = composition.relationships?.find((relationship) => relationship.id === preferredId);
+    if (preferred) return preferred;
   }
-  return relationshipsFor(composition, key, { outgoing: false })[0] ?? null;
+  return relationshipsFor(composition, key)[0] ?? null;
 }
 function decorateSatellites(root: Element, view: EvidencePresentationView, evidenceById: ReadonlyMap<string, EvidenceRelationship>): void {
   for (const element of root.querySelectorAll<HTMLElement>('.satellite[data-key]')) {

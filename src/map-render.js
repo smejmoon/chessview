@@ -9,68 +9,43 @@ function nodeRecord(composition, key) {
   return composition?.nodes?.find?.((node) => node.key === key) ?? null;
 }
 
-function relationshipDirection(composition, relationship, requested) {
-  if (requested !== 'mixed') return requested;
-  const source = nodeRecord(composition, relationship.source);
-  return source?.relation === 'root' || source?.relation === 'sibling' ? 'roots' : 'lines';
-}
-
 function gameCount(gamesByRelationship, relationshipId) {
   const games = gamesByRelationship?.get?.(relationshipId);
   return Number.isFinite(games) && games > 0 ? games : 0;
 }
 
-export function visibleConnectors(composition, { direction, gamesByRelationship = new Map() }) {
-  if (!['lines', 'roots', 'mixed'].includes(direction)) {
-    throw new TypeError('visibleConnectors requires a roots, lines, or mixed direction');
-  }
+export function visibleConnectors(composition, { gamesByRelationship = new Map() } = {}) {
   const relationships = Array.isArray(composition?.relationships) ? composition.relationships : [];
   const maxGames = Math.max(0, ...relationships.map((relationship) => gameCount(gamesByRelationship, relationship.id)));
   return relationships.flatMap((relationship) => {
-    const actualDirection = relationshipDirection(composition, relationship, direction);
+    const familyIds = relationship.families?.length ? relationship.families : [null];
     const games = gameCount(gamesByRelationship, relationship.id);
     const strokeWidth = edgeStrokeWidth(games, maxGames);
-    if (actualDirection === 'lines') {
-      const familyIds = relationship.families?.length ? relationship.families : [null];
-      return familyIds.map((familyId, index) => {
-        const family = familyRecord(composition, familyId);
-        const lineShare = family?.lineShare ?? null;
-        return {
-          id: familyId ? `${relationship.id}::${familyId}` : relationship.id,
-          relationshipId: relationship.id,
-          familyId,
-          familyIndex: index,
-          familyCount: familyIds.length,
-          familyOffset: index - (familyIds.length - 1) / 2,
-          source: relationship.source,
-          target: relationship.target,
-          edge: relationship.edge,
-          className: familyIds.length > 1 ? 'edge edge-shared-family' : 'edge',
-          lineShare,
-          games,
-          strokeWidth,
-        };
-      });
-    }
     const sourceNode = nodeRecord(composition, relationship.source);
-    const classes = ['edge'];
-    if ((relationship.edge?.share ?? 0) >= 0.2) classes.push('edge-strong');
-    if (sourceNode?.merge) classes.push('edge-merge');
-    return [{
-      id: relationship.id,
-      relationshipId: relationship.id,
-      familyId: null,
-      familyIndex: 0,
-      familyCount: 1,
-      familyOffset: 0,
-      source: relationship.source,
-      target: relationship.target,
-      edge: relationship.edge,
-      className: classes.join(' '),
-      lineShare: null,
-      games,
-      strokeWidth,
-    }];
+    const targetNode = nodeRecord(composition, relationship.target);
+    const merge = sourceNode?.merge === true || targetNode?.merge === true;
+    return familyIds.map((familyId, index) => {
+      const family = familyRecord(composition, familyId);
+      return {
+        id: familyId ? `${relationship.id}::${familyId}` : relationship.id,
+        relationshipId: relationship.id,
+        familyId,
+        familyIndex: index,
+        familyCount: familyIds.length,
+        familyOffset: index - (familyIds.length - 1) / 2,
+        source: relationship.source,
+        target: relationship.target,
+        edge: relationship.edge,
+        className: [
+          'edge',
+          familyIds.length > 1 ? 'edge-shared-family' : '',
+          merge ? 'edge-merge' : '',
+        ].filter(Boolean).join(' '),
+        lineShare: family?.lineShare ?? null,
+        games,
+        strokeWidth,
+      };
+    });
   });
 }
 
@@ -111,13 +86,13 @@ function retainedEvidenceClasses(svg) {
   return result;
 }
 
-export function drawVisibleEdges(map, composition, { direction, gamesByRelationship = new Map() }) {
+export function drawVisibleEdges(map, composition, { gamesByRelationship = new Map() } = {}) {
   const svg = map?.querySelector('#edges');
   if (!map || !svg) return [];
   const mapRect = map.getBoundingClientRect();
   const elements = elementMap(map);
   const paths = [];
-  for (const connector of visibleConnectors(composition, { direction, gamesByRelationship })) {
+  for (const connector of visibleConnectors(composition, { gamesByRelationship })) {
     const source = elements.get(connector.source);
     const target = elements.get(connector.target);
     if (!source || !target) continue;

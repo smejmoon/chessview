@@ -134,7 +134,6 @@ controller = new CurrentViewController({
     return composeNodusStructure({
       center,
       mode,
-      rootContext: mode === 'roots',
       lineMax: constraints.lineCapacity,
       rootMax: constraints.rootCapacity,
       signal,

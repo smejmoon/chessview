@@ -78,34 +78,6 @@
 .satellite.eval-dubious .mini-eval { background: rgba(228,165,68,.18); color: #f4cf94; }
 .satellite.eval-bad .mini-eval { background: rgba(230,94,85,.18); color: #ffb0aa; }
 
-.map.mode-roots .satellite.rarity-rare .mini-label strong::after,
-.map.mode-roots .satellite.rarity-very-rare .mini-label strong::after,
-.root-tree .roots-row.rarity-rare .explorer-move::after,
-.root-tree .roots-row.rarity-very-rare .explorer-move::after {
-  content: '◇';
-  margin-left: 4px;
-  color: #9a968f;
-  font-size: .82em;
-  font-weight: 800;
-}
-.map.mode-roots .satellite.rarity-rare { filter: brightness(.82) saturate(.78); }
-.map.mode-roots .satellite.rarity-very-rare { filter: brightness(.66) saturate(.58); }
-.map.mode-roots .satellite.rarity-rare:hover,
-.map.mode-roots .satellite.rarity-rare:focus-visible,
-.map.mode-roots .satellite.rarity-very-rare:hover,
-.map.mode-roots .satellite.rarity-very-rare:focus-visible,
-.map.mode-roots .satellite.rarity-rare.is-related-highlight,
-.map.mode-roots .satellite.rarity-very-rare.is-related-highlight {
-  filter: brightness(1.09);
-}
-.root-tree .roots-row.rarity-rare { opacity: .8; }
-.root-tree .roots-row.rarity-very-rare { opacity: .62; }
-.root-tree .roots-row.rarity-rare:hover,
-.root-tree .roots-row.rarity-very-rare:hover,
-.root-tree .roots-row.rarity-rare.is-related-highlight,
-.root-tree .roots-row.rarity-very-rare.is-related-highlight { opacity: 1; }
-
-.edge.edge-strong { stroke: var(--line); stroke-width: 1.45; }
 .edge.edge-quality-strong { stroke: rgba(159,216,95,.58); }
 .edge.edge-quality-dubious { stroke: rgba(228,165,68,.72); }
 .edge.edge-quality-bad { stroke: rgba(230,94,85,.78); }
@@ -167,24 +139,6 @@
 .eval-human-cell { display: inline-flex; align-items: center; gap: 5px; min-height: 16px; }
 .eval-play { color: #716d67; font-size: 20px; line-height: 1; justify-self: end; }
 .eval-rail-row:hover .eval-play { color: #ddd9d2; }
-
-.root-tree .roots-row .root-loss {
-  color: #9a968f;
-  font-size: 9px;
-  font-weight: 800;
-  text-align: right;
-}
-.root-tree .roots-row.eval-strong .root-loss { color: #b9d986; }
-.root-tree .roots-row.eval-dubious .root-loss { color: #e4b46a; }
-.root-tree .roots-row.eval-bad .root-loss { color: #eb7d75; }
-.root-tree .roots-row .root-human {
-  display: inline-flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 2px;
-  min-height: 14px;
-  color: #5f5b56;
-}
 
 @media (max-width: 760px) {
   .rail-title { display: none; }

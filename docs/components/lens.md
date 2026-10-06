@@ -26,8 +26,9 @@ Lens combines presentation preferences with the current presentation environment
 - Root/Line mode is current-Nodus state, not a Lens preference. Lens consumes the active mode when deriving presentation geometry and constraints.
 - All visible boards share one Lens-owned global orientation controlled by the flip action. Orientation changes presentation only; they do not replace the Nodus or start refinement.
 - Guide and Debug are Lens-owned presentation preferences. Changing either requests redraw only.
-- One Lens-owned geometry decision derives the Nodus rectangle, board-size tiers, forward-Line slots, optional Root-context slots, and effective composition capacities from the actual rendered map rectangle. Browser viewport size alone is only a fallback before a rendered map rectangle exists.
-- The abstract Constellation constraint is the number of surrounding boards that the forward-Line region and optional Root-context region can legibly represent under that geometry. Pixel coordinates, sizes, slot rectangles, family grouping, and connector paths remain presentation-private.
+- One Lens-owned geometry decision derives the Nodus rectangle, board-size tiers, usable upstream and downstream regions, and effective composition capacities from the actual rendered map rectangle. Browser viewport size alone is only a fallback before a rendered map rectangle exists.
+- Geometry exposes usable regions and the board-size regime before composition; it does not precompute board slots. The abstract Constellation constraint remains the number of Line and optional Root/sibling boards those regions can legibly represent. Pixel coordinates, final node placement, family grouping, and connector paths remain presentation-private.
+- Effective capacities are derived from the usable regions and current board-size policy rather than fixed total-board ceilings. After Constellation accepts membership, one topology-aware placement pass consumes the whole accepted Constellation. Root/sibling and Line roles constrain which side of the Nodus a node may occupy; they do not select separate Root and Line layout algorithms.
 - A material change in effective presentation capacities is a Constellation input change and requests same-Nodus recomposition. A geometry change that affects only two-dimensional placement uses presentation-only redraw.
 - A trustworthy provisional Constellation remains visible and navigable while Weather reports `Updating…`; presentation must not treat unsettled as unavailable.
 - Same-Nodus presentation updates must not replace or disable the accepted Nodus Chessground merely because structure, Evidence, Rail, or Weather is refining.
@@ -44,7 +45,7 @@ Deterministic/browser contract tests should cover:
 - orientation, Guide, and Debug changes redrawing without replacing the current Nodus or starting acquisition;
 - different effective presentation capacities causing same-Nodus Constellation recomposition;
 - presentation-only geometry changes redrawing accepted state without structural recomposition;
-- one geometry owner deciding Nodus and surrounding-board placement for both structural directions;
+- one geometry owner and one placement path deciding Nodus and surrounding-board placement for both structural directions, without a parallel Root layout;
 - a trustworthy provisional Constellation remaining visible and interactive while Weather is `Updating…`;
 - renderer resource state remaining presentation-local and never becoming current-view/domain truth;
 - normal presentation failure falling back to a degraded surface without changing structural truth.

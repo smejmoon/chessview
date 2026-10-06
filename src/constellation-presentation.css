@@ -12,13 +12,35 @@
 .move-cue-destination { opacity: 0.2; }
 .move-cue-shaft { stroke: currentColor; stroke-width: 0.18; stroke-linecap: round; opacity: 0.9; }
 .move-cue-head { fill: currentColor; opacity: 0.94; }
-.map.has-root-context .satellite.is-shared-root-ancestry .mini-board {
+
+.satellite.is-shared-family .mini-board {
   box-shadow: 0 12px 30px rgba(0,0,0,.38), 0 0 0 1px rgba(179,210,103,.22);
 }
-.map.has-root-context .satellite.is-transposition-merge .mini-board {
+.satellite.is-transposition-merge .mini-board {
   box-shadow: 0 16px 38px rgba(0,0,0,.44), 0 0 0 2px rgba(179,210,103,.58);
 }
-.map.has-root-context .edge.edge-merge { stroke: #b3d267; opacity: .92; }
+.edge.edge-merge { stroke: #b3d267; opacity: .92; }
+
+.relation-root .mini-label strong,
+.relation-sibling .mini-label strong { color: #c5d99a; }
+
+.satellite.rarity-rare .mini-label strong::after,
+.satellite.rarity-very-rare .mini-label strong::after {
+  content: '◇';
+  margin-left: 4px;
+  color: #9a968f;
+  font-size: .82em;
+  font-weight: 800;
+}
+.satellite.rarity-rare { filter: brightness(.82) saturate(.78); }
+.satellite.rarity-very-rare { filter: brightness(.66) saturate(.58); }
+.satellite.rarity-rare:hover,
+.satellite.rarity-rare:focus-visible,
+.satellite.rarity-very-rare:hover,
+.satellite.rarity-very-rare:focus-visible,
+.satellite.rarity-rare.is-related-highlight,
+.satellite.rarity-very-rare.is-related-highlight { filter: brightness(1.09); }
+
 .satellite.is-related-highlight {
   transform: translate(-50%, -50%) scale(1.42);
   filter: brightness(1.14);

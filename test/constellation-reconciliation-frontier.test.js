@@ -39,13 +39,13 @@ test('source-usable Explorer Reading stays on the structural frontier until reco
     throw new Error('fresh cache should not hit network');
   };
 
-  const before = await composeNodusStructure({ center, mode: 'lines', max: 1 });
+  const before = await composeNodusStructure({ center, mode: 'lines', lineMax: 1 });
   assert.equal(networkCalls, 0);
   assert.deepEqual(before.readingFrontier, [center]);
   assert.equal(before.settling, true);
 
   await acquireExplorerReading(center);
-  const after = await composeNodusStructure({ center, mode: 'lines', max: 1 });
+  const after = await composeNodusStructure({ center, mode: 'lines', lineMax: 1 });
 
   assert.equal(networkCalls, 0);
   assert.deepEqual(after.readingFrontier, []);

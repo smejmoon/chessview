@@ -2,10 +2,6 @@
 
 Add user-controlled Constellation zoom so the map can trade board scale for visible graph coverage. As the effective presentation-space constraint changes, Constellation may add or remove surrounding boards dynamically while preserving the same Nodus and durable graph knowledge.
 
-# Blocked:
-
-Implementation waits until the presentation-space contract and single authoritative Root/Line geometry owner in `backlog/2026-10-01-constellation-presentation-geometry.md` are settled. Zoom must vary that one geometry/constraint model rather than introduce a second placement or capacity system.
-
 # Because:
 
 The number of boards in the Constellation is intentionally presentation-dependent. A user should eventually be able to zoom the map to see a broader or narrower coherent subgraph without changing what the Rail knows about the Nodus.
@@ -14,7 +10,7 @@ Rail inventory and tab counts are independent of Constellation capacity under `d
 
 # Edges:
 
-Constellation continues to own coherent visible-subgraph membership; Interface owns board coordinates, scale, and connector geometry. Zoom changes presentation constraints and may cause Constellation recomposition, but it does not redefine canonical graph identity.
+Constellation continues to own coherent visible-subgraph membership; Lens owns the upstream/downstream regions, board coordinates, scale, capacity derivation, and connector geometry. Zoom must vary that one presentation model rather than introduce a second placement or capacity system. Zoom changes presentation constraints and may cause Constellation recomposition, but it does not redefine canonical graph identity.
 
 If a wider zoom exposes a structural frontier that requires additional source knowledge, normal Constellation/Knowledge Acquisition boundaries continue to apply. Zoom itself does not become a source client or persistence mechanism.
 

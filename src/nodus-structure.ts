@@ -1,15 +1,10 @@
 import {
-  START_FEN,
-  canonicalPosition,
   edgeId,
   legalDestinations,
   legalMoveTargets,
   toPlayableFen,
 } from './graph.js';
-import {
-  composeLineNeighborhood,
-  chooseRootNeighborhood,
-} from './visible-graph.ts';
+import { composeLineNeighborhood } from './visible-graph.ts';
 import type {
   LineCompositionPlan,
   VisibleComposition,
@@ -17,7 +12,6 @@ import type {
   VisibleNode,
   VisibleRelationship,
 } from './visible-graph.ts';
-import { formatPgnMoves, formatPgnSuffix, reconstructPgnPath } from './pgn.js';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge } from './position-graph.ts';
 import { positionRepository } from './position-repository.js';
@@ -30,10 +24,6 @@ import {
 } from './constellation-selection.ts';
 import type { SelectionCandidate } from './constellation-selection.ts';
 
-const START = canonicalPosition(START_FEN);
-const ROOT_PATH_SEARCH_MAX_DEPTH = 32;
-const ROOT_LABEL_MAX_PLIES = 6;
-
 type CandidateSource = Readonly<{
   outgoing(source: string): Promise<readonly SelectionCandidate[]>;
   incoming(target: string): Promise<readonly SelectionCandidate[]>;
@@ -41,17 +31,14 @@ type CandidateSource = Readonly<{
   missingReadings(): readonly string[];
 }>;
 type PositionRecord = { key: string; fen: string; [field: string]: unknown };
-type RootRow = Readonly<{ key: string; label: string; title: string }>;
 
 export type NodusMode = 'roots' | 'lines';
 
 export type ComposeNodusStructureOptions = Readonly<{
   center: string;
   mode: NodusMode;
-  max?: number;
   lineMax?: number;
   rootMax?: number;
-  rootContext?: boolean;
   signal?: AbortSignal;
 }>;
 
@@ -177,59 +164,6 @@ async function composeKnownLineGraph(
     plan = { ...plan, readingFrontier: [center, ...plan.readingFrontier.filter((key) => key !== center)] };
   }
   return plan;
-}
-
-async function collectIncomingGraph(
-  center: string,
-  max: number,
-  candidateSource: CandidateSource,
-  signal?: AbortSignal,
-): Promise<Map<string, readonly SelectionCandidate[]>> {
-  const incomingByTarget = new Map<string, readonly SelectionCandidate[]>();
-  const queue = [center];
-  const visited = new Set<string>();
-  while (queue.length && visited.size < max) {
-    throwIfAborted(signal);
-    const key = queue.shift();
-    if (!key || visited.has(key)) continue;
-    visited.add(key);
-    const candidates = await candidateSource.incoming(key);
-    incomingByTarget.set(key, candidates);
-    for (const candidate of candidates) if (!visited.has(candidate.edge.source)) queue.push(candidate.edge.source);
-  }
-  return incomingByTarget;
-}
-
-async function collectIncomingToStart(
-  target: string,
-  { maxDepth = ROOT_PATH_SEARCH_MAX_DEPTH, signal }: { maxDepth?: number; signal?: AbortSignal } = {},
-): Promise<Map<string, GraphEdge[]>> {
-  const incomingByTarget = new Map<string, GraphEdge[]>();
-  const queue: Array<{ key: string; depth: number }> = [{ key: target, depth: 0 }];
-  const seen = new Set<string>();
-  while (queue.length) {
-    throwIfAborted(signal);
-    const current = queue.shift();
-    if (!current || seen.has(current.key) || current.depth >= maxDepth) continue;
-    seen.add(current.key);
-    const incoming = await positionGraph.incoming(current.key);
-    incomingByTarget.set(current.key, incoming);
-    if (incoming.some((edge) => edge.source === START)) break;
-    for (const edge of incoming) if (!seen.has(edge.source)) queue.push({ key: edge.source, depth: current.depth + 1 });
-  }
-  return incomingByTarget;
-}
-
-async function rootRows(composition: VisibleComposition, signal?: AbortSignal): Promise<readonly RootRow[]> {
-  const rows = await Promise.all(composition.nodes.map(async (node): Promise<RootRow | null> => {
-    const incomingByTarget = await collectIncomingToStart(node.key, { signal });
-    const path = reconstructPgnPath(node.key, incomingByTarget, START);
-    if (path == null) return null;
-    const full = path.length ? formatPgnMoves(path) : 'start position';
-    const suffix = path.length ? formatPgnSuffix(path, ROOT_LABEL_MAX_PLIES) : 'start position';
-    return { key: node.key, label: node.merge ? `↗ ${suffix}` : suffix, title: node.merge ? `Transposition merge · ${full}` : full };
-  }));
-  return immutable(rows.filter((row): row is RootRow => row != null));
 }
 
 function unique(values: readonly string[]): string[] {
@@ -360,35 +294,26 @@ function mergeCompositions(primary: VisibleComposition, context: VisibleComposit
 export async function composeNodusStructure(options: ComposeNodusStructureOptions) {
   const { center, mode, signal } = options;
   throwIfAborted(signal);
-  const legacyMax = capacity(options.max, 1);
   const candidateSource = createCandidateSource(signal);
-  let selected: VisibleComposition;
-  let readingFrontier: string[] = [];
-  let rows: readonly RootRow[] = [];
+  const line = await composeKnownLineGraph(
+    center,
+    capacity(options.lineMax, 1),
+    candidateSource,
+    signal,
+  );
+  let selected = line.composition;
+  const readingFrontier = [...line.readingFrontier];
 
-  if (options.rootContext === undefined) {
-    if (mode === 'roots') {
-      const incomingByTarget = await collectIncomingGraph(center, legacyMax, candidateSource, signal);
-      selected = chooseRootNeighborhood({ center, incomingByTarget, max: legacyMax });
-      readingFrontier = [...candidateSource.missingReadings()];
-      rows = await rootRows(selected, signal);
-    } else {
-      const line = await composeKnownLineGraph(center, legacyMax, candidateSource, signal);
-      selected = line.composition;
-      readingFrontier = line.readingFrontier;
-    }
-  } else {
-    const lineMax = capacity(options.lineMax, legacyMax);
-    const line = await composeKnownLineGraph(center, lineMax, candidateSource, signal);
-    selected = line.composition;
-    readingFrontier = [...line.readingFrontier];
-    if (options.rootContext && (options.rootMax ?? 0) > 0) {
-      const before = new Set(candidateSource.missingReadings());
-      const context = await composeRootContext(center, capacity(options.rootMax, 1), candidateSource);
-      selected = mergeCompositions(selected, context);
-      for (const key of candidateSource.missingReadings()) {
-        if (!before.has(key) && !readingFrontier.includes(key)) readingFrontier.push(key);
-      }
+  if (mode === 'roots' && (options.rootMax ?? 0) > 0) {
+    const before = new Set(candidateSource.missingReadings());
+    const context = await composeRootContext(
+      center,
+      capacity(options.rootMax, 1),
+      candidateSource,
+    );
+    selected = mergeCompositions(selected, context);
+    for (const key of candidateSource.missingReadings()) {
+      if (!before.has(key) && !readingFrontier.includes(key)) readingFrontier.push(key);
     }
   }
   throwIfAborted(signal);
@@ -413,6 +338,5 @@ export async function composeNodusStructure(options: ComposeNodusStructureOption
     positions,
     readingFrontier,
     settling: readingFrontier.length > 0,
-    rootRows: rows,
   });
 }

@@ -120,7 +120,7 @@ test('Knowledge Acquisition alone reconciles a fresh cached Explorer Reading int
   let networkCalls = 0;
   globalThis.fetch = async () => { networkCalls += 1; throw new Error('fresh cache should avoid network'); };
 
-  const before = await composeNodusStructure({ center, mode: 'lines', max: 3 });
+  const before = await composeNodusStructure({ center, mode: 'lines', lineMax: 3 });
   assert.equal(networkCalls, 0);
   assert.deepEqual(await getOutgoing(center), []);
   assert.deepEqual(before.composition.relationships, []);
@@ -130,7 +130,7 @@ test('Knowledge Acquisition alone reconciles a fresh cached Explorer Reading int
   assert.equal(networkCalls, 0);
   assert.deepEqual(stored.map((edge) => edge.uci).sort(), ['d2d4', 'e2e4']);
 
-  const after = await composeNodusStructure({ center, mode: 'lines', max: 1 });
+  const after = await composeNodusStructure({ center, mode: 'lines', lineMax: 1 });
   assert.deepEqual(after.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
 });
 
@@ -185,7 +185,7 @@ test('composition exposes missing center Explorer as refinement frontier without
   let networkCalls = 0;
   globalThis.fetch = async () => { networkCalls += 1; throw new Error('composition must not fetch'); };
 
-  const structure = await composeNodusStructure({ center: isolated.key, mode: 'lines', max: 3 });
+  const structure = await composeNodusStructure({ center: isolated.key, mode: 'lines', lineMax: 3 });
 
   assert.equal(networkCalls, 0);
   assert.deepEqual(structure.composition.relationships, []);
@@ -200,7 +200,7 @@ test('composition exposes only selected descendant positions whose Explorer fact
   const d4 = positionAfter(['d4']);
   await putExplorer(e4, explorerWithMoves([['e7e5', 60]]));
 
-  const structure = await composeNodusStructure({ center, mode: 'lines', max: 3 });
+  const structure = await composeNodusStructure({ center, mode: 'lines', lineMax: 3 });
 
   assert.ok(structure.composition.nodes.some((node) => node.key === e4.key));
   assert.ok(structure.composition.nodes.some((node) => node.key === d4.key));
@@ -218,7 +218,7 @@ test('stale cached Explorer remains usable structural evidence without compositi
   let networkCalls = 0;
   globalThis.fetch = async () => { networkCalls += 1; throw new Error('composition must not refresh'); };
 
-  const structure = await composeNodusStructure({ center, mode: 'lines', max: 1 });
+  const structure = await composeNodusStructure({ center, mode: 'lines', lineMax: 1 });
 
   assert.equal(networkCalls, 0);
   assert.deepEqual(structure.composition.relationships.map((relationship) => relationship.edge.uci), ['e2e4']);
@@ -240,7 +240,7 @@ test('Explorer source failure cannot make known graph structure fail during comp
   await putEdges([edge]);
   globalThis.fetch = async () => { throw new Error('offline without cache'); };
 
-  const structure = await composeNodusStructure({ center: isolated.key, mode: 'lines', max: 1 });
+  const structure = await composeNodusStructure({ center: isolated.key, mode: 'lines', lineMax: 1 });
 
   assert.equal(structure.composition.relationships.length, 0);
   assert.deepEqual(structure.readingFrontier, [isolated.key]);

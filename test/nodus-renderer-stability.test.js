@@ -92,10 +92,10 @@ class FakeDocument {
   removeEventListener() {}
 }
 
-function viewFor(center, railLines = []) {
+function viewFor(center, railLines = [], mode = 'lines') {
   return {
     center,
-    mode: 'lines',
+    mode,
     orientation: 'white',
     navigation: { canGoBack: false },
     structure: {
@@ -128,6 +128,22 @@ async function withRenderer(run) {
     await vite.close();
   }
 }
+
+test('same-Nodus mode changes preserve the playable center Chessground while relaying out the Constellation', async () => withRenderer(async (createNodusRenderer) => {
+  const document = new FakeDocument();
+  const app = new FakeApp(document, { id: 'app' });
+  const center = canonicalPosition(START_FEN);
+  const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() {} };
+  const renderer = createNodusRenderer({ app, preferences: {} });
+
+  renderer.render(viewFor(center, [], 'lines'), actions, 'ready');
+  const firstCenterElement = app.centerBoard;
+  renderer.render(viewFor(center, [], 'roots'), actions, 'ready');
+
+  const centerCalls = globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board');
+  assert.equal(app.centerBoard, firstCenterElement);
+  assert.equal(centerCalls.length, 1);
+}));
 
 test('same-Nodus updates preserve the playable center Chessground', async () => withRenderer(async (createNodusRenderer) => {
   const document = new FakeDocument();

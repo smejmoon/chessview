@@ -57,7 +57,7 @@ test('explicit materialization stays navigation-only unless current Prevalence c
 
   globalThis.fetch = async () => { throw new Error('fresh Explorer cache should avoid network'); };
 
-  const structure = await composeNodusStructure({ center: CENTER, mode: 'lines', max: 3 });
+  const structure = await composeNodusStructure({ center: CENTER, mode: 'lines', lineMax: 3 });
   const relationships = structure.composition.relationships;
 
   assert.deepEqual(relationships.map((relationship) => relationship.edge.uci), [evidenced.uci]);

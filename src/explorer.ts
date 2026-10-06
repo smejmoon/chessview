@@ -8,7 +8,6 @@ import {
 } from './graph.ts';
 import { debugLog } from './debug.js';
 import { lichessSession } from './lichess-session.js';
-import { lichessGateway } from './lichess-gateway.js';
 import { isObsoleteWork } from './obsolete-work.js';
 import { positionRepository } from './position-repository.js';
 
@@ -40,7 +39,6 @@ type ParsedExplorerReading = ExplorerReading & Readonly<{
 }>;
 
 type PositionRecord = Readonly<{
-  fen?: string;
   explorer?: unknown;
   explorerFetchedAt?: number;
   [field: string]: unknown;
@@ -103,7 +101,6 @@ type Log = (message: string, detail?: unknown, level?: DebugLevel) => void;
 export type ExplorerProviderOptions = Readonly<{
   repository?: ExplorerRepository;
   request?: ExplorerRequest;
-  cooldownUntil?: () => number;
   now?: () => number;
   log?: Log;
 }>;
@@ -179,7 +176,6 @@ function errorLike(error: unknown): ErrorLike {
 export function createExplorerProvider({
   repository = positionRepository as unknown as ExplorerRepository,
   request = (url, options) => lichessSession.authorizedRequest(url, options) as Promise<ExplorerResponse>,
-  cooldownUntil = () => lichessGateway.cooldownUntil,
   now = () => Date.now(),
   log = debugLog,
 }: ExplorerProviderOptions = {}) {
@@ -246,12 +242,10 @@ export function createExplorerProvider({
   async function persist(
     canonical: string,
     explorer: ParsedExplorerReading,
-    cached: PositionRecord | null,
     fetchedAt: number,
   ): Promise<boolean> {
     try {
       await repository.merge(canonical, {
-        fen: cached?.fen ?? toPlayableFen(canonical),
         explorer,
         explorerFetchedAt: fetchedAt,
         games: totalGames(explorer),
@@ -327,8 +321,7 @@ export function createExplorerProvider({
               throw httpError(401, 'Lichess authorization expired. Reload to sign in again.');
             }
             if (response.status === 429) {
-              const retryAfterMs = Math.max(0, cooldownUntil() - now());
-              report('explorer cooldown started', { retryAfterMs }, 'warn');
+              report('explorer rate limited', { position: canonical }, 'warn');
               throw httpError(429, 'Lichess explorer is rate-limited. Requests are paused for one minute.');
             }
             throw httpError(response.status, `Lichess explorer returned ${response.status}`);
@@ -341,7 +334,7 @@ export function createExplorerProvider({
 
         const fetchedAt = now();
         const usable = admit(canonical, explorer, fetchedAt, false);
-        if (await persist(canonical, usable, cached, fetchedAt)) {
+        if (await persist(canonical, usable, fetchedAt)) {
           markPersisted(canonical, usable, fetchedAt);
         }
         return usable;

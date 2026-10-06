@@ -1,5 +1,4 @@
 import {
-  decorateExplorerMoves,
   resolveMove,
   stableEdgeOrder,
 } from './graph.js';
@@ -9,7 +8,7 @@ import {
   currentExplorerReading,
   readCachedExplorerReading,
 } from './explorer.js';
-import type { ExplorerReading } from './knowledge-acquisition.ts';
+import type { ExplorerMove, ExplorerReading } from './knowledge-acquisition.ts';
 import { lichessEval } from './lichess-eval.js';
 import { mastersProvider } from './masters.js';
 import { throwIfObsolete } from './obsolete-work.js';
@@ -38,12 +37,6 @@ export type RailSourceOptions = Readonly<{
   mastersProvider?: MastersProvider;
 }>;
 
-type DecoratedExplorerMove = Readonly<{
-  uci: string;
-  games?: number;
-  share?: number;
-  [field: string]: unknown;
-}>;
 
 function immutable<T>(value: T): T {
   if (Array.isArray(value)) return Object.freeze(value.map(immutable)) as T;
@@ -56,7 +49,7 @@ function immutable<T>(value: T): T {
   return value;
 }
 
-async function sourceLine(center: string, move: DecoratedExplorerMove, evidence: ReturnType<typeof createEvidenceReader>) {
+async function sourceLine(center: string, move: ExplorerMove, evidence: ReturnType<typeof createEvidenceReader>) {
   let resolved;
   try {
     resolved = resolveMove(center, { uci: move.uci });
@@ -73,8 +66,6 @@ async function sourceLine(center: string, move: DecoratedExplorerMove, evidence:
     target: resolved.target,
     uci: resolved.uci,
     san: resolved.san,
-    games: move.games,
-    share: move.share,
   };
   const signals = await evidence.move(edge);
   return immutable({
@@ -108,7 +99,7 @@ async function railValue(
   evidence: ReturnType<typeof createEvidenceReader>,
 ): Promise<RailValue> {
   const sourceLines = (await Promise.all(
-    (decorateExplorerMoves(explorer) as DecoratedExplorerMove[]).map((move) => sourceLine(center, move, evidence)),
+    (explorer?.moves ?? []).map((move) => sourceLine(center, move, evidence)),
   )).filter((line): line is NonNullable<typeof line> => Boolean(line));
   const sourceUci = new Set(sourceLines.map((line) => line.edge.uci));
   const explicitLines = await Promise.all(outgoing

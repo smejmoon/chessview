@@ -27,7 +27,7 @@ Its response data includes:
 - returned moves with UCI, SAN, average rating, move-specific result counts, an optional representative game, and optional opening metadata;
 - optional top/recent game references and historical result buckets when requested.
 
-Chessview currently requests standard chess for one position, up to 30 returned moves, and the full bounded representative-game payload used by Root bootstrap (up to four top games plus enough recent games for the source's bounded representative set). This is the current primary human-game population used by Chessview.
+Chessview uses this as its current primary human-game population. Root bootstrap consumes the optional representative-game references from this source; [`Lichess access`](lichess-access.md) owns the exact live request parameters and transport behavior.
 
 Chessview's **Explorer Reading** is the data-only source observation exposed from `LichessGamesDB`. A Reading contains source facts; fetch time, freshness/staleness, authentication, request state, and downstream reconciliation/projection state are not elements of the Reading. Optional opening metadata remains part of that source observation only. It is not canonical Nodus identity and is not mirrored onto the top-level position record because one canonical position may be reached through different opening histories. The current implementation persists the validated source value in the position record's Explorer facet and keeps its fetch timestamp separately.
 

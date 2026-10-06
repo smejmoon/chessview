@@ -17,6 +17,9 @@ test('Rail keeps every legal Lichess Line and explicit-only navigable Line', asy
   const rail = await composeRail({ center: CENTER });
   assert.deepEqual(rail.lines.map((line) => line.edge.uci), ['e2e4', 'd2d4', 'a2a3', 'h2h3']);
   assert.deepEqual(rail.lines.map((line) => line.source), ['lichess', 'lichess', 'lichess', 'explicit']);
+  assert.equal(Object.hasOwn(rail.lines[0].edge, 'games'), false);
+  assert.equal(Object.hasOwn(rail.lines[0].edge, 'share'), false);
+  assert.deepEqual(rail.lines[0].frequency, { games: 600, sourceGames: 1000, share: 0.6 });
   assert.equal('rootsCount' in rail, false);
   assert.equal('notableLinesCount' in rail, false);
   assert.equal(rail.lines.some((line) => 'notable' in line), false);

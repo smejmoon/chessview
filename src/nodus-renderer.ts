@@ -18,7 +18,7 @@ import { viewStatusSpec } from './view-status.js';
 
 type ChessgroundConfig = NonNullable<Parameters<typeof Chessground>[1]>;
 type BoardApi = ReturnType<typeof Chessground>;
-type DisplayEdge = Readonly<{ target?: string; san?: string; uci?: string; share?: number; games?: number }>;
+type DisplayEdge = Readonly<{ target?: string; san?: string; uci?: string }>;
 type PositionRecord = Readonly<{ key?: string; fen?: string; games?: number }>;
 type CompositionNode = Readonly<{ key: string; relation?: string; merge?: boolean }>;
 type CompositionRelationship = Readonly<{ source: string; target: string; families?: readonly string[] }>;
@@ -97,8 +97,8 @@ function railExplorerHtml(view: RendererView): string {
   if (!rows.length) return `<div class="rail-empty">${view.rail?.status === 'loading' ? 'Loading Lichess Lines…' : 'No Lichess Lines yet.'}</div>`;
   return `<div class="explorer-list">${rows.map((row) => {
     const edge = row.edge ?? {};
-    const share = row.frequency?.share ?? edge.share ?? 0;
-    const games = row.frequency?.games ?? edge.games ?? 0;
+    const share = row.frequency?.share ?? 0;
+    const games = row.frequency?.games ?? 0;
     return `<button class="explorer-row" type="button" data-nav-key="${escapeHtml(edge.target)}"><span class="explorer-move">${escapeHtml(edge.san ?? edge.uci)}</span><span class="explorer-track"><span style="width:${Math.max(2, Math.round(share * 100))}%"></span></span><span class="explorer-share">${share > 0 ? percent(share) : ''}</span><span class="explorer-games">${games > 0 ? compactGames(games) : ''}</span></button>`;
   }).join('')}</div>`;
 }

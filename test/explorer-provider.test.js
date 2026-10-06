@@ -52,7 +52,6 @@ test('Explorer admits once and reuses the live observation when persistence fail
       };
     },
     now: () => 1_000,
-    cooldownUntil: () => 0,
     log: () => {},
   });
 
@@ -92,7 +91,6 @@ test('reading current Explorer state is passive and does not start acquisition',
       };
     },
     now: () => 2_000,
-    cooldownUntil: () => 0,
     log: () => {},
   });
 
@@ -138,7 +136,6 @@ test('explicit Explorer refresh bypasses a fresh cached Reading to obtain repres
       };
     },
     now: () => 1_100,
-    cooldownUntil: () => 0,
     log: () => {},
   });
 
@@ -174,7 +171,6 @@ test('Explorer opening metadata stays source-local instead of becoming canonical
       text: async () => '',
     }),
     now: () => 3_000,
-    cooldownUntil: () => 0,
     log: () => {},
   });
 

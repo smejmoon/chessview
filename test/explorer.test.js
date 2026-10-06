@@ -6,6 +6,7 @@ import {
   EXPLORER_TTL_MS,
   canonicalPosition,
   edgeId,
+  moveGames,
   resolveMove,
   START_FEN,
 } from '../src/graph.js';
@@ -278,4 +279,19 @@ test('Explorer refresh grows admitted topology without rewriting or retracting k
   assert.ok(byUci.has('d2d4'));
   assert.equal(byUci.get('c2c4').target, c4.target);
   edges.forEach(assertCanonicalStoredShape);
+});
+
+
+test('Root coverage sums authoritative predecessor move counts over center games', async () => {
+  await clearGraph();
+  const target = positionAfter(['e4']);
+  await putExplorer({ key: center, fen: START_FEN }, explorerWithMoves([['e2e4', 60]], 100));
+  await loadExplorer(center);
+  await putExplorer(target, explorerWithMoves([['c7c5', 40]], 100));
+
+  const structure = await composeNodusStructure({ center: target.key, mode: 'roots', lineMax: 1, rootMax: 2 });
+
+  assert.equal(structure.rootCoverage.totalGames, 100);
+  assert.equal(structure.rootCoverage.games, 60);
+  assert.equal(structure.rootCoverage.share, 0.6);
 });

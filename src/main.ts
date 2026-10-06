@@ -12,6 +12,8 @@ import type { RefinementTask } from './current-view-controller.ts';
 import { debugLog } from './debug.js';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
+import { currentExplorerReading } from './explorer.js';
+import { discoverSampledPredecessors, sampleGameIds } from './sampled-predecessors.ts';
 import { createLens } from './lens.ts';
 import { loadMasters } from './masters.js';
 import { materializeMove } from './move-materialization.ts';
@@ -71,6 +73,17 @@ function constraintsFor(mode: 'roots' | 'lines') {
   return constraints;
 }
 
+async function discoverRootPredecessors(center, { signal, priority }) {
+  const reading = currentExplorerReading(center);
+  const ids = sampleGameIds(reading);
+  if (!ids.length) return;
+  const nominations = await discoverSampledPredecessors(center, ids, { signal, priority });
+  for (const nomination of nominations) {
+    if (signal.aborted) return;
+    await refineExplorerReading(nomination.source, { signal, priority });
+  }
+}
+
 function tasksForCurrentView({ center, mode, structure }): readonly RefinementTask[] {
   const demand = deriveCurrentViewRefinementDemand({ center, mode, structure });
   const tasks = new Map<string, RefinementTask>();
@@ -80,6 +93,15 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
   }
 
   const rootTransposition = demand.rootTransposition;
+  if (mode === 'roots' && !rootTransposition) {
+    add({
+      key: `root-discovery:${center}`,
+      modes: ['roots'],
+      nodusWide: false,
+      structuralReading: center,
+      run: ({ signal, priority }) => discoverRootPredecessors(center, { signal, priority }),
+    });
+  }
   if (rootTransposition) {
     add({
       key: `root-transpositions:${rootTransposition}`,

@@ -28,11 +28,14 @@ type ParsedExplorerMove = ExplorerMove & Readonly<{
   black: number;
 }>;
 
+type ExplorerGame = Readonly<{ id: string; [field: string]: unknown }>;
 type ParsedExplorerReading = ExplorerReading & Readonly<{
   white: number;
   draws: number;
   black: number;
   moves: readonly ParsedExplorerMove[];
+  topGames?: readonly ExplorerGame[];
+  recentGames?: readonly ExplorerGame[];
 }>;
 
 type PositionRecord = Readonly<{
@@ -110,8 +113,8 @@ function explorerUrl(key: string): URL {
   url.searchParams.set('variant', 'standard');
   url.searchParams.set('fen', toPlayableFen(key));
   url.searchParams.set('moves', '30');
-  url.searchParams.set('topGames', '0');
-  url.searchParams.set('recentGames', '0');
+  url.searchParams.set('topGames', '2');
+  url.searchParams.set('recentGames', '2');
   return url;
 }
 
@@ -140,11 +143,20 @@ function validExplorerMove(value: unknown, sourceGames: number): value is Parsed
   return (move.white as number) + (move.draws as number) + (move.black as number) <= sourceGames;
 }
 
+function validExplorerGames(value: unknown): boolean {
+  if (value == null) return true;
+  return Array.isArray(value) && value.every((game) => {
+    const item = asRecord(game);
+    return Boolean(item && typeof item.id === 'string' && /^[A-Za-z0-9]{8}$/.test(item.id));
+  });
+}
+
 function parseExplorerReading(value: unknown): ParsedExplorerReading {
   const reading = asRecord(value);
   if (!reading) throw invalidDataError();
   if (![reading.white, reading.draws, reading.black].every(validCount)) throw invalidDataError();
   if (!Array.isArray(reading.moves)) throw invalidDataError();
+  if (!validExplorerGames(reading.topGames) || !validExplorerGames(reading.recentGames)) throw invalidDataError();
 
   const sourceGames = totalGames(reading);
   if (!reading.moves.every((move) => validExplorerMove(move, sourceGames))) throw invalidDataError();

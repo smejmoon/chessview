@@ -15,6 +15,7 @@ import {
 } from './explorer-refinement.ts';
 import {
   canonicalPosition,
+  moveGames,
   resolveMove,
   totalGames,
 } from './graph.js';
@@ -282,6 +283,23 @@ export function createKnowledgeAcquisition({
     reconciledExplorerReadingAvailable,
     warmExplorerReading,
   });
+}
+
+export async function explorerMoveGames(
+  source: string,
+  uci: string,
+): Promise<number | null> {
+  const canonical = canonicalPosition(source);
+  const explorer = currentExplorerReading(canonical) ?? await readCachedExplorerReading(canonical);
+  if (!explorer) return null;
+  const move = explorer.moves.find((candidate) => candidate.uci === uci);
+  return move ? moveGames(move) : null;
+}
+
+export async function explorerTotalGames(position: string): Promise<number | null> {
+  const canonical = canonicalPosition(position);
+  const explorer = currentExplorerReading(canonical) ?? await readCachedExplorerReading(canonical);
+  return explorer ? totalGames(explorer) : null;
 }
 
 export const {

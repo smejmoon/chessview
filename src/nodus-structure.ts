@@ -15,7 +15,11 @@ import type {
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge } from './position-graph.ts';
 import { positionRepository } from './position-repository.js';
-import { reconciledExplorerReadingAvailable } from './knowledge-acquisition.ts';
+import {
+  explorerMoveGames,
+  explorerTotalGames,
+  reconciledExplorerReadingAvailable,
+} from './knowledge-acquisition.ts';
 import { createEvidenceReader } from './evidence-source.ts';
 import {
   rankCrossSourceCandidates,
@@ -304,6 +308,8 @@ export async function composeNodusStructure(options: ComposeNodusStructureOption
   let selected = line.composition;
   const readingFrontier = [...line.readingFrontier];
 
+  let rootCoverage: Readonly<{ games: number; totalGames: number; share: number }> | null = null;
+
   if (mode === 'roots' && (options.rootMax ?? 0) > 0) {
     const before = new Set(candidateSource.missingReadings());
     const context = await composeRootContext(
@@ -312,6 +318,21 @@ export async function composeNodusStructure(options: ComposeNodusStructureOption
       candidateSource,
     );
     selected = mergeCompositions(selected, context);
+    const rootEdges = context.nodes
+      .filter((node) => node.relation === 'root' && node.edge)
+      .map((node) => node.edge as GraphEdge);
+    const [coveredCounts, centerGames] = await Promise.all([
+      Promise.all(rootEdges.map((edge) => explorerMoveGames(edge.source, edge.uci))),
+      explorerTotalGames(center),
+    ]);
+    const coveredGames = coveredCounts.reduce((sum: number, games) => sum + (games ?? 0), 0);
+    if (centerGames != null) {
+      rootCoverage = Object.freeze({
+        games: coveredGames,
+        totalGames: centerGames,
+        share: centerGames > 0 ? Math.min(1, coveredGames / centerGames) : 0,
+      });
+    }
     for (const key of candidateSource.missingReadings()) {
       if (!before.has(key) && !readingFrontier.includes(key)) readingFrontier.push(key);
     }
@@ -337,6 +358,7 @@ export async function composeNodusStructure(options: ComposeNodusStructureOption
     centerNode: records.get(center) ?? { key: center, fen: toPlayableFen(center) },
     positions,
     readingFrontier,
+    rootCoverage,
     settling: readingFrontier.length > 0,
   });
 }

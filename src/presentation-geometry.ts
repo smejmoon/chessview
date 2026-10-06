@@ -428,13 +428,20 @@ export function derivePresentationGeometry({
   width,
   height,
   upstreamContext = false,
+  upstreamTop = MAP_PADDING_PX,
 }: {
   width: number;
   height: number;
   upstreamContext?: boolean;
+  upstreamTop?: number;
 }): PresentationGeometry {
   const safeWidth = Math.max(320, Number.isFinite(width) ? width : 320);
   const safeHeight = Math.max(240, Number.isFinite(height) ? height : 240);
+  const safeUpstreamTop = clamp(
+    Number.isFinite(upstreamTop) ? Number(upstreamTop) : MAP_PADDING_PX,
+    MAP_PADDING_PX,
+    safeHeight - MAP_PADDING_PX,
+  );
   const centerLimit = Math.max(
     160,
     Math.min(safeHeight - MAP_PADDING_PX * 2, safeWidth * (upstreamContext ? 0.32 : 0.36)),
@@ -457,7 +464,7 @@ export function derivePresentationGeometry({
     ? Object.freeze({
       left: MAP_PADDING_PX,
       right: centerX - centerSize / 2 - BOARD_GAP_PX,
-      top: MAP_PADDING_PX,
+      top: safeUpstreamTop,
       bottom: safeHeight - MAP_PADDING_PX,
     })
     : null;

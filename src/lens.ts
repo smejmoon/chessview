@@ -81,7 +81,20 @@ export function createLens({
     const rect = map?.getBoundingClientRect?.();
     const width = rect?.width && rect.width > 0 ? rect.width : Math.max(320, (window?.innerWidth ?? 1280) - 340);
     const height = rect?.height && rect.height > 0 ? rect.height : Math.max(240, (window?.innerHeight ?? 720) - 54);
-    return derivePresentationGeometry({ width, height, upstreamContext: mode === 'roots' });
+    const controls = mode === 'roots'
+      ? root.querySelector?.('.map-controls') as HTMLElement | null
+      : null;
+    const controlsRect = controls?.getBoundingClientRect?.();
+    const upstreamTop = rect && controlsRect
+      && Number.isFinite(rect.top) && Number.isFinite(controlsRect.bottom)
+      ? controlsRect.bottom - rect.top + 12
+      : undefined;
+    return derivePresentationGeometry({
+      width,
+      height,
+      upstreamContext: mode === 'roots',
+      upstreamTop,
+    });
   }
 
   return Object.freeze({

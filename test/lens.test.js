@@ -8,10 +8,15 @@ function fixture() {
   let guide = true;
   let debug = false;
   const writes = [];
-  const map = { getBoundingClientRect: () => ({ width: 960, height: 620 }) };
+  const map = { getBoundingClientRect: () => ({ width: 960, height: 620, top: 100 }) };
+  const controls = { getBoundingClientRect: () => ({ bottom: 150 }) };
   const app = {
     ownerDocument: { defaultView: { innerWidth: 1400, innerHeight: 900 } },
-    querySelector(selector) { return selector === '#map' ? map : null; },
+    querySelector(selector) {
+      if (selector === '#map') return map;
+      if (selector === '.map-controls') return controls;
+      return null;
+    },
   };
   const preferences = {
     getOrientation: () => orientation,
@@ -53,6 +58,8 @@ test('Lens derives presentation geometry and composition constraints from the re
   assert.equal(lines.height, 620);
   assert.equal(lines.rootCapacity, 0);
   assert.ok(roots.rootCapacity > 0);
+  assert.ok(roots.upstreamRegion);
+  assert.equal(roots.upstreamRegion.top, 62);
   assert.deepEqual(lens.constraints('lines'), {
     lineCapacity: lines.lineCapacity,
     rootCapacity: 0,

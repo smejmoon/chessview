@@ -29,6 +29,8 @@ Weather presents the structural readiness derived by [Current View](../architect
 
 Weather may expose several independent measures at once when Debug is enabled so lifecycle behavior can be inspected without forcing every distinction through the primary Ready/Updating state.
 
+Debug diagnostics are intentionally terse but self-explaining: each aggregate measure remains independently hoverable/focusable with a short explanation of what it counts. The strip should remain legible as a development surface without competing with primary Weather state.
+
 The current diagnostic surface may include:
 
 - accepted structure lifecycle (`idle`, `loading`, `ready`, or `failed`);

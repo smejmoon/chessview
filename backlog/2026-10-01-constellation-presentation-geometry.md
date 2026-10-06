@@ -1,6 +1,6 @@
 # Do:
 
-Verify the unified Constellation presentation on representative supported desktop map rectangles and Rail allocations, then correct only defects demonstrated by that review: overlap, clipping, reversed or unreadable graph flow, ambiguous family structure, misleading connector weight, or interrupted Nodus interaction.
+Re-verify the unified Constellation presentation after reserving the actual map-control footprint from the upstream usable region. The previous deployed review showed the first Panov Root/sibling row colliding with the `Roots + siblings` control; verify that repair plus the already-clean deep-Line layout, then correct only any remaining demonstrated overlap, clipping, reversed or unreadable graph flow, ambiguous family structure, misleading connector weight, or interrupted Nodus interaction.
 
 Presentation now has one Lens-owned spatial model and one topology-aware placement path. Geometry derives the Nodus rectangle, board-size regime, usable upstream/downstream regions, and abstract Line/Root capacities from the actual rendered map rectangle. Root/sibling and Line roles constrain the side of the Nodus; they no longer select separate Root and Line placement or connector-rendering subsystems.
 

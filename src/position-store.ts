@@ -29,6 +29,7 @@ function withoutExplorerCache(node: StoredPosition): StoredPosition {
   const {
     explorer: _explorer,
     explorerFetchedAt: _explorerFetchedAt,
+    explorerRequestProfile: _explorerRequestProfile,
     games: _games,
     ...rest
   } = withoutLegacyOpening(node);

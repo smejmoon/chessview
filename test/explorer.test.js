@@ -31,6 +31,12 @@ const { acquireExplorerReading: loadExplorer } = await import('../src/knowledge-
 const { composeNodusStructure } = await import('../src/nodus-structure.js');
 
 const center = canonicalPosition(START_FEN);
+const CURRENT_EXPLORER_REQUEST_PROFILE = JSON.stringify({
+  variant: 'standard',
+  moves: '30',
+  topGames: '4',
+  recentGames: '8',
+});
 
 function cachedStartExplorer() {
   return {
@@ -50,6 +56,7 @@ async function putExplorer(position, explorer, fetchedAt = Date.now()) {
     fen: position.fen ?? START_FEN,
     explorer,
     explorerFetchedAt: fetchedAt,
+    explorerRequestProfile: CURRENT_EXPLORER_REQUEST_PROFILE,
     games: explorer.white + explorer.draws + explorer.black,
   });
 }

@@ -12,6 +12,13 @@ import { isObsoleteWork } from './obsolete-work.js';
 import { positionRepository } from './position-repository.js';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
+const REQUEST_PARAMETERS = Object.freeze({
+  variant: 'standard',
+  moves: '30',
+  topGames: '4',
+  recentGames: '8',
+});
+const REQUEST_PROFILE = JSON.stringify(REQUEST_PARAMETERS);
 const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 
 type LoadPriority = 'foreground' | 'background';
@@ -19,7 +26,6 @@ type Priority = LoadPriority | (() => LoadPriority);
 type LoadOptions = Readonly<{
   signal?: AbortSignal;
   priority?: Priority;
-  refresh?: boolean;
 }>;
 
 type ParsedExplorerMove = ExplorerMove & Readonly<{
@@ -41,6 +47,7 @@ type ParsedExplorerReading = ExplorerReading & Readonly<{
 type PositionRecord = Readonly<{
   explorer?: unknown;
   explorerFetchedAt?: number;
+  explorerRequestProfile?: unknown;
   [field: string]: unknown;
 }>;
 
@@ -107,11 +114,8 @@ export type ExplorerProviderOptions = Readonly<{
 
 function explorerUrl(key: string): URL {
   const url = new URL(ENDPOINT);
-  url.searchParams.set('variant', 'standard');
+  for (const [name, value] of Object.entries(REQUEST_PARAMETERS)) url.searchParams.set(name, value);
   url.searchParams.set('fen', toPlayableFen(key));
-  url.searchParams.set('moves', '30');
-  url.searchParams.set('topGames', '4');
-  url.searchParams.set('recentGames', '8');
   return url;
 }
 
@@ -248,6 +252,7 @@ export function createExplorerProvider({
       await repository.merge(canonical, {
         explorer,
         explorerFetchedAt: fetchedAt,
+        explorerRequestProfile: REQUEST_PROFILE,
         games: totalGames(explorer),
       });
       report('Explorer Reading stored', { position: canonical, games: totalGames(explorer) });
@@ -265,7 +270,7 @@ export function createExplorerProvider({
 
   function ensure(
     key: string,
-    { signal, priority = 'foreground', refresh = false }: LoadOptions = {},
+    { signal, priority = 'foreground' }: LoadOptions = {},
   ): Promise<ParsedExplorerReading> {
     const canonical = canonicalPosition(key);
     return repository.load(
@@ -277,9 +282,10 @@ export function createExplorerProvider({
         const cachedFetchedAt = cached?.explorerFetchedAt ?? 0;
         const freshCached = Boolean(
           cachedExplorer
+          && cached?.explorerRequestProfile === REQUEST_PROFILE
           && now() - cachedFetchedAt < EXPLORER_TTL_MS,
         );
-        if (!refresh && freshCached && cachedExplorer) {
+        if (freshCached && cachedExplorer) {
           report('Explorer Reading cache hit', {
             position: canonical,
             games: totalGames(cachedExplorer),
@@ -289,8 +295,7 @@ export function createExplorerProvider({
 
         const admitted = repository.currentFacet(canonical, 'explorer');
         if (
-          !refresh
-          && admitted
+          admitted
           && !admitted.persisted
           && now() - admitted.fetchedAt < EXPLORER_TTL_MS
         ) {
@@ -343,15 +348,10 @@ export function createExplorerProvider({
     );
   }
 
-  function refresh(key: string, options: Omit<LoadOptions, 'refresh'> = {}): Promise<ParsedExplorerReading> {
-    return ensure(key, { ...options, refresh: true });
-  }
-
-  return Object.freeze({ ensure, refresh, current, readCached, invalidate });
+  return Object.freeze({ ensure, current, readCached, invalidate });
 }
 
 export const explorerProvider = createExplorerProvider();
 export const loadExplorerReading = explorerProvider.ensure;
-export const refreshExplorerReading = explorerProvider.refresh;
 export const currentExplorerReading = explorerProvider.current;
 export const readCachedExplorerReading = explorerProvider.readCached;

@@ -14,7 +14,7 @@ test('Explorer cache fields can be cleared selectively without deleting structur
   await clearGraph();
   const first = canonicalPosition(START_FEN);
   const second = canonicalPosition('8/8/8/8/8/4k3/4P3/4K3 w - - 0 1');
-  await putNode({ key: first, fen: START_FEN, explorer: { white: 1 }, explorerFetchedAt: 123, games: 1, opening: { name: 'cached' }, structural: 'keep' });
+  await putNode({ key: first, fen: START_FEN, explorer: { white: 1 }, explorerFetchedAt: 123, explorerRequestProfile: 'legacy-profile', games: 1, opening: { name: 'cached' }, structural: 'keep' });
   await putNode({ key: second, explorer: { white: 2 }, explorerFetchedAt: 456, games: 2, structural: 'also keep' });
 
   await clearExplorerCacheFields([first]);
@@ -23,6 +23,7 @@ test('Explorer cache fields can be cleared selectively without deleting structur
   assert.equal(cleared.structural, 'keep');
   assert.equal('explorer' in cleared, false);
   assert.equal('explorerFetchedAt' in cleared, false);
+  assert.equal('explorerRequestProfile' in cleared, false);
   assert.equal('games' in cleared, false);
   assert.equal('opening' in cleared, false);
   assert.ok(untouched.explorer);

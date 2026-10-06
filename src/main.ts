@@ -12,10 +12,9 @@ import type { RefinementOutcome, RefinementTask } from './current-view-controlle
 import { debugLog } from './debug.js';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
-import { currentExplorerReading, refreshExplorerReading } from './explorer.js';
+import { loadExplorerReading } from './explorer.js';
 import {
   discoverSampledPredecessors,
-  representativeSampleComplete,
   sampleGameIds,
 } from './sampled-predecessors.ts';
 import { createLens } from './lens.ts';
@@ -78,32 +77,22 @@ function constraintsFor(mode: 'roots' | 'lines') {
 }
 
 async function discoverRootPredecessors(center, { signal, priority }): Promise<RefinementOutcome> {
-  let reading = currentExplorerReading(center);
-  let ids = sampleGameIds(reading);
-  if (!representativeSampleComplete(reading)) {
-    debugLog('Root discovery refreshing full Explorer sample', {
-      center,
-      cachedGames: ids.length,
-    });
-    reading = await refreshExplorerReading(center, { signal, priority });
-    ids = sampleGameIds(reading);
-  }
-  if (!ids.length) return Object.freeze({ refinement: 'unavailable' as const });
+  const reading = await loadExplorerReading(center, { signal, priority });
+  const ids = sampleGameIds(reading);
+  if (!ids.length) return Object.freeze({ refinement: 'satisfied' as const });
 
   debugLog('Root discovery replaying sampled games', { center, games: ids.length });
   const nominations = await discoverSampledPredecessors(center, ids, { signal, priority });
-  let satisfied = nominations.length === 0;
   let unavailable = false;
   for (const nomination of nominations) {
     if (signal.aborted) return Object.freeze({ refinement: 'unavailable' as const });
     const outcome = await refineExplorerReading(nomination.source, { signal, priority });
     if (outcome.refinement === 'retryable') return outcome;
-    if (outcome.refinement === 'satisfied') satisfied = true;
     if (outcome.refinement === 'unavailable') unavailable = true;
   }
-  if (satisfied) return Object.freeze({ refinement: 'satisfied' as const });
-  if (unavailable) return Object.freeze({ refinement: 'unavailable' as const });
-  return Object.freeze({ refinement: 'satisfied' as const });
+  return unavailable
+    ? Object.freeze({ refinement: 'unavailable' as const })
+    : Object.freeze({ refinement: 'satisfied' as const });
 }
 
 function tasksForCurrentView({ center, mode, structure }): readonly RefinementTask[] {
@@ -115,8 +104,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
   }
 
   const rootTransposition = demand.rootTransposition;
-  const rootSampleComplete = representativeSampleComplete(currentExplorerReading(center));
-  if (mode === 'roots' && (!rootTransposition || !rootSampleComplete)) {
+  if (mode === 'roots') {
     add({
       key: `root-discovery:${center}`,
       purpose: 'root-discovery',

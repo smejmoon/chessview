@@ -36,9 +36,9 @@ Source clients own endpoint-specific access, authentication behavior, request pa
 
 ## Root bootstrap from sampled games
 
-An arbitrary canonical Nodus may have no known incoming Graph Edge even though rated Lichess games reached it. Root bootstrap may use the bounded representative-game set returned with the Nodus Explorer Reading to discover useful **source positions**. The bootstrap requests the full bounded representative payload rather than choosing a smaller arbitrary subset; this improves discovery breadth without introducing another search loop. Sampled games are discovery material, not topology or Prevalence Evidence.
+An arbitrary canonical Nodus may have no known incoming Graph Edge even though rated Lichess games reached it. Root bootstrap may use the bounded representative-game references returned with the Nodus Explorer Reading to discover useful **source positions**. The Explorer request asks for the maximum bounded representative payload Chessview currently uses for this purpose, but Lichess may legitimately return fewer references than requested. Root bootstrap consumes whatever usable Reading the Explorer provider exposes; it does not infer cache freshness or request completeness from the number of game references returned. Sampled games are discovery material, not topology or Prevalence Evidence.
 
-Current-view coordination may batch-export the nominated game IDs through `LichessGateway`, replay their exported PGN/SAN move sequence locally (respecting an exported initial FEN when present), and recover the canonical position immediately before the exact Nodus. If an otherwise-fresh cached center Explorer Reading predates the current representative-game request shape and therefore contains an incomplete sample payload, Root bootstrap may explicitly refresh that Reading once instead of treating the aggregate cache hit as a completed bootstrap. Each distinct observed predecessor is only a nomination for ordinary Explorer refinement. Knowledge Acquisition reconciles that predecessor's Explorer Reading normally; only that reconciliation may establish the predecessor → Nodus Graph Edge.
+Current-view coordination may batch-export the nominated game IDs through `LichessGateway`, replay their exported PGN/SAN move sequence locally (respecting an exported initial FEN when present), and recover the canonical position immediately before the exact Nodus. Explorer itself owns whether the center Reading can be reused from current-profile cache or needs retrieval because an older cached request shape is no longer compatible. Each distinct observed predecessor is only a nomination for ordinary Explorer refinement. Knowledge Acquisition reconciles that predecessor's Explorer Reading normally; only that reconciliation may establish the predecessor → Nodus Graph Edge.
 
 This source-position interpretation is important: once the predecessor Reading is reconciled, it can establish both the Root move into the Nodus and other legal moves from the same source. Those other admitted relationships provide the sibling family through the existing graph/Evidence/Candidate path. Sampling therefore does not need a separate sibling-discovery mechanism.
 
@@ -70,7 +70,7 @@ The sampled-game path is deliberately bounded and opportunistic. Failure to obta
 - A sampled predecessor is verified through its ordinary Explorer Reading before its Root relationship can become authoritative graph knowledge.
 - Reconciling a discovered predecessor Reading may establish both the Root move and sibling moves from that same source; no parallel sibling acquisition path is required.
 - Root coverage uses authoritative predecessor move counts over the Nodus Explorer total, never sample frequency.
-- A fresh aggregate center Reading with an incomplete representative-game payload does not by itself satisfy Root bootstrap; the bootstrap may request one explicit source refresh for the missing sample breadth.
+- Root bootstrap does not inspect representative-game count to decide Explorer freshness or cache compatibility; the Explorer provider owns current-request-profile compatibility and acquisition policy.
 
 ## Supplementary lookahead
 

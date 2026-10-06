@@ -520,18 +520,23 @@ test('obsolete refinement completion cannot mutate a replacement Nodus', async (
 });
 
 
-test('Root discovery publishes semantic activity without pretending to be a Reading-frontier participant', async () => {
+test('Root discovery is one semantic attempt per Current View run', async () => {
   const work = deferred();
+  let attempts = 0;
   const { controller } = fixture({
-    refine: () => [{
+    refine: ({ mode }) => mode === 'roots' ? [{
       key: 'root-discovery:A',
       purpose: 'root-discovery',
       modes: ['roots'],
-      run: () => work.promise,
-    }],
+      run: () => {
+        attempts += 1;
+        return work.promise;
+      },
+    }] : [],
   });
 
   await controller.start();
+  assert.equal(attempts, 1);
   assert.equal(controller.snapshot.activities.rootDiscovery, 'working');
   assert.equal(controller.snapshot.weather.structural.detached, 0);
   assert.equal(controller.snapshot.weather.supplementary.active, 1);
@@ -541,4 +546,13 @@ test('Root discovery publishes semantic activity without pretending to be a Read
 
   assert.equal(controller.snapshot.activities.rootDiscovery, 'satisfied');
   assert.equal(controller.snapshot.weather.structural.detached, 0);
+
+  await controller.recompose();
+  await flush(16);
+  assert.equal(attempts, 1);
+
+  await controller.refresh();
+  await flush(32);
+  assert.equal(attempts, 2);
+  assert.equal(controller.snapshot.activities.rootDiscovery, 'satisfied');
 });

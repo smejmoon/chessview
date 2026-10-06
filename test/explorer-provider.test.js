@@ -104,23 +104,23 @@ test('reading current Explorer state is passive and does not start acquisition',
 });
 
 
-test('explicit Explorer refresh bypasses a fresh cached Reading to obtain representative games', async () => {
+test('Explorer request profile refreshes a legacy aggregate cache once and then reuses it', async () => {
   let requests = 0;
   let requestedUrl = null;
-  const cached = explorerReading();
+  let stored = {
+    key: CENTER,
+    fen: START_FEN,
+    explorer: explorerReading(),
+    explorerFetchedAt: 1_000,
+  };
   const refreshed = {
     ...explorerReading(),
     topGames: [{ id: 'abcdefgh' }],
     recentGames: [{ id: 'ijklmnop' }],
   };
   const repository = createPositionRepository({
-    read: async () => ({
-      key: CENTER,
-      fen: START_FEN,
-      explorer: cached,
-      explorerFetchedAt: 1_000,
-    }),
-    write: async () => {},
+    read: async () => stored,
+    write: async (value) => { stored = value; return value; },
     version: () => 0,
   });
   const provider = createExplorerProvider({
@@ -139,17 +139,19 @@ test('explicit Explorer refresh bypasses a fresh cached Reading to obtain repres
     log: () => {},
   });
 
-  const ordinary = await provider.ensure(CENTER);
-  assert.strictEqual(ordinary, cached);
-  assert.equal(requests, 0);
-
-  const sampled = await provider.refresh(CENTER);
+  const sampled = await provider.ensure(CENTER);
   assert.equal(requests, 1);
   assert.equal(requestedUrl.searchParams.get('topGames'), '4');
   assert.equal(requestedUrl.searchParams.get('recentGames'), '8');
   assert.deepEqual(sampled.topGames, [{ id: 'abcdefgh' }]);
   assert.deepEqual(sampled.recentGames, [{ id: 'ijklmnop' }]);
-  assert.strictEqual(provider.current(CENTER), sampled);
+  assert.equal(typeof stored.explorerRequestProfile, 'string');
+
+  provider.invalidate([CENTER]);
+  const reused = await provider.ensure(CENTER);
+  assert.equal(requests, 1);
+  assert.deepEqual(reused.topGames, [{ id: 'abcdefgh' }]);
+  assert.deepEqual(reused.recentGames, [{ id: 'ijklmnop' }]);
 });
 
 

@@ -18,7 +18,7 @@ Chessview does not require the three databases to expose one artificially unifor
 
 `LichessGamesDB` is the aggregate population of rated games played on Lichess. It is not a "non-masters" database: master/titled players' rated Lichess games may also belong to this population. The defining property is the Lichess rated-game population.
 
-The endpoint can filter by variant, position/path, speeds, rating groups, and date range. It can return a requested number of common moves plus optional top games, recent games, and history.
+The endpoint can filter by variant, position/path, speeds, rating groups, and date range. It can return a requested number of common moves plus optional top games, recent games, and history. The top/recent arrays may contain fewer games than requested, so their returned length is not a completeness signal.
 
 Its response data includes:
 

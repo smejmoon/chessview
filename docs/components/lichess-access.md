@@ -21,7 +21,7 @@ Chessview currently uses these Lichess endpoints:
 | --- | --- | --- | --- |
 | OAuth authorization handoff | browser navigation to `https://lichess.org/oauth` | Authorization Code + PKCE; `response_type=code`, Chessview `client_id`, `redirect_uri`, `code_challenge_method=S256`, `code_challenge`, and `state`. This browser navigation is outside `LichessGateway`. | <https://lichess.org/api#tag/OAuth> |
 | OAuth token exchange | `POST https://lichess.org/api/token` | `grant_type=authorization_code`, returned `code`, PKCE `code_verifier`, `redirect_uri`, and Chessview `client_id`; sent through `LichessGateway`. | <https://lichess.org/api#tag/OAuth> |
-| `LichessGamesDB` | `GET https://explorer.lichess.org/lichess` | `variant=standard`, current `fen`, `moves=30`, `topGames=4`, `recentGames=8`; the representative-game payload is retained for bounded Root-source discovery, while aggregate move/result counts remain the authoritative quantitative data. Requests are authenticated with the visitor's Bearer token through the shared `LichessSession` authorized-request path. | <https://lichess.org/api#tag/Opening-Explorer/operation/openingExplorerLichess> |
+| `LichessGamesDB` | `GET https://explorer.lichess.org/lichess` | `variant=standard`, current `fen`, `moves=30`, `topGames=4`, `recentGames=8`; whatever representative-game references Lichess returns are retained for bounded Root-source discovery, while aggregate move/result counts remain the authoritative quantitative data. Requests are authenticated with the visitor's Bearer token through the shared `LichessSession` authorized-request path. | <https://lichess.org/api#tag/Opening-Explorer/operation/openingExplorerLichess> |
 | `MastersGamesDB` | `GET https://explorer.lichess.org/masters` | current `fen`, `moves=30`, `topGames=0`; authenticated with the visitor's Bearer token through the same `LichessSession` authorized-request path. | <https://lichess.org/api#tag/Opening-Explorer/operation/openingExplorerMaster> |
 | Cloud evaluation | `GET https://lichess.org/api/cloud-eval` | current `fen`, `variant=standard`, `multiPv=5`. A `404` means the position is absent from the cloud-eval database. | <https://lichess.org/api#tag/Analysis/operation/apiCloudEval> |
 
@@ -67,6 +67,8 @@ Endpoint clients retain responsibility for request parameters, parsing, source v
 ## Cache and failure semantics
 
 - Rated Explorer cache TTL: 24 hours.
+- A persisted rated Explorer value is a fresh cache hit only when it was produced by the current Explorer request profile. Request-shape changes therefore trigger normal provider acquisition instead of asking Root or other consumers to infer compatibility from response contents.
+- Lichess may legitimately return fewer top/recent games than requested; representative-game count is not a cache-completeness signal.
 - Masters cache TTL: 7 days.
 - Cloud-evaluation cache TTL: 7 days.
 - A supported cloud-eval `404` is successful absence and may be cached as such.
@@ -91,7 +93,8 @@ Deterministic tests should cover:
 - expired-token / HTTP 401 handling;
 - malformed rated Explorer payloads not being cached or exposed as usable Explorer Readings;
 - malformed cached Explorer values being treated as unusable rather than fresh source data;
-- rated Explorer requests retaining the enlarged representative-game payload needed by bounded Root-source discovery (`topGames=4`, `recentGames=8`);
+- rated Explorer requests retaining the enlarged representative-game request needed by bounded Root-source discovery (`topGames=4`, `recentGames=8`);
+- a legacy Explorer cache entry from another request profile causing provider acquisition even when its timestamp is fresh, while a current-profile persisted entry is reused without another request;
 - cross-client serialization between rated Explorer, Masters, cloud evaluation, and other gateway users;
 - default request-start spacing following `LICHESS_REQUEST_MIN_INTERVAL_MS` while remaining independent from the 429 cooldown;
 - queued foreground work receiving the next available transport slot ahead of queued background work without preempting an in-flight request;

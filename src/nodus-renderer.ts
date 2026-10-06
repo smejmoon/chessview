@@ -40,6 +40,7 @@ type RendererStructure = Readonly<{
 type RailLine = Readonly<{ edge?: DisplayEdge; frequency?: Readonly<{ share?: number; games?: number }> | null }>;
 type RailValue = Readonly<{ lines?: readonly RailLine[] }>;
 type Lifecycle<T> = Readonly<{ status?: string; value?: T | null; error?: string | null }>;
+type RootDiscoveryPhase = 'idle' | 'working' | 'retry-waiting' | 'satisfied' | 'unavailable' | 'failed';
 
 type CenterBoardState = Readonly<{
   api: BoardApi;
@@ -55,6 +56,9 @@ export type RendererView = Readonly<{
   structure: Lifecycle<RendererStructure>;
   evidence?: unknown;
   rail?: Lifecycle<RailValue>;
+  activities?: Readonly<{
+    rootDiscovery?: RootDiscoveryPhase;
+  }>;
 }>;
 type RendererMaintenance = Readonly<{
   refetchView?: (positions: readonly string[]) => unknown | Promise<unknown>;
@@ -103,10 +107,21 @@ function debugRailHtml(debug: boolean): string {
   if (!debug) return '';
   return `<section class="rail-debug" aria-label="Chessview debug log"><div class="debug-head"><div class="debug-title">Debug <small>${getDebugEntries().length} events</small></div><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy</button><button class="debug-action" id="debug-clear" type="button">Clear</button></div></div><div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div><pre class="debug-log" id="debug-log">${escapeHtml(debugText())}</pre></section>`;
 }
-function rootContextButton(rootContext: boolean, coverage?: RendererStructure['rootCoverage']): string {
-  const label = rootContext && coverage
-    ? `Roots + siblings · ${percent(coverage.share)} · ${compactGames(coverage.games)}/${compactGames(coverage.totalGames)} games`
-    : 'Roots + siblings';
+function rootContextButton(
+  rootContext: boolean,
+  coverage?: RendererStructure['rootCoverage'],
+  discovery: RootDiscoveryPhase = 'idle',
+): string {
+  let label = 'Roots + siblings';
+  if (rootContext) {
+    if (discovery === 'working') label = 'Roots + siblings · Finding roots…';
+    else if (discovery === 'retry-waiting') label = 'Roots + siblings · Waiting to retry…';
+    else if (discovery === 'failed') label = 'Roots + siblings · Root search failed';
+    else if (discovery === 'unavailable') label = 'Roots + siblings · Root search unavailable';
+    else if (coverage) {
+      label = `Roots + siblings · ${percent(coverage.share)} · ${compactGames(coverage.games)}/${compactGames(coverage.totalGames)} games`;
+    }
+  }
   return `<button id="root-context-toggle" class="root-context-toggle ${rootContext ? 'is-active' : ''}" type="button" aria-pressed="${rootContext}">${label}</button>`;
 }
 function railHtml(view: RendererView, centerNode: PositionRecord, turn: Orientation, debug: boolean): string {
@@ -271,7 +286,11 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     const map = app.querySelector('#map') as HTMLElement | null;
     if (map) map.className = 'map';
     const controls = app.querySelector('.map-controls') as HTMLElement | null;
-    if (controls) controls.innerHTML = rootContextButton(rootContext, view.structure.value?.rootCoverage);
+    if (controls) controls.innerHTML = rootContextButton(
+      rootContext,
+      view.structure.value?.rootCoverage,
+      view.activities?.rootDiscovery ?? 'idle',
+    );
     const satellites = app.querySelector('#satellites') as HTMLElement | null;
     if (satellites) satellites.innerHTML = '';
     const message = app.querySelector('#map-message') as HTMLElement | null;
@@ -311,7 +330,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       updateDynamicMarkup(view, centerNode, turn, rootContext, structuralError, debug);
     } else {
       disposeBoards();
-      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage)}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug)}</aside></div></main>`;
+      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage, view.activities?.rootDiscovery ?? 'idle')}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug)}</aside></div></main>`;
       renderLichessEvalStatus(lichessEvalStatus);
       createCenterBoard(view, actions, turn);
       bindStaticControls(actions);

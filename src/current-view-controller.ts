@@ -7,6 +7,8 @@ export type { Orientation } from './lens.ts';
 export type LifecycleStatus = 'idle' | 'loading' | 'ready' | 'failed';
 export type RefinementPriority = 'foreground' | 'background';
 export type RefinementPhase = 'working' | 'retry-waiting' | 'satisfied' | 'unavailable' | 'failed';
+export type RefinementPurpose = 'root-discovery';
+export type RefinementActivityPhase = RefinementPhase | 'idle';
 
 export type Lifecycle = Readonly<{
   status: LifecycleStatus;
@@ -45,6 +47,9 @@ export type CurrentViewSnapshot = Readonly<{
   rail: Lifecycle;
   settling: boolean;
   weather: WeatherMeasures;
+  activities: Readonly<{
+    rootDiscovery: RefinementActivityPhase;
+  }>;
 }>;
 
 export type RecenterRequest =
@@ -91,6 +96,7 @@ export type RefinementOutcome =
 
 export type RefinementTask = Readonly<{
   key: string;
+  purpose?: RefinementPurpose;
   modes?: readonly ViewMode[];
   nodusWide?: boolean;
   structuralReading?: string | null;
@@ -159,6 +165,7 @@ type AcceptedViewState = {
 type RefinementParticipant = {
   key: string;
   task: RefinementTask;
+  purpose: RefinementPurpose | null;
   modes: readonly ViewMode[];
   nodusWide: boolean;
   structuralReading: string | null;
@@ -356,6 +363,9 @@ export class CurrentViewController {
       rail: this.#state.rail,
       settling: this.#structurallySettling(weather),
       weather,
+      activities: Object.freeze({
+        rootDiscovery: this.#activityPhase('root-discovery'),
+      }),
     });
   }
 
@@ -855,6 +865,7 @@ export class CurrentViewController {
         const participant: RefinementParticipant = {
           key,
           task,
+          purpose: task.purpose ?? null,
           modes,
           nodusWide: task.nodusWide === true,
           structuralReading,
@@ -869,6 +880,7 @@ export class CurrentViewController {
 
       const priorStructuralReading = existing.structuralReading;
       existing.task = task;
+      existing.purpose = task.purpose ?? null;
       existing.modes = modes;
       existing.nodusWide = task.nodusWide === true;
       existing.structuralReading = structuralReading;
@@ -879,6 +891,15 @@ export class CurrentViewController {
         this.#startParticipant(run, existing);
       }
     }
+  }
+
+  #activityPhase(purpose: RefinementPurpose): RefinementActivityPhase {
+    const run = this.#run;
+    if (!run) return 'idle';
+    for (const participant of run.participants.values()) {
+      if (participant.purpose === purpose) return participant.phase;
+    }
+    return 'idle';
   }
 
   #participantPriority(participant: RefinementParticipant): RefinementPriority {

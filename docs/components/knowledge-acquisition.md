@@ -38,7 +38,7 @@ Source clients own endpoint-specific access, authentication behavior, request pa
 
 An arbitrary canonical Nodus may have no known incoming Graph Edge even though rated Lichess games reached it. Root bootstrap may use representative games returned with the Nodus Explorer Reading to discover useful **source positions**. Sampled games are discovery material, not topology or Prevalence Evidence.
 
-Current-view coordination may batch-export the nominated game IDs through `LichessGateway`, replay them locally, and recover the canonical position immediately before the exact Nodus. Each distinct observed predecessor is only a nomination for ordinary Explorer refinement. Knowledge Acquisition reconciles that predecessor's Explorer Reading normally; only that reconciliation may establish the predecessor → Nodus Graph Edge.
+Current-view coordination may batch-export the nominated game IDs through `LichessGateway`, replay their exported PGN/SAN move sequence locally (respecting an exported initial FEN when present), and recover the canonical position immediately before the exact Nodus. If an otherwise-fresh cached center Explorer Reading predates representative-game sampling and therefore contains no game IDs, Root bootstrap may explicitly refresh that Reading once to obtain the sample payload instead of treating the aggregate cache hit as a completed bootstrap. Each distinct observed predecessor is only a nomination for ordinary Explorer refinement. Knowledge Acquisition reconciles that predecessor's Explorer Reading normally; only that reconciliation may establish the predecessor → Nodus Graph Edge.
 
 This source-position interpretation is important: once the predecessor Reading is reconciled, it can establish both the Root move into the Nodus and other legal moves from the same source. Those other admitted relationships provide the sibling family through the existing graph/Evidence/Candidate path. Sampling therefore does not need a separate sibling-discovery mechanism.
 
@@ -70,6 +70,7 @@ The sampled-game path is deliberately bounded and opportunistic. Failure to obta
 - A sampled predecessor is verified through its ordinary Explorer Reading before its Root relationship can become authoritative graph knowledge.
 - Reconciling a discovered predecessor Reading may establish both the Root move and sibling moves from that same source; no parallel sibling acquisition path is required.
 - Root coverage uses authoritative predecessor move counts over the Nodus Explorer total, never sample frequency.
+- A fresh aggregate center Reading that lacks representative-game IDs does not by itself satisfy Root bootstrap; the bootstrap may request an explicit source refresh for the missing sample payload.
 
 ## Supplementary lookahead
 

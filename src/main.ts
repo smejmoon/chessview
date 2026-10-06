@@ -8,11 +8,11 @@ import './debug.css';
 import { canonicalPosition } from './graph.js';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { CurrentViewController } from './current-view-controller.ts';
-import type { RefinementTask } from './current-view-controller.ts';
+import type { RefinementOutcome, RefinementTask } from './current-view-controller.ts';
 import { debugLog } from './debug.js';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
-import { currentExplorerReading } from './explorer.js';
+import { currentExplorerReading, refreshExplorerReading } from './explorer.js';
 import { discoverSampledPredecessors, sampleGameIds } from './sampled-predecessors.ts';
 import { createLens } from './lens.ts';
 import { loadMasters } from './masters.js';
@@ -73,15 +73,30 @@ function constraintsFor(mode: 'roots' | 'lines') {
   return constraints;
 }
 
-async function discoverRootPredecessors(center, { signal, priority }) {
-  const reading = currentExplorerReading(center);
-  const ids = sampleGameIds(reading);
-  if (!ids.length) return;
-  const nominations = await discoverSampledPredecessors(center, ids, { signal, priority });
-  for (const nomination of nominations) {
-    if (signal.aborted) return;
-    await refineExplorerReading(nomination.source, { signal, priority });
+async function discoverRootPredecessors(center, { signal, priority }): Promise<RefinementOutcome> {
+  let reading = currentExplorerReading(center);
+  let ids = sampleGameIds(reading);
+  if (!ids.length) {
+    debugLog('Root discovery refreshing Explorer samples', { center });
+    reading = await refreshExplorerReading(center, { signal, priority });
+    ids = sampleGameIds(reading);
   }
+  if (!ids.length) return Object.freeze({ refinement: 'unavailable' as const });
+
+  debugLog('Root discovery replaying sampled games', { center, games: ids.length });
+  const nominations = await discoverSampledPredecessors(center, ids, { signal, priority });
+  let satisfied = nominations.length === 0;
+  let unavailable = false;
+  for (const nomination of nominations) {
+    if (signal.aborted) return Object.freeze({ refinement: 'unavailable' as const });
+    const outcome = await refineExplorerReading(nomination.source, { signal, priority });
+    if (outcome.refinement === 'retryable') return outcome;
+    if (outcome.refinement === 'satisfied') satisfied = true;
+    if (outcome.refinement === 'unavailable') unavailable = true;
+  }
+  if (satisfied) return Object.freeze({ refinement: 'satisfied' as const });
+  if (unavailable) return Object.freeze({ refinement: 'unavailable' as const });
+  return Object.freeze({ refinement: 'satisfied' as const });
 }
 
 function tasksForCurrentView({ center, mode, structure }): readonly RefinementTask[] {
@@ -96,9 +111,9 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
   if (mode === 'roots' && !rootTransposition) {
     add({
       key: `root-discovery:${center}`,
+      purpose: 'root-discovery',
       modes: ['roots'],
       nodusWide: false,
-      structuralReading: center,
       run: ({ signal, priority }) => discoverRootPredecessors(center, { signal, priority }),
     });
   }

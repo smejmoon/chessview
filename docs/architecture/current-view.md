@@ -235,6 +235,9 @@ contain values from several authorities, for example:
 - aggregate Weather diagnostics such as accepted-structure lifecycle, Reading
   frontier size, structural participation counts by phase, incorporation-pending
   count, detached structural participation, and supplementary active/total counts;
+- semantic current-view activity summaries when presentation needs to explain a
+  user-visible refinement, such as Root discovery being working, retry-waiting,
+  satisfied, unavailable, or failed, without exposing internal task keys;
 - orientation from Lens;
 - Back availability from RouteLedger.
 
@@ -289,4 +292,6 @@ Deterministic/browser contract tests should cover:
 - empty Root context being allowed to bootstrap from bounded sampled games without treating a sampled predecessor as graph truth;
 - sampled predecessor discovery flowing back through ordinary Explorer reconciliation, with one predecessor Reading able to establish both Root and sibling topology;
 - published snapshots aggregating authoritative values without duplicating their
-  mutable ownership.
+  mutable ownership;
+- Root discovery exposing a semantic activity phase for presentation without
+  masquerading as a Constellation Reading-frontier participant.

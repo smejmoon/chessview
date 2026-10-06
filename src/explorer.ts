@@ -20,6 +20,7 @@ type Priority = LoadPriority | (() => LoadPriority);
 type LoadOptions = Readonly<{
   signal?: AbortSignal;
   priority?: Priority;
+  refresh?: boolean;
 }>;
 
 type ParsedExplorerMove = ExplorerMove & Readonly<{
@@ -272,7 +273,7 @@ export function createExplorerProvider({
 
   function ensure(
     key: string,
-    { signal, priority = 'foreground' }: LoadOptions = {},
+    { signal, priority = 'foreground', refresh = false }: LoadOptions = {},
   ): Promise<ParsedExplorerReading> {
     const canonical = canonicalPosition(key);
     return repository.load(
@@ -286,7 +287,7 @@ export function createExplorerProvider({
           cachedExplorer
           && now() - cachedFetchedAt < EXPLORER_TTL_MS,
         );
-        if (freshCached && cachedExplorer) {
+        if (!refresh && freshCached && cachedExplorer) {
           report('Explorer Reading cache hit', {
             position: canonical,
             games: totalGames(cachedExplorer),
@@ -296,7 +297,8 @@ export function createExplorerProvider({
 
         const admitted = repository.currentFacet(canonical, 'explorer');
         if (
-          admitted
+          !refresh
+          && admitted
           && !admitted.persisted
           && now() - admitted.fetchedAt < EXPLORER_TTL_MS
         ) {
@@ -350,10 +352,15 @@ export function createExplorerProvider({
     );
   }
 
-  return Object.freeze({ ensure, current, readCached, invalidate });
+  function refresh(key: string, options: Omit<LoadOptions, 'refresh'> = {}): Promise<ParsedExplorerReading> {
+    return ensure(key, { ...options, refresh: true });
+  }
+
+  return Object.freeze({ ensure, refresh, current, readCached, invalidate });
 }
 
 export const explorerProvider = createExplorerProvider();
 export const loadExplorerReading = explorerProvider.ensure;
+export const refreshExplorerReading = explorerProvider.refresh;
 export const currentExplorerReading = explorerProvider.current;
 export const readCachedExplorerReading = explorerProvider.readCached;

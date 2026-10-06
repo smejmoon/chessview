@@ -4,6 +4,7 @@ import { lichessSession } from './lichess-session.js';
 
 const EXPORT_ENDPOINT = 'https://lichess.org/api/games/export/_ids';
 const GAME_ID = /^[A-Za-z0-9]{8}$/;
+const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 
 export type PredecessorNomination = Readonly<{
   source: string;
@@ -14,6 +15,7 @@ export type PredecessorNomination = Readonly<{
 type GameExport = Readonly<{
   id?: unknown;
   moves?: unknown;
+  initialFen?: unknown;
 }>;
 
 type ExportResponse = Readonly<{
@@ -33,16 +35,32 @@ export type SampledPredecessorOptions = Readonly<{
   request?: ExportRequest;
 }>;
 
+function playExportedMove(chess: Chess, token: string) {
+  try {
+    if (UCI_MOVE.test(token)) {
+      return chess.move({
+        from: token.slice(0, 2),
+        to: token.slice(2, 4),
+        promotion: token.slice(4) || undefined,
+      });
+    }
+    return chess.move(token);
+  } catch {
+    return null;
+  }
+}
+
 function replayPredecessor(target: string, game: GameExport): PredecessorNomination | null {
   if (typeof game.id !== 'string' || !GAME_ID.test(game.id) || typeof game.moves !== 'string') return null;
-  const chess = new Chess(START_FEN);
-  for (const uci of game.moves.trim().split(/\s+/).filter(Boolean)) {
+  const initialFen = typeof game.initialFen === 'string' && game.initialFen !== 'startpos'
+    ? game.initialFen
+    : START_FEN;
+  let chess: Chess;
+  try { chess = new Chess(initialFen); } catch { return null; }
+
+  for (const token of game.moves.trim().split(/\s+/).filter(Boolean)) {
     const source = canonicalPosition(chess.fen());
-    const played = chess.move({
-      from: uci.slice(0, 2),
-      to: uci.slice(2, 4),
-      promotion: uci.slice(4) || undefined,
-    });
+    const played = playExportedMove(chess, token);
     if (!played) return null;
     if (canonicalPosition(chess.fen()) === target) {
       return Object.freeze({

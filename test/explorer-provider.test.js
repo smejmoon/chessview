@@ -104,3 +104,49 @@ test('reading current Explorer state is passive and does not start acquisition',
   assert.equal(requests, 1);
   assert.strictEqual(provider.current(CENTER), reading);
 });
+
+
+test('explicit Explorer refresh bypasses a fresh cached Reading to obtain representative games', async () => {
+  let requests = 0;
+  const cached = explorerReading();
+  const refreshed = {
+    ...explorerReading(),
+    topGames: [{ id: 'abcdefgh' }],
+    recentGames: [{ id: 'ijklmnop' }],
+  };
+  const repository = createPositionRepository({
+    read: async () => ({
+      key: CENTER,
+      fen: START_FEN,
+      explorer: cached,
+      explorerFetchedAt: 1_000,
+    }),
+    write: async () => {},
+    version: () => 0,
+  });
+  const provider = createExplorerProvider({
+    repository,
+    request: async () => {
+      requests += 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => refreshed,
+        text: async () => '',
+      };
+    },
+    now: () => 1_100,
+    cooldownUntil: () => 0,
+    log: () => {},
+  });
+
+  const ordinary = await provider.ensure(CENTER);
+  assert.strictEqual(ordinary, cached);
+  assert.equal(requests, 0);
+
+  const sampled = await provider.refresh(CENTER);
+  assert.equal(requests, 1);
+  assert.deepEqual(sampled.topGames, [{ id: 'abcdefgh' }]);
+  assert.deepEqual(sampled.recentGames, [{ id: 'ijklmnop' }]);
+  assert.strictEqual(provider.current(CENTER), sampled);
+});

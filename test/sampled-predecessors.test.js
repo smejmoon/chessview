@@ -30,8 +30,8 @@ test('sampled games nominate the observed move immediately before the exact Nodu
         ok: true,
         status: 200,
         text: async () => [
-          JSON.stringify({ id: 'abcdefgh', moves: 'e2e4 c7c5 g1f3 d7d6' }),
-          JSON.stringify({ id: 'ijklmnop', moves: 'e2e4 c7c5 g1f3 b8c6' }),
+          JSON.stringify({ id: 'abcdefgh', moves: 'e4 c5 Nf3 d6' }),
+          JSON.stringify({ id: 'ijklmnop', moves: 'e4 c5 Nf3 Nc6' }),
         ].join('\n'),
       };
     },
@@ -50,8 +50,32 @@ test('sampled game that never reaches the canonical Nodus nominates nothing', as
     request: async () => ({
       ok: true,
       status: 200,
-      text: async () => JSON.stringify({ id: 'abcdefgh', moves: 'e2e4 e7e5' }),
+      text: async () => JSON.stringify({ id: 'abcdefgh', moves: 'e4 e5' }),
     }),
   });
   assert.deepEqual(nominations, []);
+});
+
+
+test('sampled-game replay honors an exported initial FEN', async () => {
+  const initial = '8/8/8/8/8/4k3/4P3/4K3 w - - 0 1';
+  const chess = new Chess(initial);
+  chess.move('Kf1');
+  const target = canonicalPosition(chess.fen());
+
+  const nominations = await discoverSampledPredecessors(target, ['abcdefgh'], {
+    request: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        id: 'abcdefgh',
+        initialFen: initial,
+        moves: 'Kf1',
+      }),
+    }),
+  });
+
+  assert.equal(nominations.length, 1);
+  assert.equal(nominations[0].source, canonicalPosition(initial));
+  assert.equal(nominations[0].uci, 'e1f1');
 });

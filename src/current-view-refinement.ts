@@ -29,7 +29,7 @@ export type CurrentViewExplorerDemand = CurrentViewRefinementTarget & Readonly<{
 }>;
 
 export type CurrentViewRefinementDemand = Readonly<{
-  rootTransposition: string;
+  rootTransposition: string | null;
   explorer: readonly CurrentViewExplorerDemand[];
   cloudEval: readonly CurrentViewRefinementTarget[];
   masters: readonly CurrentViewRefinementTarget[];
@@ -99,6 +99,17 @@ function freezeExplorerTargets(
   })));
 }
 
+function hasAuthoritativeRoot(
+  center: string,
+  mode: ViewMode,
+  structure: StructureLike | null,
+): boolean {
+  if (mode !== 'roots') return false;
+  return (structure?.composition?.relationships ?? []).some(({ edge }) => (
+    Boolean(edge?.source) && edge?.target === center
+  ));
+}
+
 export function deriveCurrentViewRefinementDemand({
   center,
   mode,
@@ -134,7 +145,7 @@ export function deriveCurrentViewRefinementDemand({
   addTarget(mastersDemand, center);
 
   return Object.freeze({
-    rootTransposition: center,
+    rootTransposition: hasAuthoritativeRoot(center, mode, structure) ? center : null,
     explorer: freezeExplorerTargets(explorerDemand, center),
     cloudEval: freezeTargets(evalDemand, center),
     masters: freezeTargets(mastersDemand, center),

@@ -79,11 +79,14 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
     if (!tasks.has(task.key)) tasks.set(task.key, Object.freeze(task));
   }
 
-  add({
-    key: `root-transpositions:${demand.rootTransposition}`,
-    nodusWide: true,
-    run: ({ signal }) => rootTranspositionEnricher.ensure(demand.rootTransposition, { signal }),
-  });
+  const rootTransposition = demand.rootTransposition;
+  if (rootTransposition) {
+    add({
+      key: `root-transpositions:${rootTransposition}`,
+      nodusWide: true,
+      run: ({ signal }) => rootTranspositionEnricher.ensure(rootTransposition, { signal }),
+    });
+  }
 
   for (const target of demand.explorer) {
     add({

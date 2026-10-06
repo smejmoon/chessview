@@ -16,8 +16,11 @@ test('Current View derives refinement demand from its one accepted Constellation
     structure: {
       readingFrontier: ['A', 'B'],
       composition: {
-        nodes: [{ key: 'B' }, { key: 'C' }],
-        relationships: [{ edge: { source: 'C', target: 'D' } }],
+        nodes: [{ key: 'B' }, { key: 'C' }, { key: 'E' }],
+        relationships: [
+          { edge: { source: 'C', target: 'D' } },
+          { edge: { source: 'E', target: 'A' } },
+        ],
       },
     },
   });
@@ -46,6 +49,44 @@ test('Current View derives refinement demand from its one accepted Constellation
   assert.equal(Object.hasOwn(target(demand.masters, 'C') ?? {}, 'structuralModes'), false);
   assert.ok(Object.isFrozen(demand));
   assert.ok(Object.isFrozen(demand.explorer));
+});
+
+test('Root transposition demand waits for authoritative visible Root topology', () => {
+  const emptyRoots = deriveCurrentViewRefinementDemand({
+    center: 'A',
+    mode: 'roots',
+    structure: {
+      composition: {
+        nodes: [{ key: 'B' }],
+        relationships: [],
+      },
+    },
+  });
+  assert.equal(emptyRoots.rootTransposition, null);
+
+  const lines = deriveCurrentViewRefinementDemand({
+    center: 'A',
+    mode: 'lines',
+    structure: {
+      composition: {
+        nodes: [{ key: 'C' }],
+        relationships: [{ edge: { source: 'C', target: 'A' } }],
+      },
+    },
+  });
+  assert.equal(lines.rootTransposition, null);
+
+  const roots = deriveCurrentViewRefinementDemand({
+    center: 'A',
+    mode: 'roots',
+    structure: {
+      composition: {
+        nodes: [{ key: 'C' }],
+        relationships: [{ edge: { source: 'C', target: 'A' } }],
+      },
+    },
+  });
+  assert.equal(roots.rootTransposition, 'A');
 });
 
 test('Current View demand priority follows active mode while Nodus-wide demand stays foreground', () => {

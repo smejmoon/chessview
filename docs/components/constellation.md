@@ -13,6 +13,8 @@ A Constellation is a projection of Chessview's [`ChartedGraph`](charted-graph.md
 - One Nodus has one current Constellation. Lines, optional Root context, siblings, and canonical convergence are roles inside that surroundings projection rather than separate Root and Line projections.
 - The normal surroundings emphasize the Nodus and Lines. Root context is off by default; when enabled, immediate Roots and useful sibling context may compete for visible space in the same Constellation.
 - Root-context visibility is a composition input. Turning it on or off reallocates scarce visible space; it is not a post-composition DOM hide/show operation.
+- Root and sibling context share source topology: an authoritative predecessor source can contribute the Root edge into the Nodus and sibling edges from that same source. They are not separate discovery or presentation subsystems.
+- When available, Root coverage describes how much of the Nodus rated-game population is accounted for by the selected authoritative Root moves. It is derived from predecessor Explorer move counts over the Nodus Explorer total; sampled-game frequency is never part of the measure.
 - The graph Chessview knows may be larger than the current Constellation. Omitting a known position from a view never removes it from `ChartedGraph`.
 - Composition derives from durable graph facts plus Evidence currently available for relevant canonical positions and Graph Edges. It requests Evidence through the Evidence boundary rather than calculating evidence semantics or reading engine/Explorer/Masters clients directly.
 - Evidence requests during composition are reads only. Constellation does not start Explorer, engine, Masters, Root enrichment, or graph-reconciliation work.
@@ -115,4 +117,6 @@ Deterministic tests should cover:
 - Recenter/history restoration rebuilding view-local Candidates from durable graph knowledge and current Evidence;
 - distinct immediate Root/Line families remaining distinct before genuine convergence;
 - canonical transpositions appearing once while retaining every selected relationship/family membership;
-- cross-branch allocation preserving coherence without treating unrelated source-local Prevalence as one global rank.
+- cross-branch allocation preserving coherence without treating unrelated source-local Prevalence as one global rank;
+- Root and sibling context arising from the same reconciled predecessor topology rather than parallel discovery paths;
+- Root coverage using authoritative predecessor move counts over the Nodus total and remaining independent of sampled-game frequency.

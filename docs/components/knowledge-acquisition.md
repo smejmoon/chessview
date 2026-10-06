@@ -34,6 +34,18 @@ Source clients own endpoint-specific access, authentication behavior, request pa
 
 [`LichessGateway`](../architecture/lichess-gateway.md) owns application-wide Lichess transport scheduling, cooldown, and queued cancellation. `PositionRepository` owns shared producer lifetime for one position/facet. Knowledge Acquisition supplies foreground/background participation according to caller policy but does not create separate producer identities for current-view consumers.
 
+## Root bootstrap from sampled games
+
+An arbitrary canonical Nodus may have no known incoming Graph Edge even though rated Lichess games reached it. Root bootstrap may use representative games returned with the Nodus Explorer Reading to discover useful **source positions**. Sampled games are discovery material, not topology or Prevalence Evidence.
+
+Current-view coordination may batch-export the nominated game IDs through `LichessGateway`, replay them locally, and recover the canonical position immediately before the exact Nodus. Each distinct observed predecessor is only a nomination for ordinary Explorer refinement. Knowledge Acquisition reconciles that predecessor's Explorer Reading normally; only that reconciliation may establish the predecessor → Nodus Graph Edge.
+
+This source-position interpretation is important: once the predecessor Reading is reconciled, it can establish both the Root move into the Nodus and other legal moves from the same source. Those other admitted relationships provide the sibling family through the existing graph/Evidence/Candidate path. Sampling therefore does not need a separate sibling-discovery mechanism.
+
+Sampling frequency has no quantitative authority. Root coverage is measured from ordinary rated Explorer Readings: sum the game count of each selected authoritative Root move in its predecessor Reading and divide by the Nodus Explorer total. Repeated sampled games for the same predecessor do not increase coverage. In short, **sampling discovers; Explorer measures**.
+
+The sampled-game path is deliberately bounded and opportunistic. Failure to obtain a useful sampled predecessor leaves ancestry unknown; it must not manufacture a historical predecessor or make local chess legality count as Explorer evidence. A future local predecessor-hypothesis fallback, if justified by observed coverage, remains a separate discovery technique feeding the same reconciliation boundary.
+
 ## Requirements
 
 - Acquired position and Graph Edge knowledge is reconciled against canonical `ChartedGraph` identity rather than stored as view-local duplicates.
@@ -54,6 +66,10 @@ Source clients own endpoint-specific access, authentication behavior, request pa
 - Acquisition and visibility remain separate. Knowledge Acquisition does not inspect current presentation-space capacity to decide which relationships a requested Reading may admit or retain.
 - Missing optional engine evidence does not create a Knowledge Acquisition or structural-settlement obligation merely because it could alter selection if it existed.
 - Explicit Move materialization establishes graph knowledge independently of automatic Explorer acquisition or Constellation selection.
+- Sampled games may nominate predecessor source positions but never establish Graph Edges or contribute game counts directly.
+- A sampled predecessor is verified through its ordinary Explorer Reading before its Root relationship can become authoritative graph knowledge.
+- Reconciling a discovered predecessor Reading may establish both the Root move and sibling moves from that same source; no parallel sibling acquisition path is required.
+- Root coverage uses authoritative predecessor move counts over the Nodus Explorer total, never sample frequency.
 
 ## Supplementary lookahead
 
@@ -91,4 +107,8 @@ Deterministic tests should cover:
 - optional engine evidence remaining unnecessary for structural settlement;
 - bounded supplementary warming remaining separate from graph reconciliation and current-view settlement;
 - foreground demand sharing/promoting an already-running background producer rather than duplicating it;
-- detached warm expiry releasing an otherwise-unused producer through normal shared-load cancellation.
+- detached warm expiry releasing an otherwise-unused producer through normal shared-load cancellation;
+- sampled-game replay nominating only the observed predecessor immediately before the exact canonical Nodus;
+- duplicate sampled games not inflating Root coverage;
+- predecessor reconciliation supplying sibling relationships through the same ordinary graph-growth path;
+- Root coverage equaling authoritative selected Root move counts divided by the Nodus Explorer total.

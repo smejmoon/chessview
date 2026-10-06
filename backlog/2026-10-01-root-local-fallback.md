@@ -20,7 +20,7 @@ A locally derived predecessor is a transient hypothesis only. It must not be per
 
 Explorer/Knowledge Acquisition remains authoritative for whether a hypothesized predecessor was historically observed and for admitting the corresponding Graph Edge. Existing PositionRepository, LichessGateway, Evidence, Current View, and Candidate-selection ownership stays in place; this outcome must not create a second cache, scheduler, freshness protocol, or reconciliation lifecycle.
 
-Root transposition enrichment remains downstream of authoritative topology. It may use the newly established incoming seed once ordinary graph reconciliation has made that seed real, but it must not turn local hypotheses into durable ancestry itself.
+Root transposition enrichment remains downstream of authoritative topology. Current View now nominates that refinement only when the accepted Roots composition already contains an authoritative incoming relationship to the Nodus, so an empty-topology attempt cannot settle the task before bootstrap discovers its first real incoming edge. It may use the newly established incoming seed once ordinary graph reconciliation has made that seed real, but it must not turn local hypotheses into durable ancestry itself.
 
 Foreground/background request policy remains owned by Current View and Knowledge Acquisition. Bootstrap discovery may nominate bounded work, but it does not gain an independent priority system.
 
@@ -28,11 +28,13 @@ This outcome does not optimize the latency of Root views that already have suffi
 
 # Unsettled:
 
-Choose the smallest complete local predecessor-generation semantics that are trustworthy for bootstrap, including ordinary moves, captures, promotions, castling, and en passant where applicable.
+The first practical bootstrap is implemented around observed Lichess games rather than local reverse generation. The center Explorer request asks for two top and two recent representative games. A separate sampled-predecessor component batch-exports those game IDs once, replays each game locally, and nominates the distinct observed predecessor immediately before the exact canonical Nodus. Those nominations remain discovery input only: existing Explorer refinement/reconciliation on each predecessor establishes any durable Graph Edge and ordinary Evidence/Candidate selection decides Root visibility.
 
-Bound and order predecessor hypotheses so an arbitrary Nodus cannot explode into unbounded remote acquisition while still giving ordinary opening positions a useful chance to establish authoritative Roots.
+Root coverage is now measured from authoritative data only: for each selected authoritative Root edge, Chessview takes that move's rated-Lichess Explorer game count from the predecessor Reading, sums those counts, and divides by the center Explorer total. Sample frequency never contributes to coverage. The Roots toggle exposes both percentage and covered/total games so real positions can show whether the simple four-game discovery sample is sufficient.
 
-Settle how bootstrap completion triggers recomposition so newly reconciled incoming edges become visible Root Candidates without introducing a second current-view lifetime or duplicate Root identity.
+Root transposition refinement is gated on authoritative visible incoming topology, so an empty Root composition no longer consumes the transposition task before bootstrap can establish a seed.
+
+Exact-tip CI passed for the implementation before this backlog synchronization (tests, TypeScript, and production build). Re-run exact-tip CI for this documentation tip, then verify the branch preview against a directly loaded arbitrary/Panov Nodus: sampled game export must succeed through LichessGateway, sampled predecessors must reconcile into incoming Graph Edges, Roots must appear without prior navigation, and the displayed coverage must agree with the predecessor Explorer move counts over the center Explorer total. If representative games are absent or fail to expose useful predecessors, decide from observed coverage whether a local predecessor-hypothesis fallback is still warranted.
 
 # Complete:
 

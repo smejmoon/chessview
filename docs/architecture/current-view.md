@@ -100,7 +100,8 @@ accepted current-view state. It may combine:
   structural provenance;
 - useful Explorer context around represented positions;
 - supplementary engine or Masters evidence;
-- Root enrichment and other view-local enrichment.
+- Root enrichment and other view-local enrichment;
+- bounded sampled-game Root bootstrap when Root context has no authoritative incoming topology.
 
 Planning does not make Nodus an acquisition owner. Current View maps demand onto
 opaque keyed refinement work and coordinates run-local participation. Planning
@@ -115,6 +116,8 @@ PositionRepository and source providers; other refinement work, such as
 graph/topology enrichment, may have a different producer lifetime. Providers and
 Knowledge Acquisition retain source meaning, freshness/fallback/retry policy,
 and durable reconciliation behavior.
+
+When Root context has no authoritative incoming topology, planning may nominate bounded sampled-game bootstrap work. The bootstrap reuses representative game IDs from the center Explorer Reading, batch-exports/replays them to discover predecessor source positions, then asks ordinary Explorer refinement to reconcile those sources. The sampled games themselves never become accepted topology or quantitative Evidence. Once a predecessor Reading is reconciled, its outgoing graph knowledge naturally supplies both the Root relationship and sibling relationships from that source.
 
 A source name, task key, provider type, or mere run ownership cannot manufacture
 structural criticality. Only a Constellation-admitted obligation participates in
@@ -283,5 +286,7 @@ Deterministic/browser contract tests should cover:
 - Evidence remaining readable independently of Constellation;
 - current-view relevance and structural settlement remaining separate from
   reusable PositionRepository producer/cache lifetime;
+- empty Root context being allowed to bootstrap from bounded sampled games without treating a sampled predecessor as graph truth;
+- sampled predecessor discovery flowing back through ordinary Explorer reconciliation, with one predecessor Reading able to establish both Root and sibling topology;
 - published snapshots aggregating authoritative values without duplicating their
   mutable ownership.

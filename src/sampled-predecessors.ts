@@ -5,6 +5,7 @@ import { lichessSession } from './lichess-session.js';
 const EXPORT_ENDPOINT = 'https://lichess.org/api/games/export/_ids';
 const GAME_ID = /^[A-Za-z0-9]{8}$/;
 const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
+const MAX_REPRESENTATIVE_GAMES = 8;
 
 export type PredecessorNomination = Readonly<{
   source: string;
@@ -85,6 +86,15 @@ export function sampleGameIds(reading: unknown): readonly string[] {
     }
   }
   return Object.freeze(ids);
+}
+
+export function representativeSampleComplete(reading: unknown): boolean {
+  if (!reading || typeof reading !== 'object') return false;
+  const value = reading as { white?: unknown; draws?: unknown; black?: unknown };
+  const counts = [value.white, value.draws, value.black];
+  if (!counts.every((count) => Number.isInteger(count) && (count as number) >= 0)) return false;
+  const total = (value.white as number) + (value.draws as number) + (value.black as number);
+  return sampleGameIds(reading).length >= Math.min(MAX_REPRESENTATIVE_GAMES, total);
 }
 
 export async function discoverSampledPredecessors(

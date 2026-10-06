@@ -4,6 +4,7 @@ import { Chess } from 'chess.js';
 import { canonicalPosition } from '../src/graph.js';
 import {
   discoverSampledPredecessors,
+  representativeSampleComplete,
   sampleGameIds,
 } from '../src/sampled-predecessors.js';
 
@@ -18,6 +19,41 @@ test('sample game ids preserve top then recent order and deduplicate', () => {
     topGames: [{ id: 'abcdefgh' }, { id: 'ijklmnop' }],
     recentGames: [{ id: 'abcdefgh' }, { id: 'qrstuvwx' }],
   }), ['abcdefgh', 'ijklmnop', 'qrstuvwx']);
+});
+
+test('representative sample completeness detects legacy partial samples', () => {
+  assert.equal(representativeSampleComplete({
+    white: 50,
+    draws: 25,
+    black: 25,
+    topGames: [{ id: 'abcdefgh' }, { id: 'ijklmnop' }],
+    recentGames: [{ id: 'qrstuvwx' }, { id: 'yzabcdef' }],
+  }), false);
+
+  assert.equal(representativeSampleComplete({
+    white: 50,
+    draws: 25,
+    black: 25,
+    topGames: [
+      { id: 'abcdefgh' },
+      { id: 'ijklmnop' },
+      { id: 'qrstuvwx' },
+      { id: 'yzabcdef' },
+    ],
+    recentGames: [
+      { id: 'ghijklmn' },
+      { id: 'opqrstuv' },
+      { id: 'wxyzabcd' },
+      { id: 'efghijkl' },
+    ],
+  }), true);
+
+  assert.equal(representativeSampleComplete({
+    white: 2,
+    draws: 1,
+    black: 0,
+    recentGames: [{ id: 'abcdefgh' }, { id: 'ijklmnop' }, { id: 'qrstuvwx' }],
+  }), true);
 });
 
 test('sampled games nominate the observed move immediately before the exact Nodus', async () => {

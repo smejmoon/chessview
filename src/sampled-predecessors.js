@@ -5,6 +5,7 @@ import { lichessSession } from './lichess-session.js';
 const EXPORT_ENDPOINT = 'https://lichess.org/api/games/export/_ids';
 const GAME_ID = /^[A-Za-z0-9]{8}$/;
 const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
+const MAX_REPRESENTATIVE_GAMES = 8;
 
 function playExportedMove(chess, token) {
   try {
@@ -56,6 +57,14 @@ export function sampleGameIds(reading) {
     }
   }
   return Object.freeze(ids);
+}
+
+export function representativeSampleComplete(reading) {
+  if (!reading || typeof reading !== 'object') return false;
+  const counts = [reading.white, reading.draws, reading.black];
+  if (!counts.every((count) => Number.isInteger(count) && count >= 0)) return false;
+  const total = reading.white + reading.draws + reading.black;
+  return sampleGameIds(reading).length >= Math.min(MAX_REPRESENTATIVE_GAMES, total);
 }
 
 export async function discoverSampledPredecessors(

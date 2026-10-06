@@ -108,6 +108,7 @@ test('reading current Explorer state is passive and does not start acquisition',
 
 test('explicit Explorer refresh bypasses a fresh cached Reading to obtain representative games', async () => {
   let requests = 0;
+  let requestedUrl = null;
   const cached = explorerReading();
   const refreshed = {
     ...explorerReading(),
@@ -126,8 +127,9 @@ test('explicit Explorer refresh bypasses a fresh cached Reading to obtain repres
   });
   const provider = createExplorerProvider({
     repository,
-    request: async () => {
+    request: async (url) => {
       requests += 1;
+      requestedUrl = url;
       return {
         ok: true,
         status: 200,
@@ -146,6 +148,8 @@ test('explicit Explorer refresh bypasses a fresh cached Reading to obtain repres
 
   const sampled = await provider.refresh(CENTER);
   assert.equal(requests, 1);
+  assert.equal(requestedUrl.searchParams.get('topGames'), '4');
+  assert.equal(requestedUrl.searchParams.get('recentGames'), '8');
   assert.deepEqual(sampled.topGames, [{ id: 'abcdefgh' }]);
   assert.deepEqual(sampled.recentGames, [{ id: 'ijklmnop' }]);
   assert.strictEqual(provider.current(CENTER), sampled);

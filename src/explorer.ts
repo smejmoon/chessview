@@ -114,8 +114,8 @@ function explorerUrl(key: string): URL {
   url.searchParams.set('variant', 'standard');
   url.searchParams.set('fen', toPlayableFen(key));
   url.searchParams.set('moves', '30');
-  url.searchParams.set('topGames', '2');
-  url.searchParams.set('recentGames', '2');
+  url.searchParams.set('topGames', '4');
+  url.searchParams.set('recentGames', '8');
   return url;
 }
 

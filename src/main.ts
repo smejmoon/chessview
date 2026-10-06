@@ -13,7 +13,11 @@ import { debugLog } from './debug.js';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
 import { currentExplorerReading, refreshExplorerReading } from './explorer.js';
-import { discoverSampledPredecessors, sampleGameIds } from './sampled-predecessors.ts';
+import {
+  discoverSampledPredecessors,
+  representativeSampleComplete,
+  sampleGameIds,
+} from './sampled-predecessors.ts';
 import { createLens } from './lens.ts';
 import { loadMasters } from './masters.js';
 import { materializeMove } from './move-materialization.ts';
@@ -76,8 +80,11 @@ function constraintsFor(mode: 'roots' | 'lines') {
 async function discoverRootPredecessors(center, { signal, priority }): Promise<RefinementOutcome> {
   let reading = currentExplorerReading(center);
   let ids = sampleGameIds(reading);
-  if (!ids.length) {
-    debugLog('Root discovery refreshing Explorer samples', { center });
+  if (!representativeSampleComplete(reading)) {
+    debugLog('Root discovery refreshing full Explorer sample', {
+      center,
+      cachedGames: ids.length,
+    });
     reading = await refreshExplorerReading(center, { signal, priority });
     ids = sampleGameIds(reading);
   }
@@ -108,7 +115,8 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
   }
 
   const rootTransposition = demand.rootTransposition;
-  if (mode === 'roots' && !rootTransposition) {
+  const rootSampleComplete = representativeSampleComplete(currentExplorerReading(center));
+  if (mode === 'roots' && (!rootTransposition || !rootSampleComplete)) {
     add({
       key: `root-discovery:${center}`,
       purpose: 'root-discovery',

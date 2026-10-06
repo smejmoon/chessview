@@ -1,38 +1,46 @@
 # Do:
 
-Determine whether a cheap local provisional Root context can be shown while authoritative Root knowledge is still pending without manufacturing evidence-free Constellation Candidates or consuming Lichess request capacity merely to produce the fallback.
+Implement Root bootstrap for an arbitrary canonical Nodus that has no known incoming Graph Edge.
 
-If a useful trustworthy fallback exists, implement it as explicitly provisional structure/presentation that later refines into the authoritative Root projection within the same Nodus generation. If no such representation is useful under the current Candidate contract, reject the fallback rather than weakening Candidate evidence semantics.
+Derive a bounded set of locally legal one-ply predecessor hypotheses from the current position, use those positions only as addresses for authoritative rated-Lichess Explorer acquisition/reconciliation, and let ordinary Evidence-backed Candidate selection admit any predecessor relationship that the source actually establishes. Once an authoritative incoming edge exists, compose Root/sibling context and move-order transposition enrichment through the existing graph/Evidence path.
+
+Do not require prior navigation history or a previously known incoming edge merely to discover Roots for a directly loaded FEN.
 
 # Because:
 
-Root projection currently depends on `composeNodusStructure()` paths that can trigger Explorer Reading acquisition and transposition enrichment. That can make Root availability compete with more valuable foreground acquisition even though some one-ply predecessor reachability can be derived locally.
+The current Root path has a bootstrap hole. `composeRootContext()` begins from known incoming Graph Edges, while Root transposition enrichment reconstructs a reference path by walking those same known incoming edges. A directly loaded canonical position can therefore reach a settled `view=roots` with an empty Root region even after substantial Explorer acquisition and reconciliation, simply because no incoming seed was known.
 
-The current Candidate contract now requires usable rated-Lichess Prevalence, and `explicit` navigation does not bypass that requirement. A locally inferred predecessor therefore cannot enter ordinary Constellation Candidate selection merely because it is legal or cheap to compute. Local reachability can be useful provisional context, but it is not historical occurrence, source Prevalence, or automatic-selection evidence.
+Local chess legality can identify predecessor positions worth asking about, but it does not establish historical occurrence. The current Candidate contract still requires usable rated-Lichess Prevalence for the predecessor relationship. Local reverse reachability should therefore bootstrap discovery, not bypass Evidence or become graph truth by itself.
 
-Current-view architecture already permits a trustworthy current-generation projection to publish before structural work settles and to be replaced by a refined immutable value within the same Nodus generation. Any local Root fallback should use that refinement model without inventing another generation, source-freshness protocol, or evidence-free Candidate class.
+This outcome is about making authoritative Root discovery possible from an arbitrary Nodus. It is not primarily a visual fallback task.
 
 # Edges:
 
-Foreground/background acquisition priority is already owned by the current-view and Knowledge Acquisition scheduling boundaries. This outcome must not change request urgency, producer lifetime, or sibling scheduling merely to make the fallback appear sooner.
+A locally derived predecessor is a transient hypothesis only. It must not be persisted into ChartedGraph, displayed as an authoritative Root, or promoted to a Selection Candidate solely because the move into the Nodus is legal.
 
-The fallback is temporary structural/presentation assistance, not a new authoritative knowledge source. It must not own persistence, remote acquisition, freshness, background scheduling, historical-occurrence truth, or Candidate eligibility. Explorer/ChartedGraph knowledge remains authoritative for observed or enriched ancestry.
+Explorer/Knowledge Acquisition remains authoritative for whether a hypothesized predecessor was historically observed and for admitting the corresponding Graph Edge. Existing PositionRepository, LichessGateway, Evidence, Current View, and Candidate-selection ownership stays in place; this outcome must not create a second cache, scheduler, freshness protocol, or reconciliation lifecycle.
 
-A locally inferred predecessor may establish only that the predecessor can reach the current canonical position by one legal move under the supported local validation semantics. It must not be persisted as graph truth or promoted to a Selection Candidate solely from that local inference.
+Root transposition enrichment remains downstream of authoritative topology. It may use the newly established incoming seed once ordinary graph reconciliation has made that seed real, but it must not turn local hypotheses into durable ancestry itself.
+
+Foreground/background request policy remains owned by Current View and Knowledge Acquisition. Bootstrap discovery may nominate bounded work, but it does not gain an independent priority system.
+
+This outcome does not optimize the latency of Root views that already have sufficient authoritative incoming topology, except where the bootstrap path itself removes avoidable dead-end work.
 
 # Unsettled:
 
-Decide whether there is a product-useful provisional Root representation outside the ordinary evidence-backed Candidate/Constellation path. If there is no clear way to present local reachability without implying historical/source evidence, settle the outcome by rejecting the fallback.
+Choose the smallest complete local predecessor-generation semantics that are trustworthy for bootstrap, including ordinary moves, captures, promotions, castling, and en passant where applicable.
 
-If a provisional representation is useful, choose the smallest trustworthy predecessor coverage, including whether ordinary moves/captures and promotions are sufficient initially or whether en passant and castling are required before publication.
+Bound and order predecessor hypotheses so an arbitrary Nodus cannot explode into unbounded remote acquisition while still giving ordinary opening positions a useful chance to establish authoritative Roots.
 
-Settle how provisional local Root structure refines into known Root graph/Candidate structure so authoritative knowledge replaces or absorbs it without duplicate Root identity or a second reconciliation lifecycle.
+Settle how bootstrap completion triggers recomposition so newly reconciled incoming edges become visible Root Candidates without introducing a second current-view lifetime or duplicate Root identity.
 
 # Complete:
 
-Either a Root projection can publish useful local provisional context without manufacturing evidence-free Candidates, without implying historical occurrence, and without requiring extra network acquisition merely to produce the fallback, then refine cleanly when authoritative knowledge arrives; or investigation establishes that no such trustworthy provisional representation is useful and the authoritative-only path remains the deliberate contract.
+A directly loaded canonical Nodus with no previously known incoming Graph Edge can bootstrap Root discovery from local predecessor hypotheses. When rated-Lichess Explorer evidence establishes a qualifying predecessor relationship, normal Knowledge Acquisition reconciles that edge, ordinary Evidence-backed Candidate selection can admit it, and the same current Nodus can refine to a non-empty authoritative Root/sibling projection without requiring prior navigation history.
 
-In either resolution, the outcome introduces no independent persistence, freshness, scheduler, currentness, or Candidate-eligibility ownership, and local reachability never masquerades as rated-Lichess Prevalence or historical evidence.
+If none of the bounded local predecessor hypotheses is supported by qualifying source evidence, the view may remain without Roots; no local-only predecessor is persisted, presented as historically real, or admitted as a Candidate.
+
+The solution introduces no independent persistence, freshness, scheduler, currentness, or Candidate-eligibility ownership, and Root transposition enrichment continues to operate only on authoritative graph topology.
 
 # Sync:
 

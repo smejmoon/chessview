@@ -25,46 +25,68 @@ function assertDistinctInside(geometry, placement) {
   }
 }
 
+function xFor(key, topology, geometry, placement) {
+  if (key === topology.center) return geometry.center.x;
+  const point = placement.get(key);
+  assert.ok(point, `missing placement for ${key}`);
+  return point.x;
+}
+
+function assertRelationshipsDoNotReverse(topology, geometry, placement) {
+  for (const relationship of topology.relationships) {
+    assert.ok(
+      xFor(relationship.target, topology, geometry, placement)
+        >= xFor(relationship.source, topology, geometry, placement),
+      `${relationship.source} -> ${relationship.target} reversed`,
+    );
+  }
+}
+
 test('presentation geometry exposes regions and space-derived capacities rather than slots', () => {
-  const wide = derivePresentationGeometry({ width: 1200, height: 760, rootContext: false });
-  const constrained = derivePresentationGeometry({ width: 500, height: 760, rootContext: false });
+  const wide = derivePresentationGeometry({ width: 1200, height: 760, upstreamContext: false });
+  const constrained = derivePresentationGeometry({ width: 500, height: 760, upstreamContext: false });
   assert.ok(wide.lineCapacity > constrained.lineCapacity);
   assert.equal(wide.rootCapacity, 0);
-  assert.ok(wide.lineRegion.left > wide.center.x + wide.center.size / 2);
-  assert.ok(wide.lineRegion.right <= wide.width);
+  assert.ok(wide.downstreamRegion.left > wide.center.x + wide.center.size / 2);
+  assert.ok(wide.downstreamRegion.right <= wide.width);
   assert.equal('lineSlots' in wide, false);
   assert.equal('rootSlots' in wide, false);
+  assert.equal('lineRegion' in wide, false);
+  assert.equal('rootRegion' in wide, false);
 });
 
-test('Root context reallocates geometry into explicit upstream and downstream regions', () => {
-  const lines = derivePresentationGeometry({ width: 1000, height: 700, rootContext: false });
-  const context = derivePresentationGeometry({ width: 1000, height: 700, rootContext: true });
+test('upstream context reallocates geometry around the one Nodus', () => {
+  const lines = derivePresentationGeometry({ width: 1000, height: 700, upstreamContext: false });
+  const context = derivePresentationGeometry({ width: 1000, height: 700, upstreamContext: true });
   assert.equal(lines.rootCapacity, 0);
   assert.ok(context.rootCapacity > 0);
-  assert.ok(context.rootRegion);
-  assert.ok(context.rootRegion.right < context.center.x - context.center.size / 2);
-  assert.ok(context.lineRegion.left > context.center.x + context.center.size / 2);
+  assert.ok(context.upstreamRegion);
+  assert.ok(context.upstreamRegion.right < context.center.x - context.center.size / 2);
+  assert.ok(context.downstreamRegion.left > context.center.x + context.center.size / 2);
   assert.ok(context.center.x > lines.center.x);
   assert.ok(context.lineCapacity <= lines.lineCapacity);
 });
 
-test('space-derived capacity is not capped by the retired fixed total-board ceilings', () => {
-  const geometry = derivePresentationGeometry({ width: 2200, height: 1200, rootContext: true });
+test('space-derived capacity is not capped by retired fixed total-board ceilings', () => {
+  const geometry = derivePresentationGeometry({ width: 2200, height: 1200, upstreamContext: true });
   assert.ok(geometry.lineCapacity > 16);
   assert.ok(geometry.rootCapacity > 6);
 });
 
 test('presentation geometry keeps exactly the three current board-size roles', () => {
-  const geometry = derivePresentationGeometry({ width: 1100, height: 720, rootContext: true });
+  const geometry = derivePresentationGeometry({ width: 1100, height: 720, upstreamContext: true });
   assert.ok(geometry.center.size > geometry.prominentSize);
   assert.ok(geometry.prominentSize > geometry.compactSize);
 });
 
-test('Line placement follows topology and keeps a transposition as one downstream board', () => {
-  const geometry = derivePresentationGeometry({ width: 1500, height: 760, rootContext: false });
+test('one placement pass lays out upstream context, Lines, and convergence without reversing graph direction', () => {
+  const geometry = derivePresentationGeometry({ width: 1500, height: 760, upstreamContext: true });
   const topology = {
     center: 'center',
     nodes: [
+      { key: 'root-a', relation: 'root', distance: 1, families: ['root-a'] },
+      { key: 'root-b', relation: 'root', distance: 1, families: ['root-b'] },
+      { key: 'sib-a', relation: 'sibling', distance: 1, families: ['root-a'] },
       { key: 'e4', relation: 'outgoing', distance: 1, families: ['e4'] },
       { key: 'd4', relation: 'outgoing', distance: 1, families: ['d4'] },
       { key: 'e4-next', relation: 'descendant', distance: 2, families: ['e4'] },
@@ -72,6 +94,9 @@ test('Line placement follows topology and keeps a transposition as one downstrea
       { key: 'shared', relation: 'descendant', distance: 3, families: ['e4', 'd4'] },
     ],
     relationships: [
+      { source: 'root-a', target: 'center', families: ['root-a'] },
+      { source: 'root-b', target: 'center', families: ['root-b'] },
+      { source: 'root-a', target: 'sib-a', families: ['root-a'] },
       { source: 'center', target: 'e4', families: ['e4'] },
       { source: 'center', target: 'd4', families: ['d4'] },
       { source: 'e4', target: 'e4-next', families: ['e4'] },
@@ -83,24 +108,22 @@ test('Line placement follows topology and keeps a transposition as one downstrea
   const placement = placeConstellation(geometry, topology);
   assert.equal(placement.size, topology.nodes.length);
   assertDistinctInside(geometry, placement);
+  assertRelationshipsDoNotReverse(topology, geometry, placement);
 
-  const e4 = placement.get('e4');
-  const d4 = placement.get('d4');
-  const e4Next = placement.get('e4-next');
-  const d4Next = placement.get('d4-next');
-  const shared = placement.get('shared');
-  assert.ok(e4 && d4 && e4Next && d4Next && shared);
-  assert.equal(e4.tier, 'prominent');
-  assert.equal(d4.tier, 'prominent');
-  assert.ok(e4Next.x >= e4.x);
-  assert.ok(d4Next.x >= d4.x);
-  assert.ok(shared.x >= Math.max(e4Next.x, d4Next.x));
-  assert.ok(shared.y >= Math.min(e4Next.y, d4Next.y));
-  assert.ok(shared.y <= Math.max(e4Next.y, d4Next.y));
+  for (const key of ['root-a', 'root-b', 'sib-a']) {
+    assert.ok(placement.get(key).x < geometry.center.x);
+  }
+  for (const key of ['e4', 'd4', 'e4-next', 'd4-next', 'shared']) {
+    assert.ok(placement.get(key).x > geometry.center.x);
+  }
+  assert.equal(placement.get('e4').tier, 'prominent');
+  assert.equal(placement.get('d4').tier, 'prominent');
+  assert.ok(placement.get('shared').y >= Math.min(placement.get('e4-next').y, placement.get('d4-next').y));
+  assert.ok(placement.get('shared').y <= Math.max(placement.get('e4-next').y, placement.get('d4-next').y));
 });
 
 test('a forcing Line can consume the advertised capacity without reversing direction', () => {
-  const geometry = derivePresentationGeometry({ width: 1200, height: 760, rootContext: false });
+  const geometry = derivePresentationGeometry({ width: 1200, height: 760, upstreamContext: false });
   const nodes = [];
   const relationships = [];
   let previous = 'center';
@@ -115,48 +138,32 @@ test('a forcing Line can consume the advertised capacity without reversing direc
     relationships.push({ source: previous, target: key, families: ['line'] });
     previous = key;
   }
-  const placement = placeConstellation(geometry, { center: 'center', nodes, relationships });
+  const topology = { center: 'center', nodes, relationships };
+  const placement = placeConstellation(geometry, topology);
   assert.equal(placement.size, geometry.lineCapacity);
   assertDistinctInside(geometry, placement);
-  for (let index = 1; index < nodes.length; index += 1) {
-    const source = placement.get(nodes[index - 1].key);
-    const target = placement.get(nodes[index].key);
-    assert.ok(source && target);
-    assert.ok(target.x >= source.x);
-  }
+  assertRelationshipsDoNotReverse(topology, geometry, placement);
 });
 
-test('Root placement keeps Roots upstream of sibling context and both left of the Nodus', () => {
-  const geometry = derivePresentationGeometry({ width: 1400, height: 760, rootContext: true });
-  const topology = {
-    center: 'center',
-    nodes: [
-      { key: 'root-a', relation: 'root', distance: 1, families: ['a'] },
-      { key: 'root-b', relation: 'root', distance: 1, families: ['b'] },
-      { key: 'sib-a', relation: 'sibling', distance: 1, families: ['a'] },
-      { key: 'sib-b', relation: 'sibling', distance: 1, families: ['b'] },
-    ],
-    relationships: [
-      { source: 'root-a', target: 'center', families: ['a'] },
-      { source: 'root-b', target: 'center', families: ['b'] },
-      { source: 'root-a', target: 'sib-a', families: ['a'] },
-      { source: 'root-b', target: 'sib-b', families: ['b'] },
-    ],
-  };
-  const placement = placeConstellation(geometry, topology);
-  assert.equal(placement.size, topology.nodes.length);
-  assertDistinctInside(geometry, placement);
-  for (const [rootKey, siblingKey] of [['root-a', 'sib-a'], ['root-b', 'sib-b']]) {
-    const root = placement.get(rootKey);
-    const sibling = placement.get(siblingKey);
-    assert.ok(root && sibling);
-    assert.ok(root.x <= sibling.x);
-    assert.ok(sibling.x < geometry.center.x);
+test('upstream capacity can be fully occupied without a separate Root placement path', () => {
+  const geometry = derivePresentationGeometry({ width: 1400, height: 760, upstreamContext: true });
+  const nodes = [];
+  const relationships = [];
+  for (let index = 0; index < geometry.rootCapacity; index += 1) {
+    const key = 'root-' + index;
+    nodes.push({ key, relation: 'root', distance: 1, families: [key] });
+    relationships.push({ source: key, target: 'center', families: [key] });
   }
+  const topology = { center: 'center', nodes, relationships };
+  const placement = placeConstellation(geometry, topology);
+  assert.equal(placement.size, geometry.rootCapacity);
+  assertDistinctInside(geometry, placement);
+  assertRelationshipsDoNotReverse(topology, geometry, placement);
+  assert.ok([...placement.values()].every((point) => point.x < geometry.center.x));
 });
 
 test('placement fails closed instead of truncating accepted topology beyond advertised capacity', () => {
-  const geometry = derivePresentationGeometry({ width: 500, height: 760, rootContext: false });
+  const geometry = derivePresentationGeometry({ width: 500, height: 760, upstreamContext: false });
   const nodes = Array.from({ length: geometry.lineCapacity + 1 }, (_, index) => ({
     key: 'node-' + index,
     relation: index === 0 ? 'outgoing' : 'descendant',

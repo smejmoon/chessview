@@ -18,7 +18,6 @@ function structure(center, mode) {
     centerNode: { key: center },
     positions: [],
     readingFrontier: [],
-    rootRows: [],
     marker: `${center}:${mode}`,
   };
 }

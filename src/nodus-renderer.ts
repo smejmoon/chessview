@@ -9,7 +9,7 @@ import type { ViewMode } from './route-ledger.ts';
 import { clearDebugLog, debugLog, debugText, getDebugEntries } from './debug.js';
 import { decorateEvidencePresentation } from './eval-ui.js';
 import { decorateLichessEvalStatus } from './lichess-eval-presentation.js';
-import { decorateRootPresentation } from './root-presentation.js';
+import { decorateConstellationPresentation } from './constellation-presentation.js';
 import { createPromotionChooser } from './promotion-chooser.js';
 import { bindRecenterTarget, createBoardMoveRecenterHandler } from './recenter-input.js';
 import { placeConstellation } from './presentation-geometry.js';
@@ -44,7 +44,6 @@ type CenterBoardState = Readonly<{
   api: BoardApi;
   center: string;
   orientation: Orientation;
-  rootContext: boolean;
 }>;
 
 export type RendererView = Readonly<{
@@ -74,7 +73,6 @@ function errorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'message' in error && typeof (error as { message?: unknown }).message === 'string') return (error as { message: string }).message;
   return String(error ?? 'Presentation failed');
 }
-function isRootContext(item: RendererPosition): boolean { return item.relation === 'root' || item.relation === 'sibling'; }
 function relationLabel(item: RendererPosition): string {
   if (item.relation === 'root') return 'root';
   if (item.relation === 'sibling') return 'sibling';
@@ -84,7 +82,7 @@ function moveCueShapes(item: RendererPosition, structure: RendererStructure) {
   const uci = item.edge?.uci;
   if (typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8]/.test(uci)) return [];
   const node = structure.composition?.nodes?.find((candidate) => candidate.key === item.key);
-  if (isRootContext(item) && node?.merge) return [];
+  if (node?.merge) return [];
   return [{ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: 'green' }];
 }
 function emptyStructure(center: string): RendererStructure {
@@ -239,10 +237,9 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   }
   function renderLichessEvalStatus(status: unknown): void { lichessEvalStatus = status; decorateLichessEvalStatus(app, status); }
 
-  function canUpdateInPlace(view: RendererView, rootContext: boolean): boolean {
+  function canUpdateInPlace(view: RendererView): boolean {
     return centerBoardState?.center === view.center
       && centerBoardState.orientation === view.orientation
-      && centerBoardState.rootContext === rootContext
       && Boolean(app.querySelector('#center-board'))
       && Boolean(app.querySelector('#map'))
       && Boolean(app.querySelector('#satellites'))
@@ -268,7 +265,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     debug: boolean,
   ): void {
     const map = app.querySelector('#map') as HTMLElement | null;
-    if (map) map.className = `map ${rootContext ? 'has-root-context' : ''}`;
+    if (map) map.className = 'map';
     const controls = app.querySelector('.map-controls') as HTMLElement | null;
     if (controls) controls.innerHTML = rootContextButton(rootContext);
     const satellites = app.querySelector('#satellites') as HTMLElement | null;
@@ -279,7 +276,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     if (rail) rail.innerHTML = railHtml(view, centerNode, turn, debug);
   }
 
-  function createCenterBoard(view: RendererView, actions: CurrentViewActions, rootContext: boolean, turn: Orientation): void {
+  function createCenterBoard(view: RendererView, actions: CurrentViewActions, turn: Orientation): void {
     const centerBoard = app.querySelector('#center-board') as HTMLElement | null;
     if (!centerBoard) throw new Error('Nodus renderer could not create the center board');
     const api = Chessground(centerBoard, {
@@ -290,7 +287,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       } },
       draggable: { enabled: true, showGhost: true }, selectable: { enabled: true }, highlight: { lastMove: true, check: true },
     } as ChessgroundConfig);
-    centerBoardState = Object.freeze({ api, center: view.center, orientation: view.orientation, rootContext });
+    centerBoardState = Object.freeze({ api, center: view.center, orientation: view.orientation });
   }
 
   function render(view: RendererView, actions: CurrentViewActions, presentation = 'hidden'): void {
@@ -302,7 +299,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     const debug = lens.debugEnabled();
     const guide = lens.guideEnabled();
     const rootContext = view.mode === 'roots';
-    const inPlace = canUpdateInPlace(view, rootContext);
+    const inPlace = canUpdateInPlace(view);
 
     if (inPlace) {
       disposeSatelliteBoards();
@@ -310,9 +307,9 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       updateDynamicMarkup(view, centerNode, turn, rootContext, structuralError, debug);
     } else {
       disposeBoards();
-      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map ${rootContext ? 'has-root-context' : ''}" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext)}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug)}</aside></div></main>`;
+      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext)}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug)}</aside></div></main>`;
       renderLichessEvalStatus(lichessEvalStatus);
-      createCenterBoard(view, actions, rootContext, turn);
+      createCenterBoard(view, actions, turn);
       bindStaticControls(actions);
     }
 
@@ -324,7 +321,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
 
     bindDynamicControls(actions, rootContext, view);
     renderSatellites(view, structure, actions, mapGeometry);
-    decorateRootPresentation(app, view);
+    decorateConstellationPresentation(app, view);
     decorateEvidencePresentation(app, view, actions, { showGuide: guide });
     promotionChooser.sync({ center: view.center, orientation: view.orientation, color: turn });
   }

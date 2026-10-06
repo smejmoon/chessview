@@ -1,7 +1,7 @@
-import './root-ui.css';
+import './constellation-presentation.css';
 import { drawVisibleEdges } from './map-render.js';
 
-function markRootStructure(root, composition) {
+function markConstellationStructure(root, composition) {
   const satellites = new Map(
     [...(root.querySelectorAll?.('.satellite[data-key]') ?? [])]
       .filter((element) => element.dataset.key)
@@ -11,7 +11,7 @@ function markRootStructure(root, composition) {
     const satellite = satellites.get(node.key);
     if (!satellite) continue;
     satellite.classList.toggle('is-transposition-merge', node.merge === true);
-    satellite.classList.toggle('is-shared-root-ancestry', (node.families?.length ?? 0) > 1);
+    satellite.classList.toggle('is-shared-family', (node.families?.length ?? 0) > 1);
   }
 }
 
@@ -24,13 +24,12 @@ function relationshipGames(view) {
   return result;
 }
 
-export function decorateRootPresentation(root, view) {
+export function decorateConstellationPresentation(root, view) {
   const composition = view?.structure?.value?.composition;
   const map = root?.querySelector?.('.map');
   if (!map || !composition) return;
-  markRootStructure(root, composition);
+  markConstellationStructure(root, composition);
   drawVisibleEdges(map, composition, {
-    direction: 'mixed',
     gamesByRelationship: relationshipGames(view),
   });
 }

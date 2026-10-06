@@ -40,8 +40,8 @@ export type PresentationGeometry = Readonly<{
   width: number;
   height: number;
   center: Readonly<{ x: number; y: number; size: number }>;
-  lineRegion: PresentationRegion;
-  rootRegion: PresentationRegion | null;
+  upstreamRegion: PresentationRegion | null;
+  downstreamRegion: PresentationRegion;
   prominentSize: number;
   compactSize: number;
   lineCapacity: number;
@@ -54,10 +54,12 @@ export type PresentationConstraints = Readonly<{
 }>;
 
 type IndexedNode = Readonly<{ node: PresentationNode; index: number }>;
-type PlacementColumn = Readonly<{
+type PlacementSide = 'upstream' | 'downstream';
+type PlacementCell = Readonly<{
   x: number;
-  ys: readonly number[];
-  prominent: boolean;
+  y: number;
+  tier: 'prominent' | 'compact';
+  side: PlacementSide;
 }>;
 
 function clamp(value: number, min: number, max: number): number {
@@ -105,19 +107,11 @@ function rowCenters(
   return Array.from({ length: count }, (_, index) => start + index * (size + gap));
 }
 
-function columnCenters(
-  region: PresentationRegion,
-  size: number,
-  gap: number,
-  direction: 'left-to-right' | 'right-to-left' = 'left-to-right',
-): number[] {
+function columnCenters(region: PresentationRegion, size: number, gap: number): number[] {
   const count = columnCount(region, size, gap);
   if (!count) return [];
-  const first = direction === 'left-to-right'
-    ? region.left + size / 2
-    : region.right - size / 2;
-  const step = (size + gap) * (direction === 'left-to-right' ? 1 : -1);
-  return Array.from({ length: count }, (_, index) => first + index * step);
+  const first = region.left + size / 2;
+  return Array.from({ length: count }, (_, index) => first + index * (size + gap));
 }
 
 function prominentRowCount(region: PresentationRegion, prominentSize: number): number {
@@ -128,7 +122,7 @@ function prominentRowCount(region: PresentationRegion, prominentSize: number): n
   );
 }
 
-function lineCapacityFor(
+function downstreamCapacityFor(
   region: PresentationRegion,
   prominentSize: number,
   compactSize: number,
@@ -144,56 +138,81 @@ function lineCapacityFor(
       * columnCount(compactRegion, compactSize, BOARD_GAP_PX);
 }
 
-function rootCapacityFor(region: PresentationRegion | null, compactSize: number): number {
+function upstreamCapacityFor(region: PresentationRegion | null, compactSize: number): number {
   if (!region) return 0;
   return rowCount(region, compactSize, BOARD_GAP_PX + FAMILY_GAP_PX)
     * columnCount(region, compactSize, BOARD_GAP_PX);
 }
 
-function compactColumns(
+function compactCells(
   region: PresentationRegion,
   size: number,
   verticalGap: number,
-  direction: 'left-to-right' | 'right-to-left' = 'left-to-right',
-): PlacementColumn[] {
+  side: PlacementSide,
+): PlacementCell[] {
   const ys = rowCenters(region, size, verticalGap);
-  return columnCenters(region, size, BOARD_GAP_PX, direction)
-    .map((x) => Object.freeze({ x, ys, prominent: false }));
+  return columnCenters(region, size, BOARD_GAP_PX)
+    .flatMap((x) => ys.map((y) => Object.freeze({
+      x,
+      y,
+      tier: 'compact' as const,
+      side,
+    })));
 }
 
-function lineColumns(geometry: PresentationGeometry): PlacementColumn[] {
-  const rows = prominentRowCount(geometry.lineRegion, geometry.prominentSize);
-  if (!rows) {
-    return compactColumns(geometry.lineRegion, geometry.compactSize, BOARD_GAP_PX);
+function placementCells(geometry: PresentationGeometry): PlacementCell[] {
+  const cells: PlacementCell[] = [];
+
+  if (geometry.upstreamRegion) {
+    cells.push(...compactCells(
+      geometry.upstreamRegion,
+      geometry.compactSize,
+      BOARD_GAP_PX + FAMILY_GAP_PX,
+      'upstream',
+    ));
   }
-  const first = Object.freeze({
-    x: geometry.lineRegion.left + geometry.prominentSize / 2,
-    ys: rowCenters(
-      geometry.lineRegion,
+
+  const prominentRows = prominentRowCount(geometry.downstreamRegion, geometry.prominentSize);
+  if (prominentRows) {
+    const x = geometry.downstreamRegion.left + geometry.prominentSize / 2;
+    for (const y of rowCenters(
+      geometry.downstreamRegion,
       geometry.prominentSize,
       BOARD_GAP_PX + FAMILY_GAP_PX,
       MAX_PROMINENT_LINES,
-    ),
-    prominent: true,
-  });
-  const compactRegion = insetLeft(
-    geometry.lineRegion,
-    geometry.prominentSize + BOARD_GAP_PX,
-  );
-  return [first, ...compactColumns(compactRegion, geometry.compactSize, BOARD_GAP_PX)];
+    )) {
+      cells.push(Object.freeze({ x, y, tier: 'prominent', side: 'downstream' }));
+    }
+    const compactRegion = insetLeft(
+      geometry.downstreamRegion,
+      geometry.prominentSize + BOARD_GAP_PX,
+    );
+    cells.push(...compactCells(
+      compactRegion,
+      geometry.compactSize,
+      BOARD_GAP_PX,
+      'downstream',
+    ));
+  } else {
+    cells.push(...compactCells(
+      geometry.downstreamRegion,
+      geometry.compactSize,
+      BOARD_GAP_PX,
+      'downstream',
+    ));
+  }
+
+  return cells;
 }
 
-function rootColumns(geometry: PresentationGeometry): PlacementColumn[] {
-  if (!geometry.rootRegion) return [];
-  return compactColumns(
-    geometry.rootRegion,
-    geometry.compactSize,
-    BOARD_GAP_PX + FAMILY_GAP_PX,
-  );
+function placementSide(node: PresentationNode): PlacementSide {
+  return node.relation === 'root' || node.relation === 'sibling'
+    ? 'upstream'
+    : 'downstream';
 }
 
-function isRootContext(node: PresentationNode | undefined): boolean {
-  return node?.relation === 'root' || node?.relation === 'sibling';
+function familyIds(node: PresentationNode): string[] {
+  return [...new Set((node.families ?? []).filter(Boolean))];
 }
 
 function average(values: readonly number[], fallback: number): number {
@@ -201,18 +220,13 @@ function average(values: readonly number[], fallback: number): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function familyIds(node: PresentationNode): string[] {
-  return [...new Set((node.families ?? []).filter(Boolean))];
-}
-
 function stableTopologyOrder(
+  topology: PresentationTopology,
   indexed: readonly IndexedNode[],
-  relationships: readonly PresentationRelationship[],
-  anchorRelation: 'outgoing' | 'root',
 ): PresentationNode[] {
-  if (!indexed.length) return [];
   const byKey = new Map(indexed.map((item) => [item.node.key, item]));
-  const indegree = new Map(indexed.map(({ node }) => [node.key, 0]));
+  const knownKeys = new Set([topology.center, ...byKey.keys()]);
+  const indegree = new Map<string, number>([topology.center, ...byKey.keys()].map((key) => [key, 0]));
   const children = new Map<string, string[]>();
   const seenEdges = new Set<string>();
   const familyRank = new Map<string, number>();
@@ -223,8 +237,8 @@ function stableTopologyOrder(
     }
   }
 
-  for (const relationship of relationships) {
-    if (!byKey.has(relationship.source) || !byKey.has(relationship.target)) continue;
+  for (const relationship of topology.relationships) {
+    if (!knownKeys.has(relationship.source) || !knownKeys.has(relationship.target)) continue;
     if (relationship.source === relationship.target) continue;
     const id = relationship.source + '\u0000' + relationship.target;
     if (seenEdges.has(id)) continue;
@@ -235,11 +249,15 @@ function stableTopologyOrder(
   }
 
   const compare = (leftKey: string, rightKey: string): number => {
+    if (leftKey === topology.center) return rightKey === topology.center ? 0 : -1;
+    if (rightKey === topology.center) return 1;
     const left = byKey.get(leftKey);
     const right = byKey.get(rightKey);
     if (!left || !right) return leftKey.localeCompare(rightKey);
-    const leftAnchor = left.node.relation === anchorRelation ? 0 : 1;
-    const rightAnchor = right.node.relation === anchorRelation ? 0 : 1;
+    const leftSide = placementSide(left.node) === 'upstream' ? 0 : 1;
+    const rightSide = placementSide(right.node) === 'upstream' ? 0 : 1;
+    const leftAnchor = left.node.relation === 'root' || left.node.relation === 'outgoing' ? 0 : 1;
+    const rightAnchor = right.node.relation === 'root' || right.node.relation === 'outgoing' ? 0 : 1;
     const leftDistance = left.node.distance ?? Number.MAX_SAFE_INTEGER;
     const rightDistance = right.node.distance ?? Number.MAX_SAFE_INTEGER;
     const leftFamily = Math.min(
@@ -250,16 +268,17 @@ function stableTopologyOrder(
       ...familyIds(right.node).map((family) => familyRank.get(family) ?? right.index),
       right.index,
     );
-    return leftAnchor - rightAnchor
+    return leftSide - rightSide
+      || leftAnchor - rightAnchor
       || leftDistance - rightDistance
       || leftFamily - rightFamily
       || left.index - right.index
       || left.node.key.localeCompare(right.node.key);
   };
 
-  const ready = indexed
-    .filter(({ node }) => (indegree.get(node.key) ?? 0) === 0)
-    .map(({ node }) => node.key)
+  const ready = [...indegree]
+    .filter(([, degree]) => degree === 0)
+    .map(([key]) => key)
     .sort(compare);
   const ordered: PresentationNode[] = [];
   const emitted = new Set<string>();
@@ -267,10 +286,11 @@ function stableTopologyOrder(
   while (ready.length) {
     const key = ready.shift();
     if (!key || emitted.has(key)) continue;
-    const item = byKey.get(key);
-    if (!item) continue;
     emitted.add(key);
-    ordered.push(item.node);
+    if (key !== topology.center) {
+      const item = byKey.get(key);
+      if (item) ordered.push(item.node);
+    }
     for (const child of children.get(key) ?? []) {
       const next = (indegree.get(child) ?? 0) - 1;
       indegree.set(child, next);
@@ -289,93 +309,41 @@ function stableTopologyOrder(
     const item = byKey.get(key);
     if (item) ordered.push(item.node);
   }
+
   return ordered;
 }
 
-function nearestY(available: number[], target: number): number | null {
-  if (!available.length) return null;
-  let bestIndex = 0;
-  let bestDistance = Math.abs(available[0] - target);
-  for (let index = 1; index < available.length; index += 1) {
-    const distance = Math.abs(available[index] - target);
-    if (distance < bestDistance || (distance === bestDistance && available[index] < available[bestIndex])) {
-      bestIndex = index;
-      bestDistance = distance;
-    }
-  }
-  const [value] = available.splice(bestIndex, 1);
-  return value ?? null;
+function chooseCell(
+  available: PlacementCell[],
+  side: PlacementSide,
+  minX: number,
+  maxX: number,
+  targetY: number,
+): PlacementCell | null {
+  const eligible = available
+    .map((cell, index) => ({ cell, index }))
+    .filter(({ cell }) => cell.side === side && cell.x >= minX && cell.x <= maxX);
+  if (!eligible.length) return null;
+  const firstX = Math.min(...eligible.map(({ cell }) => cell.x));
+  const sameColumn = eligible.filter(({ cell }) => cell.x === firstX);
+  sameColumn.sort((left, right) => (
+    Math.abs(left.cell.y - targetY) - Math.abs(right.cell.y - targetY)
+    || left.cell.y - right.cell.y
+  ));
+  const selected = sameColumn[0];
+  if (!selected) return null;
+  available.splice(selected.index, 1);
+  return selected.cell;
 }
 
-function placeSide({
-  geometry,
-  region,
-  nodes,
-  relationships,
-  columns,
-  anchorRelation,
-}: {
-  geometry: PresentationGeometry;
-  region: PresentationRegion;
-  nodes: readonly IndexedNode[];
-  relationships: readonly PresentationRelationship[];
-  columns: readonly PlacementColumn[];
-  anchorRelation: 'outgoing' | 'root';
-}): Map<string, NodePlacement> {
-  const ordered = stableTopologyOrder(nodes, relationships, anchorRelation);
-  const capacity = columns.reduce((sum, column) => sum + column.ys.length, 0);
-  if (ordered.length > capacity) {
-    throw new RangeError(
-      'Accepted Constellation exceeds presentation capacity: '
-      + ordered.length + ' nodes for ' + capacity + ' places',
-    );
-  }
-
-  const result = new Map<string, NodePlacement>();
-  const keys = new Set(ordered.map((node) => node.key));
-  const parents = new Map<string, string[]>();
-  for (const relationship of relationships) {
-    if (!keys.has(relationship.source) || !keys.has(relationship.target)) continue;
-    if (!parents.has(relationship.target)) parents.set(relationship.target, []);
-    parents.get(relationship.target)?.push(relationship.source);
-  }
-
-  const familyY = new Map<string, number>();
-  let cursor = 0;
-
-  for (const column of columns) {
-    if (cursor >= ordered.length) break;
-    const chunk = ordered.slice(cursor, cursor + column.ys.length);
-    const available = [...column.ys];
-
-    chunk.forEach((node, localIndex) => {
-      const parentYs = (parents.get(node.key) ?? [])
-        .map((key) => result.get(key)?.y)
-        .filter((value): value is number => Number.isFinite(value));
-      const relatedYs = familyIds(node)
-        .map((family) => familyY.get(family))
-        .filter((value): value is number => Number.isFinite(value));
-      const fallback = region.top + regionHeight(region) * ((localIndex + 1) / (chunk.length + 1));
-      const target = average(parentYs, average(relatedYs, fallback));
-      const y = nearestY(available, target);
-      if (!Number.isFinite(y)) return;
-      const prominent = column.prominent && node.relation === 'outgoing';
-      const placement = Object.freeze({
-        x: column.x,
-        y: Number(y),
-        size: prominent ? geometry.prominentSize : geometry.compactSize,
-        tier: prominent ? 'prominent' as const : 'compact' as const,
-      });
-      result.set(node.key, placement);
-      for (const family of familyIds(node)) {
-        if (!familyY.has(family)) familyY.set(family, placement.y);
-      }
-    });
-
-    cursor += chunk.length;
-  }
-
-  return result;
+function pointFor(
+  key: string,
+  topology: PresentationTopology,
+  geometry: PresentationGeometry,
+  placed: ReadonlyMap<string, NodePlacement>,
+): Readonly<{ x: number; y: number }> | null {
+  if (key === topology.center) return geometry.center;
+  return placed.get(key) ?? null;
 }
 
 export function placeConstellation(
@@ -383,40 +351,74 @@ export function placeConstellation(
   topology: PresentationTopology,
 ): ReadonlyMap<string, NodePlacement> {
   const indexed = topology.nodes.map((node, index) => ({ node, index }));
-  const lines = indexed.filter(({ node }) => !isRootContext(node));
-  const roots = indexed.filter(({ node }) => isRootContext(node));
-  if (lines.length > geometry.lineCapacity) {
+  const upstreamCount = indexed.filter(({ node }) => placementSide(node) === 'upstream').length;
+  const downstreamCount = indexed.length - upstreamCount;
+  if (downstreamCount > geometry.lineCapacity) {
     throw new RangeError(
-      'Accepted Line Constellation exceeds line capacity: '
-      + lines.length + ' > ' + geometry.lineCapacity,
+      'Accepted downstream Constellation exceeds line capacity: '
+      + downstreamCount + ' > ' + geometry.lineCapacity,
     );
   }
-  if (roots.length > geometry.rootCapacity) {
+  if (upstreamCount > geometry.rootCapacity) {
     throw new RangeError(
-      'Accepted Root context exceeds root capacity: '
-      + roots.length + ' > ' + geometry.rootCapacity,
+      'Accepted upstream context exceeds root capacity: '
+      + upstreamCount + ' > ' + geometry.rootCapacity,
     );
   }
 
-  const result = placeSide({
-    geometry,
-    region: geometry.lineRegion,
-    nodes: lines,
-    relationships: topology.relationships,
-    columns: lineColumns(geometry),
-    anchorRelation: 'outgoing',
-  });
+  const available = placementCells(geometry);
+  const result = new Map<string, NodePlacement>();
+  const familyY = new Map<string, number>();
+  const order = stableTopologyOrder(topology, indexed);
 
-  if (geometry.rootRegion) {
-    const rootPlacement = placeSide({
-      geometry,
-      region: geometry.rootRegion,
-      nodes: roots,
-      relationships: topology.relationships,
-      columns: rootColumns(geometry),
-      anchorRelation: 'root',
+  for (const node of order) {
+    const side = placementSide(node);
+    const linked = topology.relationships.filter(
+      (relationship) => relationship.source === node.key || relationship.target === node.key,
+    );
+    const sourcePoints = linked
+      .filter((relationship) => relationship.target === node.key)
+      .map((relationship) => pointFor(relationship.source, topology, geometry, result))
+      .filter((point): point is Readonly<{ x: number; y: number }> => point != null);
+    const targetPoints = linked
+      .filter((relationship) => relationship.source === node.key)
+      .map((relationship) => pointFor(relationship.target, topology, geometry, result))
+      .filter((point): point is Readonly<{ x: number; y: number }> => point != null);
+
+    const minX = sourcePoints.length
+      ? Math.max(...sourcePoints.map((point) => point.x))
+      : Number.NEGATIVE_INFINITY;
+    const maxX = targetPoints.length
+      ? Math.min(...targetPoints.map((point) => point.x))
+      : Number.POSITIVE_INFINITY;
+    const neighborYs = [...sourcePoints, ...targetPoints].map((point) => point.y);
+    const familyYs = familyIds(node)
+      .map((family) => familyY.get(family))
+      .filter((value): value is number => Number.isFinite(value));
+    const region = side === 'upstream' ? geometry.upstreamRegion : geometry.downstreamRegion;
+    if (!region) {
+      throw new RangeError('Accepted upstream context has no presentation region');
+    }
+    const fallbackY = (region.top + region.bottom) / 2;
+    const targetY = average(neighborYs, average(familyYs, fallbackY));
+    const cell = chooseCell(available, side, minX, maxX, targetY);
+    if (!cell) {
+      throw new RangeError(
+        'Accepted Constellation cannot be placed without reversing a visible relationship',
+      );
+    }
+
+    const prominent = cell.tier === 'prominent' && node.relation === 'outgoing';
+    const placement = Object.freeze({
+      x: cell.x,
+      y: cell.y,
+      size: prominent ? geometry.prominentSize : geometry.compactSize,
+      tier: prominent ? 'prominent' as const : 'compact' as const,
     });
-    for (const [key, placement] of rootPlacement) result.set(key, placement);
+    result.set(node.key, placement);
+    for (const family of familyIds(node)) {
+      if (!familyY.has(family)) familyY.set(family, placement.y);
+    }
   }
 
   return result;
@@ -425,33 +427,33 @@ export function placeConstellation(
 export function derivePresentationGeometry({
   width,
   height,
-  rootContext = false,
+  upstreamContext = false,
 }: {
   width: number;
   height: number;
-  rootContext?: boolean;
+  upstreamContext?: boolean;
 }): PresentationGeometry {
   const safeWidth = Math.max(320, Number.isFinite(width) ? width : 320);
   const safeHeight = Math.max(240, Number.isFinite(height) ? height : 240);
   const centerLimit = Math.max(
     160,
-    Math.min(safeHeight - MAP_PADDING_PX * 2, safeWidth * (rootContext ? 0.32 : 0.36)),
+    Math.min(safeHeight - MAP_PADDING_PX * 2, safeWidth * (upstreamContext ? 0.32 : 0.36)),
   );
   const centerSize = clamp(centerLimit, 160, 470);
   const prominentSize = clamp(centerSize * 0.30, 76, 128);
   const compactSize = clamp(centerSize * 0.21, 54, 92);
   const minimumCenterX = MAP_PADDING_PX + centerSize / 2;
   const maximumCenterX = safeWidth - MAP_PADDING_PX - centerSize / 2;
-  const desiredCenterX = safeWidth * (rootContext ? 0.40 : 0.27);
+  const desiredCenterX = safeWidth * (upstreamContext ? 0.40 : 0.27);
   const centerX = clamp(desiredCenterX, minimumCenterX, maximumCenterX);
 
-  const lineRegion = Object.freeze({
+  const downstreamRegion = Object.freeze({
     left: centerX + centerSize / 2 + BOARD_GAP_PX,
     right: safeWidth - MAP_PADDING_PX,
     top: MAP_PADDING_PX,
     bottom: safeHeight - MAP_PADDING_PX,
   });
-  const rootRegion = rootContext
+  const upstreamRegion = upstreamContext
     ? Object.freeze({
       left: MAP_PADDING_PX,
       right: centerX - centerSize / 2 - BOARD_GAP_PX,
@@ -464,12 +466,12 @@ export function derivePresentationGeometry({
     width: safeWidth,
     height: safeHeight,
     center: Object.freeze({ x: centerX, y: safeHeight / 2, size: centerSize }),
-    lineRegion,
-    rootRegion,
+    upstreamRegion,
+    downstreamRegion,
     prominentSize,
     compactSize,
-    lineCapacity: lineCapacityFor(lineRegion, prominentSize, compactSize),
-    rootCapacity: rootCapacityFor(rootRegion, compactSize),
+    lineCapacity: downstreamCapacityFor(downstreamRegion, prominentSize, compactSize),
+    rootCapacity: upstreamCapacityFor(upstreamRegion, compactSize),
   });
 }
 

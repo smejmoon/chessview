@@ -34,12 +34,36 @@
 .view-status-measures {
   margin-left: 4px;
   padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, .07);
-  color: #77746f;
+  border-left: 1px solid rgba(224, 145, 58, .26);
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  color: #d9903d;
   font: 9px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: 0;
+  letter-spacing: .015em;
   white-space: nowrap;
-  opacity: .9;
+  opacity: .96;
+  text-shadow: 0 0 7px rgba(224, 145, 58, .2);
+}
+
+.view-status-measure {
+  position: relative;
+  padding: 2px 3px;
+  border-radius: 3px;
+  cursor: help;
+}
+
+.view-status-measure + .view-status-measure::before {
+  content: '·';
+  margin-right: 6px;
+  color: rgba(224, 145, 58, .4);
+}
+
+.view-status-measure:hover,
+.view-status-measure:focus-visible {
+  background: rgba(224, 145, 58, .08);
+  color: #ffc36a;
+  text-shadow: 0 0 9px rgba(255, 174, 72, .36);
 }
 
 .view-status.is-hidden {

@@ -55,8 +55,10 @@ test('Weather diagnostics decorate only Debug presentation', () => {
         className: '',
         textContent: '',
         title: '',
+        children: [],
         setAttribute() {},
-        remove() { if (this.parent) this.parent.child = null; },
+        appendChild(child) { this.children.push(child); child.parent = this; },
+        remove() { if (this.parent?.child === this) this.parent.child = null; },
       };
     },
   };
@@ -64,9 +66,13 @@ test('Weather diagnostics decorate only Debug presentation', () => {
 
   assert.equal(decorateWeatherDiagnostics(app, view(), { debug: true }), true);
   assert.equal(status.dataset.weatherDiagnostics, 'true');
-  assert.match(status.child.textContent, /frontier 3/);
-  assert.match(status.child.textContent, /incorporating 1/);
-  assert.match(status.child.textContent, /supplementary 2\/5/);
+  assert.equal(status.child.children.length, 12);
+  const frontier = status.child.children.find((item) => item.textContent === 'frontier 3');
+  const incorporating = status.child.children.find((item) => item.textContent === 'incorporating 1');
+  const supplementary = status.child.children.find((item) => item.textContent === 'supplementary 2/5');
+  assert.match(frontier.title, /Explorer Readings/);
+  assert.match(incorporating.title, /settlement recomposition/);
+  assert.match(supplementary.title, /Non-structural background work/);
 
   assert.equal(decorateWeatherDiagnostics(app, view(), { debug: false }), true);
   assert.equal(status.dataset.weatherDiagnostics, 'false');

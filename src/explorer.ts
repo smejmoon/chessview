@@ -6,10 +6,10 @@ import {
   type ExplorerMove,
   type ExplorerReading,
 } from './graph.ts';
-import { debugLog } from './debug.js';
-import { lichessSession } from './lichess-session.js';
-import { isObsoleteWork } from './obsolete-work.js';
-import { positionRepository } from './position-repository.js';
+import { debugLog } from './debug.ts';
+import { lichessSession } from './lichess-session.ts';
+import { isObsoleteWork } from './obsolete-work.ts';
+import { positionRepository } from './position-repository.ts';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
 const REQUEST_PARAMETERS = Object.freeze({

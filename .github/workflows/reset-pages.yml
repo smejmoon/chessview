@@ -5,8 +5,8 @@ on:
   push:
     paths:
       - .github/workflows/reset-pages.yml
-      - scripts/pages-reset-plan.js
-      - scripts/pages-target.js
+      - scripts/pages-reset-plan.ts
+      - scripts/pages-target.ts
 
 permissions:
   contents: read
@@ -60,7 +60,7 @@ jobs:
 
           git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin/ \
             | grep -v '^HEAD$' \
-            | node scripts/pages-reset-plan.js > "$plan"
+            | node scripts/pages-reset-plan.ts > "$plan"
 
           index=0
           while IFS=$'\t' read -r branch base target; do

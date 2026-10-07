@@ -5,15 +5,15 @@ import {
   moveFrequency,
   positionEvaluation,
   rootRarityFromFrequency,
-} from './evidence.js';
+} from './evidence.ts';
 import {
   currentExplorerReading,
   readCachedExplorerReading,
-} from './explorer.js';
+} from './explorer.ts';
 import type { ExplorerReading } from './knowledge-acquisition.ts';
-import { lichessEval } from './lichess-eval.js';
-import { mastersProvider } from './masters.js';
-import { throwIfObsolete } from './obsolete-work.js';
+import { lichessEval } from './lichess-eval.ts';
+import { mastersProvider } from './masters.ts';
+import { throwIfObsolete } from './obsolete-work.ts';
 
 type CurrentExplorer = (position: string) => ExplorerReading | null;
 type ReadCachedExplorer = (position: string) => Promise<ExplorerReading | null>;

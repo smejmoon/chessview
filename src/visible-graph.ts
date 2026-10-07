@@ -1,4 +1,4 @@
-import { edgeId } from './graph.js';
+import { edgeId } from './graph.ts';
 import type { SelectionCandidate } from './constellation-selection.ts';
 import type { GraphEdge } from './position-graph.ts';
 

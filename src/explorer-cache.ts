@@ -1,5 +1,5 @@
-import { canonicalPosition } from './graph.js';
-import { explorerProvider } from './explorer.js';
+import { canonicalPosition } from './graph.ts';
+import { explorerProvider } from './explorer.ts';
 import { clearExplorerCacheFields } from './position-store.ts';
 
 export async function clearExplorerCache(positions?: readonly string[]): Promise<void> {

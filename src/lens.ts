@@ -1,5 +1,5 @@
-import { isDebugEnabled, setDebugEnabled } from './debug.js';
-import { compositionConstraints, derivePresentationGeometry } from './presentation-geometry.js';
+import { isDebugEnabled, setDebugEnabled } from './debug.ts';
+import { compositionConstraints, derivePresentationGeometry } from './presentation-geometry.ts';
 import type { PresentationConstraints, PresentationGeometry } from './presentation-geometry.ts';
 import type { ViewMode } from './route-ledger.ts';
 

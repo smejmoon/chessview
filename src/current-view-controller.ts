@@ -1,6 +1,6 @@
 import type { Lens, Orientation } from './lens.ts';
 import type { MaterializeMoveInput, MaterializeMoveResult, Move } from './move-materialization.ts';
-import { isObsoleteWork } from './obsolete-work.js';
+import { isObsoleteWork } from './obsolete-work.ts';
 import type { Route, RouteLedger, ViewMode } from './route-ledger.ts';
 
 export type { Orientation } from './lens.ts';

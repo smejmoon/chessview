@@ -1,6 +1,6 @@
 import { Chess } from 'chess.js';
-import { canonicalPosition, START_FEN } from './graph.js';
-import { lichessSession } from './lichess-session.js';
+import { canonicalPosition, START_FEN } from './graph.ts';
+import { lichessSession } from './lichess-session.ts';
 
 const EXPORT_ENDPOINT = 'https://lichess.org/api/games/export/_ids';
 const GAME_ID = /^[A-Za-z0-9]{8}$/;

@@ -1,6 +1,6 @@
 import { getIncoming, getOutgoing, mutateEdge } from './edge-store.ts';
 import type { EdgeMutation, StoredEdge } from './edge-store.ts';
-import { canonicalPosition, edgeId, resolveMove } from './graph.js';
+import { canonicalPosition, edgeId, resolveMove } from './graph.ts';
 
 export type GraphEdge = StoredEdge;
 

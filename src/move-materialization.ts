@@ -1,7 +1,7 @@
-import { canonicalPosition, resolveMove } from './graph.js';
-import { debugLog } from './debug.js';
+import { canonicalPosition, resolveMove } from './graph.ts';
+import { debugLog } from './debug.ts';
 import { positionGraph } from './position-graph.ts';
-import { positionRepository } from './position-repository.js';
+import { positionRepository } from './position-repository.ts';
 import type { GraphEdge } from './position-graph.ts';
 
 export type Promotion = 'q' | 'r' | 'b' | 'n';

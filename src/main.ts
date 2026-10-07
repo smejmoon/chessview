@@ -5,33 +5,33 @@ import './style.css';
 import './lichess-eval-presentation.css';
 import './debug.css';
 
-import { canonicalPosition } from './graph.js';
+import { canonicalPosition } from './graph.ts';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { CurrentViewController } from './current-view-controller.ts';
 import type { RefinementOutcome, RefinementTask } from './current-view-controller.ts';
-import { debugLog } from './debug.js';
+import { debugLog } from './debug.ts';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
-import { loadExplorerReading } from './explorer.js';
+import { loadExplorerReading } from './explorer.ts';
 import {
   discoverSampledPredecessors,
   sampleGameIds,
 } from './sampled-predecessors.ts';
 import { createLens } from './lens.ts';
-import { loadMasters } from './masters.js';
+import { loadMasters } from './masters.ts';
 import { materializeMove } from './move-materialization.ts';
 import { deriveCurrentViewRefinementDemand } from './current-view-refinement.ts';
-import { composeNodusStructure } from './nodus-structure.js';
-import { projectVisibleEvidence } from './evidence-presentation.js';
-import { lichessEval } from './lichess-eval.js';
-import { createLichessEvalStatusPresenter } from './lichess-eval-presentation.js';
-import { createNodusRenderer } from './nodus-renderer.js';
-import { createNodusPresenter } from './nodus-presenter.js';
-import { composeNodusRail } from './rail-source.js';
-import { rootTranspositionEnricher } from './root-enrichment.js';
+import { composeNodusStructure } from './nodus-structure.ts';
+import { projectVisibleEvidence } from './evidence-presentation.ts';
+import { lichessEval } from './lichess-eval.ts';
+import { createLichessEvalStatusPresenter } from './lichess-eval-presentation.ts';
+import { createNodusRenderer } from './nodus-renderer.ts';
+import { createNodusPresenter } from './nodus-presenter.ts';
+import { composeNodusRail } from './rail-source.ts';
+import { rootTranspositionEnricher } from './root-enrichment.ts';
 import { createRouteLedger } from './route-ledger.ts';
-import { preferenceStore } from './preference-store.js';
-import { decorateWeatherDiagnostics } from './weather-diagnostics.js';
+import { preferenceStore } from './preference-store.ts';
+import { decorateWeatherDiagnostics } from './weather-diagnostics.ts';
 
 const RESIZE_UPDATE_DEBOUNCE_MS = 120;
 const routeLedger = createRouteLedger({ preferences: preferenceStore });

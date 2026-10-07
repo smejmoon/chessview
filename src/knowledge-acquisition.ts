@@ -2,12 +2,12 @@ import {
   GRAPH_EDGE_ADMISSION_SAMPLE_FLOOR,
   SUPPLEMENTARY_EXPLORER_WARM_TIMEOUT_MS,
 } from './config.ts';
-import { debugLog } from './debug.js';
+import { debugLog } from './debug.ts';
 import {
   currentExplorerReading,
   loadExplorerReading,
   readCachedExplorerReading,
-} from './explorer.js';
+} from './explorer.ts';
 import {
   classifyExplorerRefinementFailure,
   type ExplorerRefinementFailureClassifier,
@@ -18,9 +18,9 @@ import {
   moveGames,
   resolveMove,
   totalGames,
-} from './graph.js';
+} from './graph.ts';
 import { positionGraph } from './position-graph.ts';
-import { positionRepository } from './position-repository.js';
+import { positionRepository } from './position-repository.ts';
 import type { GraphEdge, GraphEdgeInput, PositionGraph } from './position-graph.ts';
 
 export type AcquisitionPriority = 'foreground' | 'background';

@@ -1,5 +1,5 @@
-import { lichessGateway } from './lichess-gateway.js';
-import { isObsoleteWork } from './obsolete-work.js';
+import { lichessGateway } from './lichess-gateway.ts';
+import { isObsoleteWork } from './obsolete-work.ts';
 
 export type ExplorerRefinementOutcome =
   | Readonly<{ refinement: 'retryable'; retry: PromiseLike<unknown> }>

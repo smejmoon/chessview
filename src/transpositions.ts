@@ -3,9 +3,9 @@ import {
   START_FEN,
   canonicalPosition,
   edgeId,
-} from './graph.js';
+} from './graph.ts';
 import { positionGraph } from './position-graph.ts';
-import { positionRepository } from './position-repository.js';
+import { positionRepository } from './position-repository.ts';
 
 const START = canonicalPosition(START_FEN);
 const DEFAULT_TRANSPOSITION_MAX_PATHS = 128;

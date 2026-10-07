@@ -1,4 +1,4 @@
-import { positionFromUrl } from './graph.js';
+import { positionFromUrl } from './graph.ts';
 
 export type ViewMode = 'roots' | 'lines';
 

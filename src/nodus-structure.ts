@@ -3,7 +3,7 @@ import {
   legalDestinations,
   legalMoveTargets,
   toPlayableFen,
-} from './graph.js';
+} from './graph.ts';
 import { composeLineNeighborhood } from './visible-graph.ts';
 import type {
   LineCompositionPlan,
@@ -14,7 +14,7 @@ import type {
 } from './visible-graph.ts';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge } from './position-graph.ts';
-import { positionRepository } from './position-repository.js';
+import { positionRepository } from './position-repository.ts';
 import {
   explorerMoveGames,
   explorerTotalGames,

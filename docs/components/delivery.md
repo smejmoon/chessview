@@ -47,7 +47,7 @@ a commit.
 published Pages snapshot. A reset uses the current repository branch heads as
 its source of truth: `main` is required and publishes at the production root,
 `gh-pages` is excluded, and every other still-existing branch publishes at its
-canonical preview target from `scripts/pages-target.js`.
+canonical preview target from `scripts/pages-target.ts`.
 
 A reset must:
 

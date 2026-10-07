@@ -1,5 +1,5 @@
 import './eval-ui.css';
-import { bindRecenterTarget } from './recenter-input.js';
+import { bindRecenterTarget } from './recenter-input.ts';
 import type { CurrentViewActions } from './current-view-controller.ts';
 
 type MoveEvaluation = Readonly<{ lossCp: number; quality: string }>;

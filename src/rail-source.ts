@@ -1,17 +1,17 @@
 import {
   resolveMove,
   stableEdgeOrder,
-} from './graph.js';
-import { debugLog } from './debug.js';
+} from './graph.ts';
+import { debugLog } from './debug.ts';
 import { createEvidenceReader } from './evidence-source.ts';
 import {
   currentExplorerReading,
   readCachedExplorerReading,
-} from './explorer.js';
+} from './explorer.ts';
 import type { ExplorerMove, ExplorerReading } from './knowledge-acquisition.ts';
-import { lichessEval } from './lichess-eval.js';
-import { mastersProvider } from './masters.js';
-import { throwIfObsolete } from './obsolete-work.js';
+import { lichessEval } from './lichess-eval.ts';
+import { mastersProvider } from './masters.ts';
+import { throwIfObsolete } from './obsolete-work.ts';
 import { positionGraph } from './position-graph.ts';
 import type { GraphEdge, PositionGraph } from './position-graph.ts';
 

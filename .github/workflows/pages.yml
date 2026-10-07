@@ -34,7 +34,7 @@ jobs:
 
       - name: Determine Pages target
         id: pages
-        run: node scripts/pages-target.js
+        run: node scripts/pages-target.ts
 
       - name: Build static site
         env:

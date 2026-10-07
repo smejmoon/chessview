@@ -121,7 +121,7 @@ async function withRenderer(run) {
   });
   try {
     globalThis.__chessviewRendererBoardCalls = [];
-    const { createNodusRenderer } = await vite.ssrLoadModule('/src/nodus-renderer.js');
+    const { createNodusRenderer } = await vite.ssrLoadModule('/src/nodus-renderer.ts');
     await run(createNodusRenderer);
   } finally {
     delete globalThis.__chessviewRendererBoardCalls;

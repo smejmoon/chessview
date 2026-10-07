@@ -44,7 +44,7 @@ IndexedDB stores edges by durable edge ID and indexes them by canonical `source`
 
 Graph Edge persistence is rebuildable browser cache. It has its own logical schema version, independent from the position-node cache schema. A Graph Edge schema mismatch clears the `edges` store and stamps the current schema version; old Graph Edge records are not migrated or interpreted. Physical IndexedDB layout changes use a new cache database epoch rather than converting an older cache in place.
 
-`src/edge-store.js`, `src/indexed-db.js`, and `src/db.js` are compatibility re-export shims so existing JavaScript callers can keep stable import paths during incremental TypeScript migration. `src/db.ts` remains only a typed test/maintenance surface, including whole-store reset. Application graph code does not use it as a mixed persistence API.
+`src/db.ts` remains only a typed test/maintenance surface, including whole-store reset. Application graph code does not use it as a mixed persistence API.
 
 `PositionGraph` does not keep a second in-memory graph or graph-neighborhood cache. Durable Graph Edge reads are served by the persistence boundary.
 
@@ -61,15 +61,14 @@ Constellation selection, Evidence, and current-view state consume Graph Edges bu
 ## Implementation
 
 - `src/position-graph.ts` implements the application boundary and its normalization, ensure, incoming, and outgoing operations. It exposes only the durable `explicit` materialization option beyond canonical relationship identity.
-- `src/graph.js::canonicalPosition()` provides canonical position identity.
-- `src/graph.js::resolveMove()` provides legal source-position + Move resolution used to validate edge target and notation.
-- `src/graph.js::edgeId()` computes durable Graph Edge identity from the normalized relationship.
+- `src/graph.ts::canonicalPosition()` provides canonical position identity.
+- `src/graph.ts::resolveMove()` provides legal source-position + Move resolution used to validate edge target and notation.
+- `src/graph.ts::edgeId()` computes durable Graph Edge identity from the normalized relationship.
 - `src/edge-store.ts::mutateEdge()` provides typed atomic per-edge read/modify/write persistence over the canonical stored edge shape.
 - `src/edge-store.ts::getIncoming()` and `getOutgoing()` provide typed indexed directional edge reads.
 - `src/cache-schema.ts` owns shared storage identities and logical per-store cache-schema versions.
 - `src/indexed-db.ts` owns typed shared IndexedDB setup, per-store cache schema invalidation, and transaction/request mechanics.
 - `src/db.ts` provides the typed test/maintenance facade for legacy low-level node/edge access and whole-store reset.
-- `src/edge-store.js`, `src/indexed-db.js`, and `src/db.js` are compatibility re-export shims for JavaScript callers.
 
 ## Verification
 

@@ -79,7 +79,7 @@ async function loadChooser() {
     logLevel: 'silent',
     server: { middlewareMode: true },
   });
-  const module = await vite.ssrLoadModule('/src/promotion-chooser.js');
+  const module = await vite.ssrLoadModule('/src/promotion-chooser.ts');
   return { ...module, close: () => vite.close() };
 }
 

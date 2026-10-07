@@ -58,7 +58,7 @@ These responsibilities are implemented inside `LichessGateway`; request scheduli
 
 The voluntary start interval is Chessview pacing policy used to reduce burstiness between otherwise serial requests. It is not a Lichess-mandated rate limit and does not replace the full-minute post-429 cooldown. Its concrete value lives in `src/config.ts`; this document owns the behavior and distinction that value implements.
 
-Priority is generic transport urgency only. The gateway does not decide which chess or current-view work is foreground. It observes the effective urgency supplied by callers when choosing the next queued request; an already in-flight request is not preempted.
+Foreground/background is generic application work urgency, not browser Fetch priority. The gateway does not decide which chess or current-view work is foreground. It consumes the effective live urgency carried by separate work metadata when choosing the next queued request; an already in-flight request is not preempted. HTTP `RequestInit` remains reserved for browser request semantics.
 
 Position-backed endpoint clients may coalesce equivalent work for one canonical position and endpoint facet. One caller becoming obsolete must stop only that caller's participation without cancelling equivalent work still needed by another live caller. The shared producer's effective urgency is the highest urgency among its live subscribers, so joining or leaving shared work may promote or demote a still-queued request without creating another producer. When every caller to shared queued work becomes obsolete, the shared producer must be cancelled so the queued request does not reach Lichess.
 
@@ -75,7 +75,7 @@ Endpoint clients retain responsibility for request parameters, parsing, source v
 - A transport or HTTP failure is not successful absence.
 - A non-null stale source value may be used when its endpoint client still judges it usable and a refresh fails.
 - Explorer structural refinement classifies source failure only after the Explorer provider has exhausted its own fresh/live/stale fallback path. It never manufactures an empty or negative Reading from failure.
-- An Explorer HTTP 429 is retryable for the active refinement run only when `LichessGateway` exposes a future cooldown end. That cooldown is the semantic retry gate; Current View does not reconstruct the delay from the HTTP status.
+- An Explorer HTTP 429 is retryable for the active refinement run only when `LichessGateway` exposes an active semantic retry gate. Current View does not reconstruct cooldown timing from the HTTP status or a raw gateway clock value.
 - If no future retry gate exists, or another Explorer source failure remains after fallback, that source attempt is unavailable-for-this-run. A replacement refinement run may try again under normal freshness/source policy.
 - Explorer source classification stops at the source-load boundary. Failure after a usable Reading has been obtained—such as graph reconciliation/persistence failure—is not source unavailability and remains retryable/visible through Knowledge Acquisition.
 - Cloud-eval retrieval details are not exposed as evaluation values. `LichessEval` returns usable evaluation or absence and exposes request/failure activity separately through its operational status channel.

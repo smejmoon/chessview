@@ -34,17 +34,35 @@ Likewise, an HTTP request is not automatically the unit of work. Distinguish cal
 
 Do not reopen migration suspicions that current source no longer supports merely because they were recorded during conversion. In particular, the gateway callback contract is explicit, promotion/recenter parameter bags now describe their actual fields, and Root enrichment's empty factory call is backed by complete defaults. This outcome owns only Lichess contract repairs that remain real after source validation.
 
-# Unsettled:
+# Decision:
 
-- What is the precise unit of demand that carries lifetime and urgency, and when does coalescing create a new shared demand rather than merely forwarding a caller's context?
-- Should ChessView have a generic work/demand context such as `AbortSignal` plus live urgency, or is a narrower Lichess-specific contract preferable?
-- Which component creates, aggregates, forwards, and consumes that context across Current View, `PositionRepository`, Explorer/Masters/cloud eval, `LichessSession`, and `LichessGateway`?
-- Should HTTP request description and work scheduling metadata be separate API arguments/types so Fetch `RequestInit` keeps only browser HTTP semantics?
-- Should the gateway expose raw cooldown clock state such as `cooldownUntil`, or a more semantic retry/cooldown gate to higher layers?
-- What transport response/error surface must the gateway guarantee so domain clients do not reconstruct or weakly infer Fetch contracts?
-- What explicit minimal dependency interfaces should `createLichessSession` expose for gateway, location/history/storage/crypto access, redirect, and logging, and which of those collaborators are intentionally providers rather than direct values?
-- Is foreground/background the right semantic distinction, and should the concept be named priority, urgency, or something else?
-- Which remaining option/default shapes disappear naturally once the boundary is settled, and which are independent API-design problems?
+ChessView will use a generic application work-demand contract rather than a Lichess-specific scheduling type. A caller demand carries lifetime plus foreground/background urgency. Coalescing creates a distinct shared producer context: `PositionRepository` owns the producer's abort signal and derives its live effective urgency from all current participants.
+
+The shared context may be forwarded to a Lichess transport operation, but it is not identical to the HTTP request and does not automatically govern later validation or persistence. This preserves useful completion work whose semantics outlive a view while still allowing queued/in-flight transport to stop when shared demand disappears.
+
+HTTP description and ChessView scheduling metadata will be separate. The target gateway/session API keeps ordinary browser `RequestInit` intact and passes work metadata separately; browser `RequestInit.priority` is therefore never redefined as ChessView foreground/background priority. The application term for this ordering signal is **urgency**.
+
+`LichessGateway` remains the only application-issued Lichess HTTP scheduler and continues to own serialization, request-start spacing, queued urgency selection, exact-signal cancellation translation, 429 cooldown, and browser fetch dispatch. Introducing generic work demand does not introduce a second scheduling service.
+
+`PositionRepository` owns aggregation of equivalent caller demand because it owns producer coalescing. Current View and other callers create their own demand; endpoint providers receive a repository-owned producer context; `LichessSession` forwards work metadata without interpreting it; `LichessGateway` consumes it only when coordinating the HTTP operation.
+
+The gateway should expose cooldown as a semantic retry gate rather than a raw `cooldownUntil` clock value. Explorer refinement may wait on that lower-owned gate after a 429, but it should not own cooldown duration, clock arithmetic, or sleep policy.
+
+The gateway continues to return platform `Response`. Endpoint clients legitimately own status/body parsing and endpoint-specific meaning, so a generic response DTO would not simplify the boundary. Injection surfaces should instead describe the smallest consumed capability. `createLichessSession` should gain an explicit minimal options contract in follow-up, including a request-only gateway surface and lightweight browser collaborators.
+
+Implementation of the separated work argument and semantic retry gate is bounded follow-up in `backlog/2026-10-07-work-context-implementation.md`.
+
+## Alternatives considered
+
+Keeping the current `LichessRequestInit` shape is the smallest code change, but it permanently overloads a browser-owned field name and keeps application lifetime/scheduling semantics coupled to HTTP description.
+
+Making the context Lichess-specific would avoid the DOM collision, but it would misplace semantics that already exist at `CurrentViewController` and `PositionRepository` before transport exists, and would make generic coalescing depend on a source-specific abstraction.
+
+Using each caller's signal directly for a shared producer would make first-caller lifetime accidentally own equivalent later demand. Conversely, making shared producer lifetime unconditional would keep queued transport alive after all demand disappears. Repository-owned aggregation is the boundary that avoids both failures.
+
+Wrapping `Response` in a new generic transport result would make endpoint clients reconstruct Fetch capabilities they already legitimately consume and would not solve the work/HTTP coupling.
+
+Exposing `cooldownUntil` keeps clock arithmetic duplicated above the gateway; hiding all cooldown state would prevent higher-level retry coordination. A semantic gate preserves lower-layer ownership while exposing only the coordination capability the caller needs.
 
 # Complete:
 

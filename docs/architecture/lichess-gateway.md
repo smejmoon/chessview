@@ -10,6 +10,38 @@ Top-level browser navigation to Lichess's OAuth authorization endpoint is a user
 
 `LichessGateway` directly owns the transport coordination needed to enforce the application-wide Lichess request policy. Its queue, serialization, start spacing, effective transport-priority selection, 429 cooldown, queued cancellation, and browser-fetch dispatch are internal parts of this boundary rather than a separate architectural request-gate component.
 
+## Work and HTTP request contract
+
+ChessView scheduling metadata is application work state, not HTTP request state. The intended API therefore keeps browser `RequestInit` semantics intact and carries work metadata separately.
+
+The generic application concept is **work demand**: a lifetime signal plus live urgency. Foreground/background remains the current urgency vocabulary. The concept is generic because the same caller lifetime and coalescing semantics exist before any Lichess request is constructed; it is not a second scheduler and it does not move queue ownership out of `LichessGateway`.
+
+There are three distinct lifetimes:
+
+1. A caller demand belongs to the caller that currently wants a result.
+2. A coalesced producer context belongs to shared work. `PositionRepository` creates its own abort signal for that producer and derives live effective urgency from all current participants.
+3. A transport operation is one HTTP request. A Lichess endpoint client forwards the producer context to the gateway only for that operation.
+
+Those lifetimes must not be collapsed. In particular, an endpoint client may continue useful validation or persistence after a response has arrived even when the initiating view has disappeared, unless that work explicitly consumes the producer signal.
+
+The target gateway shape is conceptually `request(input, requestInit, work)`, where `requestInit` is ordinary `RequestInit` and `work` carries the ChessView signal/urgency contract. Exact exported type names may be introduced during implementation, but browser `RequestInit.priority` must never be repurposed for ChessView urgency.
+
+`LichessSession.authorizedRequest` follows the same separation: authentication modifies HTTP headers and delegates the request plus work metadata; it does not reinterpret urgency or lifetime.
+
+## Cooldown and retry exposure
+
+The gateway owns the cooldown clock. Higher layers should not reconstruct transport timing from a raw `cooldownUntil` timestamp.
+
+Where a source policy needs to retry after a gateway-owned 429 cooldown, the gateway should expose a semantic retry gate (for example, a promise-like gate that is present only while retry is blocked). Explorer refinement can then classify a 429 as retryable using that gate without owning the cooldown duration, clock arithmetic, or sleep policy.
+
+This keeps one source of truth for transport availability while preserving Current View's existing rule that it waits on a lower-owned gate rather than busy-retrying.
+
+## Transport response contract
+
+The gateway remains an HTTP boundary and may return the platform `Response`. Endpoint clients legitimately need status, headers/body parsing, and endpoint-specific interpretation, so wrapping every response in a second generic transport DTO would add indirection without removing policy.
+
+Injection contracts should nevertheless depend on the smallest consumed capability. A session that only calls `gateway.request` accepts a request-capable gateway rather than the full concrete singleton shape; endpoint-provider test doubles likewise need only the response operations that provider consumes.
+
 ## Cancellation translation
 
 `LichessGateway` is the boundary that has both the browser transport failure and the exact `AbortSignal` for that request. It may therefore translate an abort-shaped fetch rejection into semantic `ObsoleteWork` when that request signal is actually aborted, preserving the underlying failure as causal detail.

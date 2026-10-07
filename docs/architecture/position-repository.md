@@ -36,9 +36,11 @@ Live facet state is not a second durable cache. It is page-lifetime application 
 
 Explorer, cloud evaluation, Masters, and future position-backed data are independently hydrated facets. There is no whole-node freshness flag: each endpoint client keeps its own TTL, request parameters, parsing, validation, fallback, absence, and failure semantics.
 
-Equivalent concurrent loads for one facet and canonical key share one producer. Each caller participates with its own `AbortSignal` and transport urgency. One caller becoming obsolete detaches only that caller. The shared producer exposes the highest effective urgency among its live callers, so a queued request can promote or demote as callers join or leave without creating another producer. When the last caller detaches before the producer settles, the repository aborts the producer so queued work can be rejected before it reaches Lichess.
+Equivalent concurrent loads for one facet and canonical key share one producer. Each caller participates with generic work demand: its own lifetime signal and urgency. One caller becoming obsolete detaches only that caller. The shared producer exposes the highest effective urgency among its live callers, so queued transport can promote or demote as callers join or leave without creating another producer. When the last caller detaches before the producer settles, the repository aborts the producer so cancellable downstream work can stop.
 
-The shared producer receives an internal abort signal owned by the repository rather than any caller's signal. This keeps producer lifetime independent of first-caller lifetime while preserving cancellation when nobody still needs the work.
+The shared producer receives a repository-owned work context rather than any caller's context. Its abort signal represents the lifetime of the coalesced producer, and its urgency is live aggregate state derived from current participants. This keeps producer lifetime independent of first-caller lifetime while preserving cancellation when nobody still needs the work.
+
+Work demand is generic application coordination rather than a Lichess transport type. `PositionRepository` owns aggregation because coalescing happens here; it does not schedule HTTP requests. A source provider may forward the producer work context to a transport operation, while persistence and other useful completion work remain independent unless they explicitly consume that context.
 
 This gives the repository one coherent responsibility around source facets:
 

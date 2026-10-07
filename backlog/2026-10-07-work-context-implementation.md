@@ -1,6 +1,6 @@
 # Do:
 
-Implement the work-demand boundary settled in `2026-10-07-lichess-work-scheduling.md`.
+Implement the work-demand boundary defined by [`docs/architecture/lichess-gateway.md`](../docs/architecture/lichess-gateway.md) §Work and HTTP request contract, [`docs/architecture/position-repository.md`](../docs/architecture/position-repository.md) §Facet hydration and shared producer lifetime, and [`docs/components/lichess-access.md`](../docs/components/lichess-access.md) §Network boundary.
 
 Introduce a generic application work-demand/context type for lifetime and live foreground/background urgency. Separate that metadata from browser `RequestInit` throughout `PositionRepository`, Explorer, Masters, cloud evaluation, `LichessSession`, and `LichessGateway`.
 

@@ -87,8 +87,6 @@ Move-quality and Root-rarity thresholds are specified in their owning behavior s
 Deterministic tests should cover:
 
 - position and Graph Edge Evidence being readable without any Constellation structure;
-- Evidence having no dependency on Constellation, visible relationship identity, or presentation objects;
-- Constellation requesting Evidence rather than directly calculating evidence semantics or reading engine/Explorer provider clients for Candidate evidence;
 - move loss from source MultiPV and target-position fallback;
 - the 0.5 / 1.0 pawn quality thresholds;
 - unavailable engine source data remaining distinct from strong, dubious, or bad quality;

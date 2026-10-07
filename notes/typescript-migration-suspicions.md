@@ -9,7 +9,6 @@ These are investigation leads, not accepted architecture or backlog commitments.
 Several converted modules use `= {}` on parameter objects while their implementations immediately expect meaningful fields. TypeScript consequently infers misleadingly narrow or optional shapes.
 
 Seen in:
-- `src/evidence-presentation.ts`
 - `src/lichess-gateway.ts`
 - `src/lichess-session.ts`
 - `src/promotion-chooser.ts`

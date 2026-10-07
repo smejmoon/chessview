@@ -7,7 +7,8 @@ import { createLens } from './lens.ts';
 import type { Lens, Orientation } from './lens.ts';
 import type { ViewMode } from './route-ledger.ts';
 import { clearDebugLog, debugLog, debugText, getDebugEntries } from './debug.ts';
-import { decorateEvidencePresentation } from './eval-ui.ts';
+import { decorateEvidencePresentation, decorateEvidencePresentationFailure } from './eval-ui.ts';
+import type { PreparedConstellationEvidence } from './evidence-presentation.ts';
 import { decorateLichessEvalStatus } from './lichess-eval-presentation.ts';
 import { decorateConstellationPresentation } from './constellation-presentation.ts';
 import { createPromotionChooser } from './promotion-chooser.ts';
@@ -53,7 +54,6 @@ export type RendererView = Readonly<{
   orientation: Orientation;
   navigation: Readonly<{ canGoBack: boolean }>;
   structure: Lifecycle<RendererStructure>;
-  evidence?: unknown;
   rail?: Lifecycle<RailValue>;
   activities?: Readonly<{
     rootDiscovery?: RootDiscoveryPhase;
@@ -344,8 +344,17 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     bindDynamicControls(actions, rootContext, view);
     renderSatellites(view, structure, actions, mapGeometry);
     decorateConstellationPresentation(app, view);
-    decorateEvidencePresentation(app, view, actions, { showGuide: guide });
+    decorateEvidencePresentation(app, view, actions, null, { showGuide: guide });
     promotionChooser.sync({ center: view.center, orientation: view.orientation, color: turn });
+  }
+
+  function decorateEvidence(view: RendererView, actions: CurrentViewActions, evidence: PreparedConstellationEvidence): void {
+    decorateConstellationPresentation(app, view, evidence);
+    decorateEvidencePresentation(app, view, actions, evidence, { showGuide: lens.guideEnabled() });
+  }
+
+  function renderEvidenceFailure(error: unknown): void {
+    decorateEvidencePresentationFailure(app, error);
   }
 
   function renderFailure(view: RendererView | null | undefined, actions: CurrentViewActions, error: unknown, presentation = 'failed'): void {
@@ -357,5 +366,5 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     app.querySelector('#presentation-retry')?.addEventListener('click', () => { void actions.redraw(); });
   }
   function dispose(): void { promotionChooser.dispose(); disposeBoards(); }
-  return Object.freeze({ render, renderFailure, renderStatus, renderLichessEvalStatus, dispose });
+  return Object.freeze({ render, decorateEvidence, renderEvidenceFailure, renderFailure, renderStatus, renderLichessEvalStatus, dispose });
 }

@@ -22,9 +22,16 @@ test('Constellation requests Evidence instead of deriving provider evidence dire
   assert.doesNotMatch(structure, /from '\.\/masters\.js'/);
 });
 
-test('joining Evidence to visible relationship identity is presentation glue, not Evidence', () => {
-  const projection = source('../src/evidence-presentation.ts');
-  assert.match(projection, /createEvidenceReader/);
-  assert.match(projection, /relationship\.id/);
-  assert.match(projection, /relationship\.edge/);
+test('presentation preparation is keyed by Graph Edge rather than visible relationship identity', () => {
+  const preparation = source('../src/evidence-presentation.ts');
+  assert.match(preparation, /prepareMoveEvidence/);
+  assert.match(preparation, /edgeId\(edge\)/);
+  assert.doesNotMatch(preparation, /relationship\.id/);
+  assert.doesNotMatch(preparation, /composition/);
+});
+
+test('presentation owns the join from prepared Graph Edge Evidence to visible relationships', () => {
+  const presentation = source('../src/eval-ui.ts');
+  assert.match(presentation, /relationship\.edge/);
+  assert.match(presentation, /evidence\.moves\.get\(edgeId/);
 });

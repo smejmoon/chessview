@@ -2,6 +2,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createNodusPresenter } from '../src/nodus-presenter.ts';
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+async function flush(turns = 8) {
+  for (let index = 0; index < turns; index += 1) await Promise.resolve();
+}
+
 function statusFixture() {
   const calls = [];
   let presentation = 'hidden';
@@ -68,4 +79,61 @@ test('fallback failure is not swallowed after normal rendering has failed', asyn
     presenter.update({ center: 'A', structure: { status: 'ready' } }, {}),
     /fallback failed/,
   );
+});
+
+
+test('stale passive Evidence cannot decorate a replacement Nodus', async () => {
+  const first = deferred();
+  const signals = [];
+  const decorated = [];
+  const renderer = {
+    render() {},
+    renderFailure() {},
+    decorateEvidence(view, _actions, evidence) {
+      decorated.push([view.center, evidence.position.evaluation]);
+    },
+  };
+  const prepareEvidence = ({ center, signal }) => {
+    signals.push([center, signal]);
+    if (center === 'A') return first.promise;
+    return Promise.resolve({ position: { evaluation: center }, moves: new Map() });
+  };
+  const presenter = createNodusPresenter({
+    renderer,
+    statusPresenter: statusFixture(),
+    prepareEvidence,
+  });
+
+  await presenter.start({ center: 'A', mode: 'lines', structure: { status: 'loading' } }, {});
+  await presenter.update({ center: 'B', mode: 'lines', structure: { status: 'loading' } }, {});
+  await flush();
+
+  assert.equal(signals[0][1].aborted, true);
+  assert.deepEqual(decorated, [['B', 'B']]);
+
+  first.resolve({ position: { evaluation: 'A' }, moves: new Map() });
+  await flush();
+  assert.deepEqual(decorated, [['B', 'B']]);
+});
+
+test('passive Evidence failure degrades annotations without failing the Nodus presentation', async () => {
+  const failures = [];
+  const statusPresenter = statusFixture();
+  const renderer = {
+    render() {},
+    renderFailure() { throw new Error('whole-view fallback should not run'); },
+    decorateEvidence() {},
+    renderEvidenceFailure(error) { failures.push(error.message); },
+  };
+  const presenter = createNodusPresenter({
+    renderer,
+    statusPresenter,
+    prepareEvidence: async () => { throw new Error('evidence unavailable'); },
+  });
+
+  assert.equal(await presenter.update({ center: 'A', mode: 'lines', structure: { status: 'ready' } }, {}), true);
+  await flush();
+
+  assert.deepEqual(failures, ['evidence unavailable']);
+  assert.equal(statusPresenter.calls.includes('fail'), false);
 });

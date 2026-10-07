@@ -88,11 +88,11 @@ test('same-run recomposition can admit structural work after presentation constr
   assert.equal(controller.snapshot.settling, false);
 });
 
-test('supplementary refinement during evidence derivation drains another pass without inventing structural progress', async () => {
+test('supplementary refinement during settlement recomposition drains another pass without inventing structural progress', async () => {
   const first = deferred();
   const second = deferred();
-  const evidenceGate = deferred();
-  const evidenceEntered = deferred();
+  const settlementGate = deferred();
+  const settlementEntered = deferred();
   const publications = [];
   let fact = 0;
   let compositions = 0;
@@ -103,18 +103,15 @@ test('supplementary refinement during evidence derivation drains another pass wi
     structure: async ({ center, mode }) => {
       compositions += 1;
       const observed = fact;
+      if (observed === 1) {
+        settlementEntered.resolve();
+        await settlementGate.promise;
+      }
       return {
         composition: { center, direction: mode },
         readingFrontier: observed < 2 ? ['B'] : [],
         marker: `lines:${observed}`,
       };
-    },
-    evidence: async ({ structure }) => {
-      if (structure.marker === 'lines:1') {
-        evidenceEntered.resolve();
-        await evidenceGate.promise;
-      }
-      return { marker: `evidence:${structure.marker}` };
     },
     refine: () => [
       {
@@ -143,11 +140,11 @@ test('supplementary refinement during evidence derivation drains another pass wi
   publications.length = 0;
 
   first.resolve();
-  await evidenceEntered.promise;
+  await settlementEntered.promise;
 
   second.resolve();
   await flush(8);
-  evidenceGate.resolve();
+  settlementGate.resolve();
   await flush(48);
 
   assert.equal(controller.snapshot.structure.value.marker, 'lines:2');

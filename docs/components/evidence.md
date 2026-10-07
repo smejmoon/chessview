@@ -22,7 +22,9 @@ Evidence reads may combine multiple currently available sources to derive one se
 
 A consumer may request Evidence before any Constellation exists. Conversely, a later Constellation, Rail, or Interface derivation may request the same position/edge Evidence again after source facts become richer. Missing facts remain unknown rather than being encoded as negative evidence.
 
-View-specific joining is outside Evidence. For example, presentation may join independently read move Evidence onto the IDs of currently visible Constellation relationships, but Evidence itself neither receives nor knows those relationship IDs or the Constellation structure.
+View-specific joining is outside Evidence. Constellation presentation prepares passive reads for its center position and currently visible Graph Edges in a presentation-local cancellation scope. Move preparation is keyed by canonical Graph Edge identity; decorators perform the final join to visible relationship identity and decide which signals apply in that visual context. Current View does not own or publish an Evidence lifecycle. Rail continues to request the Evidence for its own rows independently.
+
+Presentation preparation does not start source acquisition. Replacing a presentation cancels its passive Evidence participation so stale results cannot decorate the replacement Nodus.
 
 ## Product criticality
 

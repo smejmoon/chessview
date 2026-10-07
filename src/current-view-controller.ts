@@ -43,7 +43,6 @@ export type CurrentViewSnapshot = Readonly<{
   orientation: Orientation;
   navigation: Readonly<{ canGoBack: boolean }>;
   structure: Lifecycle;
-  evidence: Lifecycle;
   rail: Lifecycle;
   settling: boolean;
   weather: WeatherMeasures;
@@ -69,13 +68,6 @@ export type CurrentViewActions = Readonly<{
 export type StructureInput = Readonly<{
   center: string;
   mode: ViewMode;
-  signal: AbortSignal;
-}>;
-
-export type EvidenceInput = Readonly<{
-  center: string;
-  mode: ViewMode;
-  structure: unknown;
   signal: AbortSignal;
 }>;
 
@@ -145,7 +137,6 @@ export type CurrentViewControllerOptions = {
   preferences?: Preferences | null;
   lens?: OrientationLens | null;
   structure: Contributor<StructureInput>;
-  evidence?: Contributor<EvidenceInput> | null;
   rail?: Contributor<RailInput> | null;
   refine?: RefinementPlanner | null;
   lookahead?: LookaheadContributor | null;
@@ -158,7 +149,6 @@ type AcceptedViewState = {
   nodus: string;
   mode: ViewMode;
   structure: Lifecycle;
-  evidence: Lifecycle;
   rail: Lifecycle;
 };
 
@@ -179,7 +169,6 @@ type RefinementRun = {
   abortController: AbortController;
   lookaheadController: AbortController | null;
   structureTail: Promise<boolean>;
-  evidenceTail: Promise<boolean>;
   railTail: Promise<boolean>;
   participants: Map<string, RefinementParticipant>;
   incorporationPending: Set<string>;
@@ -285,7 +274,6 @@ export class CurrentViewController {
   #actions: CurrentViewActions;
   #canonicalize: (value: unknown) => string;
   #disposed = false;
-  #evidence: Contributor<EvidenceInput> | null;
   #lens: OrientationLens;
   #log: Log;
   #lookahead: LookaheadContributor | null;
@@ -308,7 +296,6 @@ export class CurrentViewController {
     preferences,
     lens,
     structure,
-    evidence = null,
     rail = null,
     refine = null,
     lookahead = null,
@@ -326,7 +313,6 @@ export class CurrentViewController {
     this.#preferences = preferences ?? {};
     this.#lens = lens ?? localLens(initial?.orientation);
     this.#structure = structure;
-    this.#evidence = evidence;
     this.#rail = rail;
     this.#refine = refine;
     this.#lookahead = lookahead;
@@ -337,7 +323,6 @@ export class CurrentViewController {
       nodus: canonicalize(initial?.center),
       mode: normalizeMode(initial?.mode ?? initial?.view),
       structure: lifecycle('idle'),
-      evidence: lifecycle('idle'),
       rail: lifecycle('idle'),
     };
     this.#actions = Object.freeze({
@@ -359,7 +344,6 @@ export class CurrentViewController {
       orientation: this.#lens.orientation(),
       navigation: Object.freeze({ canGoBack: this.#routeLedger.canGoBack?.() ?? false }),
       structure: this.#state.structure,
-      evidence: this.#state.evidence,
       rail: this.#state.rail,
       settling: this.#structurallySettling(weather),
       weather,
@@ -445,7 +429,6 @@ export class CurrentViewController {
     run.lookaheadController = null;
     this.#state.mode = next;
     this.#state.structure = lifecycle('loading');
-    this.#state.evidence = lifecycle('idle');
     this.#preferences.setView?.(next);
     this.#routeLedger.replace?.(this.#route());
     this.#log('view mode changed', { mode: next, center: this.#state.nodus });
@@ -615,7 +598,6 @@ export class CurrentViewController {
       abortController: new AbortController(),
       lookaheadController: null,
       structureTail: Promise.resolve(false),
-      evidenceTail: Promise.resolve(false),
       railTail: Promise.resolve(false),
       participants: new Map(),
       incorporationPending: new Set(),
@@ -631,8 +613,7 @@ export class CurrentViewController {
       && this.#state.rail.status === 'ready';
     if (!preserveEstablished) {
       this.#state.structure = lifecycle('loading');
-      this.#state.evidence = lifecycle('idle');
-    }
+      }
     if (!preserveRail) {
       this.#state.rail = typeof this.#rail === 'function' ? lifecycle('loading') : lifecycle('idle');
     }
@@ -649,15 +630,11 @@ export class CurrentViewController {
       void this.#queueRail(run, { preserveEstablished: preserveRail, publish: true });
     }
 
-    const ready = await this.#queueStructure(run, { preserveEstablished, publish: false });
+    await this.#queueStructure(run, { preserveEstablished, publish: false });
     if (!this.#isCurrent(run)) return;
 
     this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;
-
-    if (ready && typeof this.#evidence === 'function') {
-      void this.#queueEvidence(run, { preserveEstablished, publish: true });
-    }
 
     run.settlementReady = true;
     await this.#presentCurrent('update');
@@ -698,17 +675,6 @@ export class CurrentViewController {
     return tail;
   }
 
-  #queueEvidence(
-    run: RefinementRun,
-    options: { preserveEstablished?: boolean; publish?: boolean } = {},
-  ): Promise<boolean> {
-    const tail = run.evidenceTail
-      .catch(() => false)
-      .then(() => this.#deriveEvidence(run, options));
-    run.evidenceTail = tail;
-    return tail;
-  }
-
   #queueRail(
     run: RefinementRun,
     options: { preserveEstablished?: boolean; publish?: boolean } = {},
@@ -742,8 +708,7 @@ export class CurrentViewController {
         return false;
       }
       this.#state.structure = lifecycle('failed', null, structureError);
-      this.#state.evidence = lifecycle('idle');
-      this.#log('Current View structure failed', { mode, error: errorMessage(structureError) });
+        this.#log('Current View structure failed', { mode, error: errorMessage(structureError) });
       if (publish) await this.#presentCurrent('update');
       return false;
     }
@@ -751,44 +716,6 @@ export class CurrentViewController {
     this.#state.structure = lifecycle('ready', value);
     if (publish) await this.#presentCurrent('update');
     return true;
-  }
-
-  async #deriveEvidence(
-    run: RefinementRun,
-    { preserveEstablished = false, publish = true }: { preserveEstablished?: boolean; publish?: boolean } = {},
-  ): Promise<boolean> {
-    if (!this.#isCurrent(run) || typeof this.#evidence !== 'function') return false;
-    if (this.#state.structure.status !== 'ready') return false;
-    const center = this.#state.nodus;
-    const mode = this.#state.mode;
-    const structure = this.#state.structure.value;
-    const previous = this.#state.evidence;
-    try {
-      const value = await this.#evidence(Object.freeze({
-        center,
-        mode,
-        structure,
-        signal: run.abortController.signal,
-      }));
-      if (!this.#isCurrent(run) || this.#state.nodus !== center || this.#state.mode !== mode) return false;
-      this.#state.evidence = lifecycle('ready', value);
-      if (publish) await this.#presentCurrent('update');
-      return true;
-    } catch (error: unknown) {
-      if (!this.#isCurrent(run) || isObsoleteWork(error, run.abortController.signal)) return false;
-      if (this.#state.nodus !== center || this.#state.mode !== mode) return false;
-      if (preserveEstablished && previous.status === 'ready') {
-        this.#log('Current View evidence refinement failed; keeping established evidence', {
-          mode,
-          error: errorMessage(error),
-        });
-        return false;
-      }
-      this.#state.evidence = lifecycle('failed', null, error);
-      this.#log('Current View evidence failed', { mode, error: errorMessage(error) });
-      if (publish) await this.#presentCurrent('update');
-      return false;
-    }
   }
 
   async #deriveRail(
@@ -1040,9 +967,6 @@ export class CurrentViewController {
     }
 
     const refinements: Promise<boolean>[] = [];
-    if (this.#state.structure.status === 'ready' && typeof this.#evidence === 'function') {
-      refinements.push(this.#queueEvidence(run, { preserveEstablished: true, publish: false }));
-    }
     if (typeof this.#rail === 'function') {
       refinements.push(this.#queueRail(run, { preserveEstablished: true, publish: false }));
     }
@@ -1063,11 +987,7 @@ export class CurrentViewController {
   ): Promise<void> {
     if (!this.#isCurrent(run)) return;
     const before = this.snapshot;
-    const ready = await this.#queueStructure(run, { preserveEstablished, publish: false });
-    if (!this.#isCurrent(run)) return;
-    if (ready && typeof this.#evidence === 'function') {
-      await this.#queueEvidence(run, { preserveEstablished, publish: false });
-    }
+    await this.#queueStructure(run, { preserveEstablished, publish: false });
     if (!this.#isCurrent(run)) return;
     this.#planRefinements(run);
     if (!this.#isCurrent(run)) return;

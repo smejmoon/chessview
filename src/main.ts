@@ -22,7 +22,6 @@ import { loadMasters } from './masters.ts';
 import { materializeMove } from './move-materialization.ts';
 import { deriveCurrentViewRefinementDemand } from './current-view-refinement.ts';
 import { composeNodusStructure } from './nodus-structure.ts';
-import { projectVisibleEvidence } from './evidence-presentation.ts';
 import { lichessEval } from './lichess-eval.ts';
 import { createLichessEvalStatusPresenter } from './lichess-eval-presentation.ts';
 import { createNodusRenderer } from './nodus-renderer.ts';
@@ -175,7 +174,6 @@ controller = new CurrentViewController({
       signal,
     });
   },
-  evidence: ({ center, mode, structure, signal }) => projectVisibleEvidence({ center, mode, structure, signal }),
   rail: composeNodusRail,
   refine: tasksForCurrentView,
   lookahead: warmLookahead,

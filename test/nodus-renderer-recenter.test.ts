@@ -117,7 +117,6 @@ function viewFor(center, positions = []) {
         positions,
       },
     },
-    evidence: { status: 'idle', value: null, error: null },
   };
 }
 

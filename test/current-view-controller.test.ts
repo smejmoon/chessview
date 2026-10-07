@@ -66,11 +66,11 @@ function fixture(overrides = {}) {
   const presenter = {
     start(view, actions) {
       publications.push({ kind: 'start', view, actions });
-      calls.push(['presentStart', view.center, view.mode, view.structure.status, view.evidence.status, view.settling]);
+      calls.push(['presentStart', view.center, view.mode, view.structure.status, view.settling]);
     },
     update(view, actions) {
       publications.push({ kind: 'update', view, actions });
-      calls.push(['presentUpdate', view.center, view.mode, view.structure.status, view.evidence.status, view.settling]);
+      calls.push(['presentUpdate', view.center, view.mode, view.structure.status, view.settling]);
     },
   };
   const controller = new CurrentViewController({
@@ -82,10 +82,6 @@ function fixture(overrides = {}) {
     structure: async ({ center, mode }) => {
       calls.push(['structure', center, mode]);
       return structure(center, mode);
-    },
-    evidence: async ({ center, mode, structure: accepted }) => {
-      calls.push(['evidence', center, mode, accepted]);
-      return { marker: `evidence:${center}:${mode}` };
     },
     presenter,
     ...overrides,
@@ -215,16 +211,11 @@ test('superseded structure results never become current after another Nodus is s
 
 test('contributors receive one accepted structure and no controller publication capabilities', async () => {
   let structureInput;
-  let evidenceInput;
   let refinementInput;
   const { controller, publications } = fixture({
     structure: async (input) => {
       structureInput = input;
       return structure(input.center, input.mode);
-    },
-    evidence: async (input) => {
-      evidenceInput = input;
-      return { center: input.center };
     },
     refine: (input) => {
       refinementInput = input;
@@ -235,7 +226,6 @@ test('contributors receive one accepted structure and no controller publication 
   await controller.start();
 
   assert.deepEqual(Object.keys(structureInput).sort(), ['center', 'mode', 'signal']);
-  assert.deepEqual(Object.keys(evidenceInput).sort(), ['center', 'mode', 'signal', 'structure']);
   assert.deepEqual(Object.keys(refinementInput).sort(), ['center', 'mode', 'signal', 'structure']);
   assert.equal(Object.hasOwn(refinementInput, 'structures'), false);
   assert.equal(Object.hasOwn(refinementInput, 'publish'), false);
@@ -245,7 +235,7 @@ test('contributors receive one accepted structure and no controller publication 
   assert.ok(Object.isFrozen(controller.snapshot.structure));
   assert.ok(Object.isFrozen(controller.snapshot.structure.value));
   assert.ok(Object.isFrozen(controller.snapshot.structure.value.composition));
-  assert.ok(Object.isFrozen(controller.snapshot.evidence.value));
+  assert.equal(Object.hasOwn(controller.snapshot, 'evidence'), false);
   assert.ok(Object.isFrozen(controller.snapshot.rail));
   assert.ok(Object.isFrozen(publications[0].actions));
 });

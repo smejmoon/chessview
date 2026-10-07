@@ -22,8 +22,7 @@ Conceptually that accepted state includes:
 - the Nodus canonical position;
 - active Root/Line mode;
 - the accepted Constellation for those current composition inputs;
-- accepted Nodus-level Rail values;
-- presentation-facing Evidence decoration when useful.
+- accepted Nodus-level Rail values.
 
 These values are accepted independently of work still trying to improve them.
 Refresh or failed refinement must not erase an established trustworthy value that
@@ -59,9 +58,10 @@ settlement.
 Rail has a different validity boundary. Its inventory is Nodus-scoped, so an
 accepted Rail may remain useful across a same-Nodus Root/Line transition while the
 new Constellation is established. A different Nodus establishes new Rail state.
-Presentation Evidence decoration is projection-facing and may update independently
-as richer values arrive, but it must not be carried onto a spatial projection it
-does not describe.
+Presentation Evidence decoration is not accepted Current View state. The presenter
+reads Evidence passively for the current Nodus and visible Graph Edges, owns a
+replaceable presentation-local cancellation scope, and rejects stale results
+before they can decorate a replacement spatial projection.
 
 Lens orientation/Guide/Debug and browser-history state are outside accepted-view
 identity. Current View may publish Lens orientation and `RouteLedger.canGoBack()`
@@ -179,7 +179,9 @@ because it belongs to the same refinement run.
   contributors return values; Current View publishes immutable snapshots; Lens
   and renderer delegates consume them.
 - Current View is the sole owner allowed to make an asynchronous domain result
-  current. Revision/currentness tokens and publication decisions remain private.
+  part of accepted Current View state. Revision/currentness tokens and publication
+  decisions remain private. Passive Evidence used only for decoration stays
+  presentation-local and is guarded by the presenter's own replacement lifetime.
 - A newly composed ready Constellation is planned and its refinement participation
   reconciled synchronously before publication. Publication must not expose the
   transient gap between structural admission and participation attachment.
@@ -197,8 +199,10 @@ because it belongs to the same refinement run.
 - Structure and Rail contributors may read durable graph/source facts or request
   semantic Evidence, but derivation does not itself own source acquisition.
 - Evidence remains independently addressable by canonical position or Graph Edge.
-  Presentation may join current Evidence onto accepted visible relationships
-  without making Evidence part of Constellation identity.
+  Presentation may batch passive reads for the current Nodus and visible Graph
+  Edges, then join those results onto accepted visible relationships without
+  publishing an Evidence lifecycle through Current View or making Evidence part
+  of Constellation identity.
 - Rail inventory remains independent of Constellation presentation capacity and
   is recomputed from available graph/source facts and Evidence rather than
   owning hydration.
@@ -229,7 +233,6 @@ contain values from several authorities, for example:
 
 - Nodus canonical position and active mode from Current View;
 - accepted Constellation and Rail from Current View;
-- presentation Evidence decoration read through Evidence;
 - structural readiness derived from accepted Constellation plus the active
   refinement run;
 - aggregate Weather diagnostics such as accepted-structure lifecycle, Reading

@@ -11,21 +11,8 @@ export { MASTERS_TTL_MS } from './config.ts';
 const MASTERS_ENDPOINT = 'https://explorer.lichess.org/masters';
 const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 
-type MastersError = Error & {
-  status?: number;
-  kind?: string;
-};
-
-function httpError(status: number, message: string): MastersError {
-  const error = new Error(message) as MastersError;
-  error.status = status;
-  return error;
-}
-
-function invalidDataError(): MastersError {
-  const error = new Error('Lichess masters explorer returned invalid data') as MastersError;
-  error.kind = 'invalid-data';
-  return error;
+function invalidDataError(): Error {
+  return new Error('Lichess masters explorer returned invalid data');
 }
 
 function validCount(value: any) {
@@ -150,7 +137,7 @@ export function createMastersProvider({
           priority: requestPriority,
           headers: { Accept: 'application/json' },
         });
-        if (!response.ok) throw httpError(response.status, `Lichess masters explorer returned ${response.status}`);
+        if (!response.ok) throw new Error(`Lichess masters explorer returned ${response.status}`);
         value = parseMastersReading(await response.json());
       } catch (error) {
         return staleOrAbsent(error, cachedValue, cachedFetchedAt, requestSignal, key);

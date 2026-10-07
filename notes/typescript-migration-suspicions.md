@@ -4,10 +4,6 @@ Observations surfaced while converting ChessView-owned executable code to TypeSc
 
 These are investigation leads, not accepted architecture or backlog commitments. Migration repairs should preserve behavior; broader cleanup should be assayed separately.
 
-## Ad-hoc domain errors
-
-`src/lichess-eval.ts` and `src/masters.ts` attach fields such as `status` and `kind` to ordinary `Error` instances. TypeScript exposes that these fields have no explicit error contract. Investigate whether Lichess/domain failures should have one shared typed representation.
-
 ## Empty-object defaults hiding required inputs
 
 Several converted modules use `= {}` on parameter objects while their implementations immediately expect meaningful fields. TypeScript consequently infers misleadingly narrow or optional shapes.

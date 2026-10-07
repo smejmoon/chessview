@@ -15,28 +15,28 @@ export {
 
 const ENDPOINT = 'https://lichess.org/api/cloud-eval';
 
-type LichessEvalError = Error & {
-  status?: number;
-  kind?: string;
-};
+type LichessEvalIssueKind =
+  | 'network'
+  | 'service'
+  | 'rate-limited'
+  | 'refresh-failed'
+  | 'invalid-data'
+  | 'insufficient-data'
+  | 'storage';
+
+type LichessEvalIssue = Readonly<{
+  kind: LichessEvalIssueKind;
+  position: string;
+  status: number | null;
+  fallback: 'cached' | null;
+  message: string;
+}>;
+
 type LichessEvalStatus = Readonly<{
   activity: 'idle' | 'requesting';
   pending: number;
-  issue: any;
+  issue: LichessEvalIssue | null;
 }>;
-
-function httpError(status: number, message: string): LichessEvalError {
-  const error = new Error(message) as LichessEvalError;
-  error.status = status;
-  return error;
-}
-
-function typedError(kind: string, message: string, cause: unknown = null): LichessEvalError {
-  const error = new Error(message) as LichessEvalError;
-  error.kind = kind;
-  if (cause != null) error.cause = cause;
-  return error;
-}
 
 function validPayload(value: any) {
   return Boolean(value)
@@ -50,19 +50,24 @@ export function isUsableLichessEval(value: any) {
   return Boolean(best) && (Number.isFinite(best.cp) || Number.isFinite(best.mate));
 }
 
-function issueFor(error: any, position: string, fallback: 'cached' | null = null) {
-  const status = Number.isFinite(error?.status) ? error.status : null;
-  let kind = error?.kind ?? 'network';
-  if (kind === 'network' && status === 429) kind = 'rate-limited';
-  else if (kind === 'network' && status != null) kind = 'service';
-  if (fallback === 'cached' && ['network', 'service', 'rate-limited'].includes(kind)) kind = 'refresh-failed';
-  return Object.freeze({
-    kind,
-    position,
-    status,
-    fallback,
-    message: error?.message ?? String(error),
-  });
+function evalIssue(
+  kind: LichessEvalIssueKind,
+  position: string,
+  {
+    status = null,
+    fallback = null,
+    message,
+  }: {
+    status?: number | null;
+    fallback?: 'cached' | null;
+    message: string;
+  },
+): LichessEvalIssue {
+  return Object.freeze({ kind, position, status, fallback, message });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function createLichessEval({
@@ -72,7 +77,7 @@ export function createLichessEval({
 } = {}) {
   const listeners = new Set<(status: LichessEvalStatus) => void>();
   let pending = 0;
-  let issue: any = null;
+  let issue: LichessEvalIssue | null = null;
   let status: LichessEvalStatus = Object.freeze({ activity: 'idle', pending: 0, issue: null });
 
   function publish() {
@@ -89,7 +94,7 @@ export function createLichessEval({
     publish();
   }
 
-  function finishRequest(nextIssue: any = null) {
+  function finishRequest(nextIssue: LichessEvalIssue | null = null) {
     pending = Math.max(0, pending - 1);
     issue = nextIssue;
     publish();
@@ -112,8 +117,10 @@ export function createLichessEval({
     try {
       await repository.merge(key, fields);
       return null;
-    } catch (error) {
-      return issueFor(typedError('storage', 'Could not persist Lichess cloud evaluation', error), key);
+    } catch {
+      return evalIssue('storage', key, {
+        message: 'Could not persist Lichess cloud evaluation',
+      });
     }
   }
 
@@ -164,7 +171,10 @@ export function createLichessEval({
         }
         const fallback = cachedValue ? 'cached' : null;
         if (cachedValue) admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
-        finishRequest(issueFor(error, key, fallback));
+        finishRequest(evalIssue(fallback ? 'refresh-failed' : 'network', key, {
+          fallback,
+          message: errorMessage(error),
+        }));
         return cachedValue;
       }
 
@@ -176,27 +186,38 @@ export function createLichessEval({
         return null;
       }
       if (!response.ok) {
-        const error = httpError(response.status, `Lichess cloud eval returned ${response.status}`);
         const fallback = cachedValue ? 'cached' : null;
         if (cachedValue) admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
-        finishRequest(issueFor(error, key, fallback));
+        finishRequest(evalIssue(
+          fallback ? 'refresh-failed' : response.status === 429 ? 'rate-limited' : 'service',
+          key,
+          {
+            status: response.status,
+            fallback,
+            message: `Lichess cloud eval returned ${response.status}`,
+          },
+        ));
         return cachedValue;
       }
 
       let value;
       try {
         value = await response.json();
-      } catch (error) {
-        const invalid = typedError('invalid-data', 'Lichess cloud eval response could not be parsed', error);
+      } catch {
         if (cachedValue) admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
-        finishRequest(issueFor(invalid, key, cachedValue ? 'cached' : null));
+        finishRequest(evalIssue('invalid-data', key, {
+          fallback: cachedValue ? 'cached' : null,
+          message: 'Lichess cloud eval response could not be parsed',
+        }));
         return cachedValue;
       }
 
       if (!validPayload(value)) {
-        const error = typedError('invalid-data', 'Lichess cloud eval returned invalid data');
         if (cachedValue) admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
-        finishRequest(issueFor(error, key, cachedValue ? 'cached' : null));
+        finishRequest(evalIssue('invalid-data', key, {
+          fallback: cachedValue ? 'cached' : null,
+          message: 'Lichess cloud eval returned invalid data',
+        }));
         return cachedValue;
       }
 
@@ -207,11 +228,10 @@ export function createLichessEval({
         } else {
           admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
         }
-        const error = typedError(
-          'insufficient-data',
-          `Lichess cloud eval depth ${value.depth} is below ${LICHESS_EVAL_MIN_DEPTH}`,
-        );
-        finishRequest(issueFor(error, key, cachedValue ? 'cached' : null));
+        finishRequest(evalIssue('insufficient-data', key, {
+          fallback: cachedValue ? 'cached' : null,
+          message: `Lichess cloud eval depth ${value.depth} is below ${LICHESS_EVAL_MIN_DEPTH}`,
+        }));
         return cachedValue;
       }
 

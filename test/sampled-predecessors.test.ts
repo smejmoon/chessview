@@ -24,8 +24,8 @@ test('sampled games nominate the observed move immediately before the exact Nodu
   const target = positionAfter(['e4', 'c5', 'Nf3']);
   let request = null;
   const nominations = await discoverSampledPredecessors(target, ['abcdefgh', 'ijklmnop'], {
-    request: async (input, init) => {
-      request = { input, init };
+    request: async (input, init, work) => {
+      request = { input, init, work };
       return {
         ok: true,
         status: 200,

@@ -9,6 +9,8 @@ import {
 } from './graph.ts';
 import { debugLog } from './debug.ts';
 import { lichessSession } from './lichess-session.ts';
+import { isObsoleteWork } from './obsolete-work.ts';
+import { sourceUnavailable } from './source-unavailable.ts';
 import { positionRepository } from './position-repository.ts';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
@@ -147,12 +149,13 @@ export function createExplorerProvider({
     return repository.currentFacet(canonicalPosition(key), 'explorer')?.value ?? null;
   }
 
-  function ensure(
+  async function ensure(
     key: string,
     { signal, urgency = 'foreground' }: WorkDemand = {},
   ): Promise<ParsedExplorerReading> {
     const canonical = canonicalPosition(key);
-    return repository.observe(canonical, 'explorer', {
+    try {
+      return await repository.observe(canonical, 'explorer', {
       decode: cachedExplorerReading,
       profile: REQUEST_PROFILE,
       refreshAfterMs: EXPLORER_TTL_MS,
@@ -204,7 +207,11 @@ export function createExplorerProvider({
           games: totalGames(result.value),
         });
       },
-    }, { signal, urgency });
+      }, { signal, urgency });
+    } catch (error: unknown) {
+      if (isObsoleteWork(error)) throw error;
+      throw sourceUnavailable('Lichess Explorer Reading unavailable', error);
+    }
   }
 
   return Object.freeze({ ensure, current, readCached, invalidate });

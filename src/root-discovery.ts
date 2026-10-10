@@ -1,9 +1,6 @@
 import { debugLog } from './debug.ts';
 import { loadExplorerReading } from './explorer.ts';
-import {
-  classifyExplorerRefinementFailure,
-  type ExplorerRefinementFailureClassifier,
-} from './explorer-refinement.ts';
+import { isSourceUnavailable } from './source-unavailable.ts';
 import {
   refineExplorerReading,
   type ExplorerRefinementRunOutcome,
@@ -32,7 +29,6 @@ type RootDiscoveryDependencies = Readonly<{
   loadExplorer?: LoadExplorer;
   discoverPredecessors?: DiscoverPredecessors;
   refineExplorer?: RefineExplorer;
-  classifyExplorerFailure?: ExplorerRefinementFailureClassifier;
   log?: Log;
 }>;
 
@@ -43,7 +39,6 @@ export async function discoverRootPredecessors(
     loadExplorer = loadExplorerReading,
     discoverPredecessors = discoverSampledPredecessors,
     refineExplorer = refineExplorerReading,
-    classifyExplorerFailure = classifyExplorerRefinementFailure,
     log = debugLog,
   }: RootDiscoveryDependencies = {},
 ): Promise<ExplorerRefinementRunOutcome> {
@@ -51,8 +46,7 @@ export async function discoverRootPredecessors(
   try {
     reading = await loadExplorer(center, work);
   } catch (error: unknown) {
-    const outcome = classifyExplorerFailure(error);
-    if (outcome) return outcome;
+    if (isSourceUnavailable(error)) return Object.freeze({ refinement: 'unavailable' as const });
     throw error;
   }
 
@@ -60,7 +54,13 @@ export async function discoverRootPredecessors(
   if (!ids.length) return Object.freeze({ refinement: 'satisfied' as const });
 
   log('Root discovery replaying sampled games', { center, games: ids.length });
-  const nominations = await discoverPredecessors(center, ids, work);
+  let nominations: readonly PredecessorNomination[];
+  try {
+    nominations = await discoverPredecessors(center, ids, work);
+  } catch (error: unknown) {
+    if (isSourceUnavailable(error)) return Object.freeze({ refinement: 'unavailable' as const });
+    throw error;
+  }
   let unavailable = false;
   for (const nomination of nominations) {
     if (work.signal.aborted) return Object.freeze({ refinement: 'unavailable' as const });

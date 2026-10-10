@@ -9,11 +9,7 @@ import {
   loadExplorerReading,
   readCachedExplorerReading,
 } from './explorer.ts';
-import {
-  classifyExplorerRefinementFailure,
-  type ExplorerRefinementFailureClassifier,
-  type ExplorerRefinementOutcome,
-} from './explorer-refinement.ts';
+import { isSourceUnavailable } from './source-unavailable.ts';
 import {
   canonicalPosition,
   moveGames,
@@ -43,7 +39,7 @@ export type ExplorerReading = Readonly<{
 export type ExplorerLoadOptions = WorkDemand;
 
 export type ExplorerRefinementRunOutcome =
-  | ExplorerRefinementOutcome
+  | Readonly<{ refinement: 'unavailable' }>
   | Readonly<{ refinement: 'satisfied' }>;
 
 type ResolvedMove = Readonly<{
@@ -78,7 +74,6 @@ export type KnowledgeAcquisitionOptions = Readonly<{
   loadExplorer?: LoadExplorer;
   currentExplorer?: CurrentExplorer;
   readCachedExplorer?: ReadCachedExplorer;
-  classifyExplorerFailure?: ExplorerRefinementFailureClassifier;
   graph?: Pick<PositionGraph, 'outgoing' | 'ensureEdge'>;
   repository?: KnowledgeRepository;
   warmTimeoutMs?: number;
@@ -121,7 +116,6 @@ export function createKnowledgeAcquisition({
   loadExplorer = loadExplorerReading as LoadExplorer,
   currentExplorer = currentExplorerReading as CurrentExplorer,
   readCachedExplorer = readCachedExplorerReading as ReadCachedExplorer,
-  classifyExplorerFailure = classifyExplorerRefinementFailure,
   graph = positionGraph,
   repository = positionRepository,
   warmTimeoutMs = SUPPLEMENTARY_EXPLORER_WARM_TIMEOUT_MS,
@@ -239,8 +233,7 @@ export function createKnowledgeAcquisition({
     try {
       explorer = await loadExplorer(canonical, options);
     } catch (error: unknown) {
-      const outcome = classifyExplorerFailure(error);
-      if (outcome) return outcome;
+      if (isSourceUnavailable(error)) return Object.freeze({ refinement: 'unavailable' as const });
       throw error;
     }
     if (!explorer) return Object.freeze({ refinement: 'unavailable' as const });

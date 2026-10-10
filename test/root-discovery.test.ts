@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { obsoleteWork } from '../src/obsolete-work.ts';
+import { sourceUnavailable } from '../src/source-unavailable.ts';
 import { discoverRootPredecessors } from '../src/root-discovery.ts';
 
 function work() {
@@ -11,11 +12,11 @@ function work() {
   });
 }
 
-test('Root discovery classifies initial Explorer 429 as unavailable-for-this-run', async () => {
+test('Root discovery maps provider-classified Explorer unavailability to unavailable-for-this-run', async () => {
   let exported = false;
   const outcome = await discoverRootPredecessors('position', work(), {
     loadExplorer: async () => {
-      throw Object.assign(new Error('rate limited'), { status: 429 });
+      throw sourceUnavailable('Explorer unavailable', Object.assign(new Error('rate limited'), { status: 429 }));
     },
     discoverPredecessors: async () => {
       exported = true;
@@ -37,4 +38,24 @@ test('Root discovery preserves obsolete Explorer cancellation instead of reporti
     }),
     (error) => error === obsolete,
   );
+});
+
+
+test('Root discovery maps sampled-game source unavailability to unavailable-for-this-run', async () => {
+  const reading = {
+    white: 1,
+    draws: 0,
+    black: 0,
+    moves: [],
+    topGames: [{ id: 'abcdefgh' }],
+  };
+  const outcome = await discoverRootPredecessors('position', work(), {
+    loadExplorer: async () => reading,
+    discoverPredecessors: async () => {
+      throw sourceUnavailable('sample export unavailable', Object.assign(new Error('rate limited'), { status: 429 }));
+    },
+    log: () => {},
+  });
+
+  assert.deepEqual(outcome, { refinement: 'unavailable' });
 });

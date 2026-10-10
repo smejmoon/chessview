@@ -2,6 +2,8 @@ import type { WorkDemand } from './work-demand.ts';
 import { Chess } from 'chess.js';
 import { canonicalPosition, START_FEN } from './graph.ts';
 import { lichessSession } from './lichess-session.ts';
+import { isObsoleteWork } from './obsolete-work.ts';
+import { sourceUnavailable } from './source-unavailable.ts';
 
 const EXPORT_ENDPOINT = 'https://lichess.org/api/games/export/_ids';
 const GAME_ID = /^[A-Za-z0-9]{8}$/;
@@ -101,18 +103,27 @@ export async function discoverSampledPredecessors(
   url.searchParams.set('evals', 'false');
   url.searchParams.set('opening', 'false');
 
-  const response = await request(url.toString(), {
-    method: 'POST',
-    headers: {
-      Accept: 'application/x-ndjson',
-      'Content-Type': 'text/plain',
-    },
-    body: ids.join(','),
-  }, { signal, urgency });
-  if (!response.ok) throw Object.assign(new Error(`Lichess game export returned ${response.status}`), { status: response.status });
+  let body: string;
+  try {
+    const response = await request(url.toString(), {
+      method: 'POST',
+      headers: {
+        Accept: 'application/x-ndjson',
+        'Content-Type': 'text/plain',
+      },
+      body: ids.join(','),
+    }, { signal, urgency });
+    if (!response.ok) {
+      throw Object.assign(new Error(`Lichess game export returned ${response.status}`), { status: response.status });
+    }
+    body = await response.text();
+  } catch (error: unknown) {
+    if (isObsoleteWork(error)) throw error;
+    throw sourceUnavailable('Lichess sampled-game export unavailable', error);
+  }
 
   const nominations = new Map<string, PredecessorNomination>();
-  for (const line of (await response.text()).split(/\r?\n/)) {
+  for (const line of body.split(/\r?\n/)) {
     if (!line.trim()) continue;
     let game: GameExport;
     try { game = JSON.parse(line) as GameExport; } catch { continue; }

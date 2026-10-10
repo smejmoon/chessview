@@ -30,7 +30,7 @@ The gateway exposes `request(input, requestInit, work)`: `requestInit` is ordina
 
 ## Cooldown and source availability
 
-The gateway owns the shared 429 cooldown clock, keeps subsequent requests waiting for at least one minute, and does not publish that timestamp to source clients. Explorer treats HTTP 429 as unavailable for the current refinement attempt after retained-source fallback. No automatic same-run retry gate or extra scheduler is needed; a later refresh or visit can request that still-unknown Reading again. The current accepted Constellation remains usable.
+The gateway owns the shared 429 cooldown clock and keeps subsequent requests waiting for at least one minute. It does not decide what that transport outcome means to domain callers. Lichess-backed clients apply their own fallback/recovery policy and translate exhausted acquisition into source-level semantics before higher coordination sees it. Explorer and sampled-game Root discovery may therefore surface semantic source unavailability, while Masters, cloud evaluation, and authorization retain their own client-specific outcomes. Higher refinement code never inspects HTTP 429 or cooldown state.
 
 ## Transport response contract
 

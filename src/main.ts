@@ -13,11 +13,7 @@ import { debugLog } from './debug.ts';
 import { lichessSession } from './lichess-session.ts';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
-import { loadExplorerReading } from './explorer.ts';
-import {
-  discoverSampledPredecessors,
-  sampleGameIds,
-} from './sampled-predecessors.ts';
+import { discoverRootPredecessors } from './root-discovery.ts';
 import { createLens } from './lens.ts';
 import { loadMasters } from './masters.ts';
 import { materializeMove } from './move-materialization.ts';
@@ -75,24 +71,6 @@ function constraintsFor(mode: 'roots' | 'lines') {
   const constraints = lens.constraints(mode);
   constraintsByMode.set(mode, constraints);
   return constraints;
-}
-
-async function discoverRootPredecessors(center, { signal, urgency }): Promise<RefinementOutcome> {
-  const reading = await loadExplorerReading(center, { signal, urgency });
-  const ids = sampleGameIds(reading);
-  if (!ids.length) return Object.freeze({ refinement: 'satisfied' as const });
-
-  debugLog('Root discovery replaying sampled games', { center, games: ids.length });
-  const nominations = await discoverSampledPredecessors(center, ids, { signal, urgency });
-  let unavailable = false;
-  for (const nomination of nominations) {
-    if (signal.aborted) return Object.freeze({ refinement: 'unavailable' as const });
-    const outcome = await refineExplorerReading(nomination.source, { signal, urgency });
-    if (outcome.refinement === 'unavailable') unavailable = true;
-  }
-  return unavailable
-    ? Object.freeze({ refinement: 'unavailable' as const })
-    : Object.freeze({ refinement: 'satisfied' as const });
 }
 
 function tasksForCurrentView({ center, mode, structure }): readonly RefinementTask[] {

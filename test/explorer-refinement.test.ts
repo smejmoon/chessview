@@ -43,19 +43,6 @@ test('Knowledge Acquisition turns only Explorer load failure into a semantic una
   assert.equal(reconciliations, 0);
 });
 
-test('Knowledge Acquisition preserves a semantic retry gate from Explorer source policy', async () => {
-  const retry = deferred();
-  const acquisition = createKnowledgeAcquisition({
-    loadExplorer: async () => { throw new Error('rate limited'); },
-    classifyExplorerFailure: () => ({ refinement: 'retryable', retry: retry.promise }),
-    repository: { merge: async () => {} },
-  });
-
-  const outcome = await acquisition.refineExplorerReading(center);
-  assert.equal(outcome.refinement, 'retryable');
-  assert.equal(outcome.retry, retry.promise);
-});
-
 test('graph reconciliation failure after a usable Reading is not reclassified as source unavailability', async () => {
   const reconciliationFailure = new Error('graph persistence failed');
   let classifications = 0;

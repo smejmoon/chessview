@@ -10,6 +10,7 @@ import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { CurrentViewController } from './current-view-controller.ts';
 import type { RefinementOutcome, RefinementTask } from './current-view-controller.ts';
 import { debugLog } from './debug.ts';
+import { lichessSession } from './lichess-session.ts';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
 import { loadExplorerReading } from './explorer.ts';
@@ -36,6 +37,7 @@ const RESIZE_UPDATE_DEBOUNCE_MS = 120;
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
 const initialRoute = routeLedger.read();
 const app = document.querySelector('#app');
+if (!app) throw new Error('Chessview requires an app element');
 const lens = createLens({ app, preferences: preferenceStore });
 let controller: CurrentViewController;
 
@@ -199,10 +201,77 @@ window.addEventListener('resize', () => {
     void controller.recompose();
   }, RESIZE_UPDATE_DEBOUNCE_MS);
 });
+// This notice sits outside #app, so rerenders cannot erase it or the accepted view.
+let reconnectNotice: HTMLElement | null = null;
+function showReconnectLichess(): void {
+  if (reconnectNotice) return;
+  const notice = document.createElement('aside');
+  notice.className = 'lichess-reconnect';
+  notice.setAttribute('role', 'status');
+  notice.setAttribute('aria-live', 'polite');
+  const title = document.createElement('strong');
+  title.textContent = 'Lichess authorization needs attention';
+  const message = document.createElement('p');
+  message.textContent = 'Fresh Lichess data is unavailable. Your current view remains usable.';
+  const reconnect = document.createElement('button');
+  reconnect.type = 'button';
+  reconnect.textContent = 'Reconnect Lichess';
+  reconnect.addEventListener('click', async () => {
+    reconnect.disabled = true;
+    message.textContent = 'Opening Lichess authorization…';
+    try {
+      await lichessSession.signIn();
+    } catch (error) {
+      reconnect.disabled = false;
+      message.textContent = error instanceof Error ? error.message : 'Could not begin Lichess sign-in.';
+    }
+  });
+  notice.append(title, message, reconnect);
+  document.body.append(notice);
+  reconnectNotice = notice;
+}
+const stopAuthorizationLost = lichessSession.onAuthorizationLost(showReconnectLichess);
+
+function showStartupAuthorizationFailure(error: unknown): void {
+  const panel = document.createElement('section');
+  panel.className = 'lichess-auth-gate';
+  const title = document.createElement('h1');
+  title.textContent = 'Lichess sign-in required';
+  const message = document.createElement('p');
+  message.textContent = error instanceof Error ? error.message : 'Could not authorize with Lichess.';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.textContent = 'Try again';
+  retry.addEventListener('click', () => {
+    retry.disabled = true;
+    void authorizeAndStart();
+  });
+  panel.append(title, message, retry);
+  app.replaceChildren(panel);
+}
+
+// Only application startup initiates the first sign-in; sources never navigate.
+async function authorizeAndStart(): Promise<void> {
+  let token: string | null;
+  try {
+    token = await lichessSession.establishAuthorization();
+  } catch (error) {
+    showStartupAuthorizationFailure(error);
+    return;
+  }
+  if (!token) {
+    app.textContent = 'Redirecting to Lichess…';
+    return;
+  }
+  await controller.start();
+}
+
 window.addEventListener('beforeunload', () => {
+  stopAuthorizationLost();
+  reconnectNotice?.remove();
   stopLichessEvalStatus();
   controller.dispose();
   presenter.dispose();
 }, { once: true });
 
-await controller.start();
+await authorizeAndStart();

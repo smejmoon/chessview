@@ -30,13 +30,13 @@ Chessview currently uses these Lichess endpoints:
 ## Authentication
 
 - Live rated Explorer and Masters access use the visitor's Lichess authorization through browser OAuth2 Authorization Code + PKCE.
-- Authenticated application requests use one `LichessSession.authorizedRequest(...)` path. Source clients do not acquire tokens or construct Bearer headers independently.
-- That session path completes or begins authorization as needed, attaches the current visitor Bearer token, delegates the HTTP request to `LichessGateway`, and clears the same stored token when Lichess rejects it with HTTP 401.
-- Concurrent clients share one pending authorization attempt, so rated Explorer and Masters cannot independently start competing OAuth redirects for the same page session.
+- Application startup owns initial authorization: it consumes an OAuth callback, reuses a stored access token, or begins PKCE navigation before starting Current View source work. Terminal startup failures offer an explicit retry.
+- Authenticated application requests use one `LichessSession.authorizedRequest(...)` path. It attaches an already-established Bearer token and delegates to `LichessGateway`; it rejects missing authorization rather than initiating OAuth navigation. Source providers never acquire tokens or redirect the browser.
+- When Lichess returns HTTP 401 for the token actually still stored, `LichessSession` invalidates that token and notifies the application once. A later 401 for an already-replaced token must not invalidate newer credentials.
+- The running application offers **Reconnect Lichess** through a user-initiated action, without replacing the accepted Constellation, Rail, or cached knowledge. Full-page OAuth navigation subsequently restores the route through the position URL.
 - No client secret or personal token is shipped in the static bundle.
-- OAuth callback parameters and PKCE transaction state are consumed on both successful completion and terminal callback failure so reload can begin a clean sign-in.
-- Browser navigation to Lichess's OAuth authorization endpoint is the user-agent authorization handoff and is outside the gateway-managed application transport boundary.
-- The OAuth token exchange is an application-issued Lichess API request and therefore goes through `LichessGateway`.
+- OAuth callback parameters and PKCE transaction state are consumed on successful completion and terminal failure, including malformed successful JSON or token persistence failure. A failed persistence operation must not be reported as established authorization; retry starts a new OAuth exchange rather than replaying the old code.
+- Browser navigation to Lichess's OAuth authorization endpoint is a user-agent handoff outside the gateway; OAuth token exchange stays inside `LichessGateway`.
 
 ## Network boundary
 
@@ -89,8 +89,9 @@ The request policy is intended to satisfy [Lichess's published API guidance](htt
 
 Deterministic tests should cover:
 
-- OAuth callback success and terminal-failure cleanup;
-- expired-token / HTTP 401 handling;
+- OAuth callback success, denial, malformed response, network and persistence failures clearing callback and PKCE state before explicit retry;
+- startup-owned authorization and user-initiated retries without redirects from incidental source requests;
+- rejected-token / HTTP 401 invalidation notifying the application once, retaining an already accepted view and cached navigation, and not invalidating a newer token after a stale 401;
 - malformed rated Explorer payloads not being cached or exposed as usable Explorer Readings;
 - malformed cached Explorer values being treated as unusable rather than fresh source data;
 - rated Explorer requests retaining the enlarged representative-game request needed by bounded Root-source discovery (`topGames=4`, `recentGames=8`);

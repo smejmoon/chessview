@@ -29,7 +29,7 @@ export function createLichessSession({
   redirect = (url: string) => globalThis.window?.location?.assign(url),
   log = debugLog,
 } = {}) {
-  let pendingAuthorization: Promise<string> | null = null;
+  const authorizationLostListeners = new Set<() => void>();
 
   function currentLocation() {
     const value = resolve(location);
@@ -149,60 +149,75 @@ export function createLichessSession({
     });
 
     log('lichess token exchange', { redirectUri, clientId: CLIENT_ID });
-    let response;
     try {
-      response = await gateway.request(`${LICHESS_HOST}/api/token`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body,
-      });
-    } catch (error) {
-      clearTransaction({ cleanUrl: true });
-      log('lichess token exchange network failure', error, 'error');
-      throw new Error('Lichess sign-in token exchange failed. Reload to sign in again.');
-    }
+      let response;
+      try {
+        response = await gateway.request(`${LICHESS_HOST}/api/token`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body,
+        });
+      } catch (error) {
+        log('lichess token exchange network failure', error, 'error');
+        throw new Error('Lichess sign-in token exchange failed. Try again.');
+      }
 
-    if (!response.ok) {
-      let detail = '';
-      try { detail = (await response.text()).slice(0, 300); } catch {}
-      clearTransaction({ cleanUrl: true });
-      log('lichess token exchange failed', { status: response.status, detail }, 'error');
-      throw new Error(`Lichess sign-in token exchange returned ${response.status}. Reload to sign in again.`);
-    }
+      if (!response.ok) {
+        let detail = '';
+        try { detail = (await response.text()).slice(0, 300); } catch {}
+        log('lichess token exchange failed', { status: response.status, detail }, 'error');
+        throw new Error(`Lichess sign-in token exchange returned ${response.status}. Try again.`);
+      }
 
-    const token = await response.json();
-    if (!token?.access_token) {
-      clearTransaction({ cleanUrl: true });
-      throw new Error('Lichess sign-in did not return an access token. Reload to sign in again.');
-    }
+      let token;
+      try {
+        token = await response.json();
+      } catch (error) {
+        log('lichess token response malformed', error, 'error');
+        throw new Error('Lichess sign-in token response was invalid. Try again.');
+      }
+      if (typeof token?.access_token !== 'string' || !token.access_token) {
+        throw new Error('Lichess sign-in did not return an access token. Try again.');
+      }
 
-    persistentStorage()?.setItem(TOKEN_KEY, token.access_token);
-    clearTransaction({ cleanUrl: true });
-    log('lichess auth complete', { tokenType: token.token_type ?? 'Bearer', scope: token.scope ?? '' });
-    return token.access_token;
+      try {
+        const storage = persistentStorage();
+        if (!storage) throw new Error('Token storage is unavailable');
+        storage.setItem(TOKEN_KEY, token.access_token);
+        if (storage.getItem(TOKEN_KEY) !== token.access_token) throw new Error('Token was not retained');
+      } catch (error) {
+        log('lichess token persistence failed', error, 'error');
+        throw new Error('Lichess sign-in could not be saved. Try again.');
+      }
+
+      log('lichess auth complete', { tokenType: token.token_type ?? 'Bearer', scope: token.scope ?? '' });
+      return token.access_token;
+    } finally {
+      // Authorization codes are one-use; even unsuccessful completion must not replay one.
+      clearTransaction({ cleanUrl: true });
+    }
+  }
+
+  // Startup and explicit user actions own browser navigation; source requests never redirect.
+  async function establishAuthorization() {
+    const token = await completeCallback();
+    if (token) return token;
+    await signIn();
+    return null; // The browser is navigating to Lichess.
   }
 
   async function requireAccessToken() {
-    const current = accessToken();
-    if (current) return current;
+    const token = accessToken();
+    if (!token) throw new Error('Lichess authorization required. Reconnect Lichess to load fresh data.');
+    return token;
+  }
 
-    if (!pendingAuthorization) {
-      pendingAuthorization = (async () => {
-        const token = await completeCallback();
-        if (token) return token;
-        await signIn();
-        throw new Error('Redirecting to Lichess sign-in…');
-      })();
-    }
-
-    try {
-      return await pendingAuthorization;
-    } finally {
-      if (accessToken()) pendingAuthorization = null;
-    }
+  function onAuthorizationLost(listener: () => void) {
+    authorizationLostListeners.add(listener);
+    return () => authorizationLostListeners.delete(listener);
   }
 
   async function authorizedRequest(input: RequestInfo | URL, init: LichessRequestInit = {}): Promise<Response> {
@@ -210,7 +225,12 @@ export function createLichessSession({
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${token}`);
     const response = await gateway.request(input, { ...init, headers });
-    if (response?.status === 401 && accessToken() === token) clearAccessToken();
+    if (response?.status === 401 && accessToken() === token) {
+      clearAccessToken();
+      for (const listener of authorizationLostListeners) {
+        try { listener(); } catch (error) { log('lichess authorization listener failed', error, 'error'); }
+      }
+    }
     return response;
   }
 
@@ -221,6 +241,8 @@ export function createLichessSession({
     signIn,
     completeCallback,
     requireAccessToken,
+    establishAuthorization,
+    onAuthorizationLost,
     authorizedRequest,
   });
 }

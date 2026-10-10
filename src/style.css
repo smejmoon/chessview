@@ -146,3 +146,21 @@ cg-board piece { will-change: transform; }
   .explorer-row { min-height: 34px; grid-template-columns: 46px minmax(54px, 1fr) 36px 42px; gap: 5px; padding: 0 6px; }
   .rail-debug { display: none; }
 }
+
+/* Lichess authorization recovery belongs to the application shell, not the map. */
+.lichess-reconnect {
+  position: fixed; z-index: 100; top: 64px; right: 16px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 16px; border: 1px solid var(--line-strong);
+  border-radius: 10px; background: var(--bg-deep);
+  box-shadow: 0 14px 36px rgba(0,0,0,.45);
+}
+.lichess-reconnect strong { display: block; font-size: 13px; }
+.lichess-reconnect p { margin: 8px 0 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.lichess-reconnect button, .lichess-auth-gate button {
+  padding: 9px 12px; background: var(--accent); color: #1b1a18;
+  border: 0; border-radius: 7px; font-weight: 650; cursor: pointer;
+}
+.lichess-reconnect button:disabled, .lichess-auth-gate button:disabled { opacity: .6; cursor: default; }
+.lichess-auth-gate { max-width: 440px; margin: 15vh auto; padding: 24px; }
+.lichess-auth-gate p { color: var(--muted); }

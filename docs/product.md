@@ -17,6 +17,12 @@ A user should be able to:
 
 The visible Constellation adapts to the available presentation space and the shape of the position. Broad positions may spend space on breadth; forcing Lines may spend it on useful depth. A fixed surrounding-board count or fixed opening depth is not a product rule.
 
+## Authorization
+
+Chessview establishes Lichess authorization at application startup before starting Current View acquisition. Incidental Explorer, Masters, and Root work cannot initiate OAuth navigation. If initial authorization is denied or fails, the user gets an explicit sign-in retry.
+
+If Lichess rejects a stored access token with HTTP 401 during an active session, the application offers **Reconnect Lichess** without replacing the accepted Constellation or Rail. Fresh authenticated acquisition may fail until the user deliberately reconnects; cached knowledge and position-based navigation remain usable. Reauthorization navigates through Lichess and returns to the current position URL, allowing Chessview to rebuild from persisted knowledge.
+
 ## Progressive truth
 
 Chessview shows the best trustworthy current view it can establish instead of waiting for every useful refinement to finish.

@@ -31,7 +31,7 @@ A spatial Constellation is accepted for a specific **Nodus plus Root/Line mode**
 
 Rail is Nodus-scoped rather than spatial-projection-scoped. It may remain useful across a Root/Line mode change for the same Nodus while the new Constellation is established. Presentation Evidence may update independently as richer values arrive, but it must not decorate a different spatial projection as though it belonged to the current one.
 
-While a Constellation-admitted structural obligation still has live work, is waiting for its legitimate retry gate, or has completed successfully but still has a settlement recomposition to perform, the trustworthy accepted projection remains visible and navigable while Weather shows `Updating…`.
+While a Constellation-admitted structural obligation still has live work, has completed successfully but still has a settlement recomposition to perform, the trustworthy accepted projection remains visible and navigable while Weather shows `Updating…`.
 
 Successful execution and pending incorporation are different facts. A successful structural participant may remain recorded as satisfied for the refinement run after its settlement recomposition has been attempted. If the same Reading still belongs to the Constellation frontier after that drain, the old success by itself is no longer evidence that automatic progress remains.
 
@@ -53,8 +53,8 @@ Evidence should make the map easier to understand without overstating what Chess
 
 Weather presents structural readiness of the accepted current projection; it does not define chess knowledge or source failure policy.
 
-- `Updating…` means a Constellation-admitted structural obligation still blocks the current refinement run because it has live work, is waiting for its lower-owned retry gate, or has a successful result whose settlement recomposition is still pending. The trustworthy accepted projection may remain visible and interactive.
-- Normal `Ready` / subtle check means no admitted structural obligation still blocks this accepted projection in the active refinement run. Unknown source facts may remain unknown, a satisfied participant may remain as run history after its incorporation attempt, and a replacement refinement run may try unknown knowledge again.
+- `Updating…` means a Constellation-admitted structural obligation still blocks the current refinement run because it has live work, has a successful result whose settlement recomposition is still pending. The trustworthy accepted projection may remain visible and interactive.
+- Normal `Ready` / subtle check means no admitted structural obligation still blocks this accepted projection in the active refinement run. When relevant Explorer Readings remain unknown because their acquisition was unavailable for this run, Weather additionally says `Limited data` while the map remains usable. Unknown source facts may remain unknown, a satisfied participant may remain as run history after its incorporation attempt, and a replacement refinement run may try unknown knowledge again.
 - A degraded or unavailable state means Chessview could not establish trustworthy current structure. Failure of supplementary work or failure to improve an already trustworthy accepted projection does not replace that projection with a global failure state.
 
 ## Product-wide invariants

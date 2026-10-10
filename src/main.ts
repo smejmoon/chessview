@@ -45,170 +45,209 @@ function showAuthorizationFailure(error: unknown): void {
   retry.textContent = 'Try again';
   retry.addEventListener('click', () => {
     app.textContent = 'Redirecting to Lichess…';
-    void lichessSession.establishAuthorization()
-      .then((token) => { if (token) window.location.reload(); })
-      .catch(showAuthorizationFailure);
+    void authorizeAndStart();
   });
   panel.append(heading, message, retry);
   app.replaceChildren(panel);
 }
 
-let authorized = false;
-try {
-  authorized = Boolean(await lichessSession.establishAuthorization());
-  if (!authorized) app.textContent = 'Redirecting to Lichess…';
-} catch (error) {
-  showAuthorizationFailure(error);
-}
-
 // No view or source work is started until authentication is established.
-if (authorized) {
-const routeLedger = createRouteLedger({ preferences: preferenceStore });
-const initialRoute = routeLedger.read();
-const lens = createLens({ app, preferences: preferenceStore });
-let controller: CurrentViewController;
-
-async function clearExplorerAndReload(positions?: readonly string[]): Promise<void> {
-  debugLog(positions ? 'Refetching current view' : 'Clearing Explorer cache', {
-    positions: positions?.length ?? 'all',
-  });
-  controller.dispose();
-  await clearExplorerCache(positions);
-  window.location.reload();
-}
-
-const renderer = createNodusRenderer({
-  app,
-  lens,
-  maintenance: {
-    refetchView: (positions) => clearExplorerAndReload(positions),
-    clearExplorerCache: () => clearExplorerAndReload(),
-  },
-});
-const lichessEvalStatusPresenter = createLichessEvalStatusPresenter({
-  render: (status) => renderer.renderLichessEvalStatus(status),
-  log: (message, detail) => { debugLog(message, detail, 'error'); },
-});
-const stopLichessEvalStatus = lichessEval.subscribe(lichessEvalStatusPresenter.update);
-const presenter = createNodusPresenter({
-  renderer,
-  decorateWeather: (view) => { decorateWeatherDiagnostics(app, view, { debug: lens.debugEnabled() }); },
-  log: (message, detail) => { debugLog(message, detail, 'error'); },
-});
-
-const constraintsByMode = new Map<string, Readonly<{ lineCapacity: number; rootCapacity: number }>>();
-
-function constraintsFor(mode: 'roots' | 'lines') {
-  const constraints = lens.constraints(mode);
-  constraintsByMode.set(mode, constraints);
-  return constraints;
-}
-
-function tasksForCurrentView({ center, mode, structure }): readonly RefinementTask[] {
-  const demand = deriveCurrentViewRefinementDemand({ center, mode, structure });
-  const tasks: RefinementTask[] = [];
-
-  const rootTransposition = demand.rootTransposition;
-  if (mode === 'roots') {
-    tasks.push({
-      key: `root-discovery:${center}`,
-      purpose: 'root-discovery',
-      modes: ['roots'],
-      run: ({ signal, priority }) => discoverRootPredecessors(center, { signal, priority }),
-    });
-  }
-  if (rootTransposition) {
-    tasks.push({
-      key: `root-transpositions:${rootTransposition}`,
-      nodusWide: true,
-      run: ({ signal }) => rootTranspositionEnricher.ensure(rootTransposition, { signal }),
-    });
-  }
-
-  for (const target of demand.explorer) {
-    tasks.push({
-      key: `explorer:${target.position}`,
-      modes: target.modes,
-      nodusWide: target.nodusWide,
-      structuralReading: target.structuralModes.includes(mode) ? target.position : null,
-      run: ({ signal, priority }) => refineExplorerReading(target.position, { signal, priority }),
-    });
-  }
-
-  for (const target of demand.cloudEval) {
-    tasks.push({
-      key: `cloud-eval:${target.position}`,
-      modes: target.modes,
-      nodusWide: target.nodusWide,
-      run: ({ signal, priority }) => lichessEval.get(target.position, { signal, priority }),
-    });
-  }
-
-  for (const target of demand.masters) {
-    tasks.push({
-      key: `masters:${target.position}`,
-      modes: target.modes,
-      nodusWide: target.nodusWide,
-      run: ({ signal, priority }) => loadMasters(target.position, { signal, priority }),
-    });
-  }
-
-  return tasks;
-}
-
-async function warmLookahead({ center, structure, signal }) {
-  const nominations = nominateConstellationLookahead({ center, structure });
-  await Promise.all(nominations.map((position) => warmExplorerReading(position, { signal })));
-}
-
-controller = new CurrentViewController({
-  initial: initialRoute,
-  canonicalize: canonicalPosition,
-  routeLedger,
-  preferences: {
-    setView: (view) => { preferenceStore.setView(view); },
-  },
-  lens,
-  structure: ({ center, mode, signal }) => {
-    const constraints = constraintsFor(mode);
-    return composeNodusStructure({
-      center,
-      mode,
-      lineMax: constraints.lineCapacity,
-      rootMax: constraints.rootCapacity,
-      signal,
-    });
-  },
-  rail: composeNodusRail,
-  refine: tasksForCurrentView,
-  lookahead: warmLookahead,
-  materializeMove,
-  presenter,
-  log: (message, detail) => { debugLog(message, detail); },
-});
-
-debugLog('app start', controller.snapshot);
-
-let resizeTimer;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    const mode = controller.snapshot.mode;
-    const previous = constraintsByMode.get(mode);
-    const next = lens.constraints(mode);
-    if (previous && previous.lineCapacity === next.lineCapacity && previous.rootCapacity === next.rootCapacity) {
-      void controller.redraw();
+async function authorizeAndStart(): Promise<void> {
+  try {
+    const token = await lichessSession.establishAuthorization();
+    if (!token) {
+      app.textContent = 'Redirecting to Lichess…';
       return;
     }
-    constraintsByMode.set(mode, next);
-    void controller.recompose();
-  }, RESIZE_UPDATE_DEBOUNCE_MS);
-});
-window.addEventListener('beforeunload', () => {
-  stopLichessEvalStatus();
-  controller.dispose();
-  presenter.dispose();
-}, { once: true });
+  } catch (error) {
+    showAuthorizationFailure(error);
+    return;
+  }
 
-await controller.start();
+  await startApplication();
 }
+
+async function startApplication(): Promise<void> {
+  const routeLedger = createRouteLedger({ preferences: preferenceStore });
+  const initialRoute = routeLedger.read();
+  const lens = createLens({ app, preferences: preferenceStore });
+  let controller: CurrentViewController;
+
+  async function clearExplorerAndReload(positions?: readonly string[]): Promise<void> {
+    debugLog(positions ? 'Refetching current view' : 'Clearing Explorer cache', {
+      positions: positions?.length ?? 'all',
+    });
+    await clearExplorerCache(positions);
+    disposeApplication();
+    window.location.reload();
+  }
+
+  const renderer = createNodusRenderer({
+    app,
+    lens,
+    maintenance: {
+      refetchView: (positions) => clearExplorerAndReload(positions),
+      clearExplorerCache: () => clearExplorerAndReload(),
+    },
+  });
+  const lichessEvalStatusPresenter = createLichessEvalStatusPresenter({
+    render: (status) => renderer.renderLichessEvalStatus(status),
+    log: (message, detail) => { debugLog(message, detail, 'error'); },
+  });
+  const stopLichessEvalStatus = lichessEval.subscribe(lichessEvalStatusPresenter.update);
+  const presenter = createNodusPresenter({
+    renderer,
+    decorateWeather: (view) => { decorateWeatherDiagnostics(app, view, { debug: lens.debugEnabled() }); },
+    log: (message, detail) => { debugLog(message, detail, 'error'); },
+  });
+
+  const constraintsByMode = new Map<string, Readonly<{ lineCapacity: number; rootCapacity: number }>>();
+
+  function constraintsFor(mode: 'roots' | 'lines') {
+    const constraints = lens.constraints(mode);
+    constraintsByMode.set(mode, constraints);
+    return constraints;
+  }
+
+  function tasksForCurrentView({ center, mode, structure }): readonly RefinementTask[] {
+    const demand = deriveCurrentViewRefinementDemand({ center, mode, structure });
+    const tasks: RefinementTask[] = [];
+
+    const rootTransposition = demand.rootTransposition;
+    if (mode === 'roots') {
+      tasks.push({
+        key: `root-discovery:${center}`,
+        purpose: 'root-discovery',
+        modes: ['roots'],
+        run: ({ signal, priority }) => discoverRootPredecessors(center, { signal, priority }),
+      });
+    }
+    if (rootTransposition) {
+      tasks.push({
+        key: `root-transpositions:${rootTransposition}`,
+        nodusWide: true,
+        run: ({ signal }) => rootTranspositionEnricher.ensure(rootTransposition, { signal }),
+      });
+    }
+
+    for (const target of demand.explorer) {
+      tasks.push({
+        key: `explorer:${target.position}`,
+        modes: target.modes,
+        nodusWide: target.nodusWide,
+        structuralReading: target.structuralModes.includes(mode) ? target.position : null,
+        run: ({ signal, priority }) => refineExplorerReading(target.position, { signal, priority }),
+      });
+    }
+
+    for (const target of demand.cloudEval) {
+      tasks.push({
+        key: `cloud-eval:${target.position}`,
+        modes: target.modes,
+        nodusWide: target.nodusWide,
+        run: ({ signal, priority }) => lichessEval.get(target.position, { signal, priority }),
+      });
+    }
+
+    for (const target of demand.masters) {
+      tasks.push({
+        key: `masters:${target.position}`,
+        modes: target.modes,
+        nodusWide: target.nodusWide,
+        run: ({ signal, priority }) => loadMasters(target.position, { signal, priority }),
+      });
+    }
+
+    return tasks;
+  }
+
+  async function warmLookahead({ center, structure, signal }) {
+    const nominations = nominateConstellationLookahead({ center, structure });
+    await Promise.all(nominations.map((position) => warmExplorerReading(position, { signal })));
+  }
+
+  controller = new CurrentViewController({
+    initial: initialRoute,
+    canonicalize: canonicalPosition,
+    routeLedger,
+    preferences: {
+      setView: (view) => { preferenceStore.setView(view); },
+    },
+    lens,
+    structure: ({ center, mode, signal }) => {
+      const constraints = constraintsFor(mode);
+      return composeNodusStructure({
+        center,
+        mode,
+        lineMax: constraints.lineCapacity,
+        rootMax: constraints.rootCapacity,
+        signal,
+      });
+    },
+    rail: composeNodusRail,
+    refine: tasksForCurrentView,
+    lookahead: warmLookahead,
+    materializeMove,
+    presenter,
+    log: (message, detail) => { debugLog(message, detail); },
+  });
+
+  debugLog('app start', controller.snapshot);
+
+  let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+  let disposed = false;
+
+  function onResize(): void {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      resizeTimer = undefined;
+      if (disposed) return;
+      const mode = controller.snapshot.mode;
+      const previous = constraintsByMode.get(mode);
+      const next = lens.constraints(mode);
+      if (previous && previous.lineCapacity === next.lineCapacity && previous.rootCapacity === next.rootCapacity) {
+        void controller.redraw().catch((error) => {
+          debugLog('resize redraw failed', error, 'error');
+        });
+        return;
+      }
+      constraintsByMode.set(mode, next);
+      void controller.recompose().catch((error) => {
+        debugLog('resize recomposition failed', error, 'error');
+      });
+    }, RESIZE_UPDATE_DEBOUNCE_MS);
+  }
+
+  function disposeApplication(): void {
+    if (disposed) return;
+    disposed = true;
+    clearTimeout(resizeTimer);
+    window.removeEventListener('resize', onResize);
+    window.removeEventListener('beforeunload', disposeApplication);
+    stopLichessEvalStatus();
+    controller.dispose();
+    presenter.dispose();
+  }
+
+  window.addEventListener('resize', onResize);
+  window.addEventListener('beforeunload', disposeApplication, { once: true });
+
+  try {
+    await controller.start();
+  } catch (error) {
+    debugLog('app startup failed', error, 'error');
+    disposeApplication();
+    const panel = document.createElement('section');
+    panel.className = 'auth-gate';
+    const heading = document.createElement('h1');
+    heading.textContent = 'Chessview could not start';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'Reload to try again';
+    retry.addEventListener('click', () => window.location.reload());
+    panel.append(heading, retry);
+    app.replaceChildren(panel);
+  }
+}
+
+await authorizeAndStart();

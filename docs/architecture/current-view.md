@@ -74,7 +74,7 @@ View is presently trying to improve about its accepted view.
 
 Run-local state includes cancellation/currentness, live refinement
 participation, structural provenance carried from Constellation admission,
-working/retry-waiting/satisfied/unavailable/failed execution phases, successful
+working/satisfied/unavailable/failed execution phases, successful
 structural work still awaiting a settlement recomposition, and recomposition
 scheduling. This state is coordination state, not Nodus identity and not durable
 chess knowledge.
@@ -135,8 +135,7 @@ whether the current attempt still has an automatic progress witness for the
 corresponding admitted obligation.
 
 A frontier obligation keeps the accepted projection structurally Settling while
-its current participation is actively working, waiting on a semantic retry gate,
-or has completed successfully and still has a settlement recomposition pending.
+its current participation is actively working or has completed successfully and still has a settlement recomposition pending.
 A nonzero Reading frontier alone is not a progress witness.
 
 Successful execution and pending incorporation are deliberately separate. A
@@ -155,16 +154,11 @@ Evidence, alter ChartedGraph, persist into PositionRepository, or become a durab
 source conclusion. A replacement refinement run begins without the old run's
 discharge and may try again under normal source policy.
 
-A retryable result is not terminal unavailability. It remains Settling while its
-lower-owned retry gate can wake another attempt. Current View must not infer
-retryability or terminality from HTTP status, UI strings, or raw transport
-errors; the lower boundary that owns fallback/recovery policy must keep retrying
-internally or expose a semantic outcome and wakeup/eligibility condition.
+A 429 from Explorer is terminal unavailability for the current refinement run after provider fallback. Current View does not infer the failure's meaning from HTTP status or initiate automatic same-run retries. A new run may try again through ordinary source acquisition.
 
 `failed` and `unplanned` are terminal coordination diagnostics for the current
 automatic settlement cycle, not source unavailability and not progress witnesses.
-A failed participant has no automatic retry path unless a lower-owned retry gate
-was supplied; an unplanned frontier Reading means the synchronous planning result
+A failed participant has no automatic retry path; an unplanned frontier Reading means the synchronous planning result
 did not attach current participation. Neither keeps primary Weather Updating by
 itself. A later refresh, replacement run, or genuinely changed plan may create a
 new progress path without reclassifying either condition as unavailable chess
@@ -239,7 +233,7 @@ contain values from several authorities, for example:
   frontier size, structural participation counts by phase, incorporation-pending
   count, detached structural participation, and supplementary active/total counts;
 - semantic current-view activity summaries when presentation needs to explain a
-  user-visible refinement, such as Root discovery being working, retry-waiting,
+  user-visible refinement, such as Root discovery being working,
   satisfied, unavailable, or failed, without exposing internal task keys;
 - orientation from Lens;
 - Back availability from RouteLedger.

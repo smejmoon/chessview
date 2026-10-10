@@ -1,6 +1,7 @@
 import { debugLog } from './debug.ts';
 import { lichessGateway } from './lichess-gateway.ts';
 import type { WorkDemand } from './work-demand.ts';
+import type { DebugLevel } from './debug.ts';
 
 const LICHESS_HOST = 'https://lichess.org';
 const CLIENT_ID = 'chessview.smejmoon.github.io';
@@ -22,13 +23,13 @@ function base64Url(bytes: Uint8Array) {
 type RequestGateway = Pick<typeof lichessGateway, 'request'>;
 type SessionOptions = Readonly<{
   gateway?: RequestGateway;
-  location?: () => any;
-  history?: () => any;
-  localStorage?: () => any;
-  sessionStorage?: () => any;
-  crypto?: () => any;
+  location?: any;
+  history?: any;
+  localStorage?: any;
+  sessionStorage?: any;
+  crypto?: any;
   redirect?: (url: string) => unknown;
-  log?: typeof debugLog;
+  log?: (event: string, detail?: unknown, level?: DebugLevel) => unknown;
 }>;
 
 export function createLichessSession({

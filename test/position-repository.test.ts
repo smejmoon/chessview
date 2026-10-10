@@ -216,6 +216,44 @@ test('shared load priority follows the highest live subscriber demand', async ()
   assert.equal(await backgroundResult, 'shared');
 });
 
+test('maintenance quiescence blocks new loads and writes until detached producers finish', async () => {
+  const repository = createPositionRepository({
+    read: async () => null,
+    write: async (value) => value,
+    version: () => 0,
+  });
+  const caller = new AbortController();
+  let producerSignal;
+  let finishProducer;
+  let markStarted;
+  const started = new Promise((resolve) => { markStarted = resolve; });
+  const result = repository.load(key, 'explorer', ({ signal }) => {
+    producerSignal = signal;
+    markStarted();
+    return new Promise((resolve) => { finishProducer = resolve; });
+  }, { signal: caller.signal });
+  await started;
+
+  const cancelled = assert.rejects(result, isObsoleteWork);
+  caller.abort();
+  await cancelled;
+  assert.equal(producerSignal.aborted, true);
+
+  const quiesced = repository.quiesceForMaintenance();
+  assert.strictEqual(repository.quiesceForMaintenance(), quiesced);
+  await assert.rejects(repository.load(key, 'masters', () => 'late'), isObsoleteWork);
+  await assert.rejects(repository.merge(key, { games: 9 }), isObsoleteWork);
+  await assert.rejects(repository.put({ key, fen: START_FEN }), isObsoleteWork);
+
+  let finished = false;
+  void quiesced.then(() => { finished = true; });
+  await Promise.resolve();
+  assert.equal(finished, false, 'quiescence must await the detached producer');
+  finishProducer('late completion');
+  await quiesced;
+  assert.equal(finished, true);
+});
+
 test('last obsolete caller aborts the producer and a replacement starts fresh work', async () => {
   const repository = createPositionRepository({ read: async () => null, write: async (value) => value, version: () => 0 });
   const first = new AbortController();

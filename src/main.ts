@@ -73,8 +73,23 @@ async function startApplication(): Promise<void> {
     debugLog(positions ? 'Refetching current view' : 'Clearing Explorer cache', {
       positions: positions?.length ?? 'all',
     });
-    await clearExplorerCache(positions);
     disposeApplication();
+    try {
+      await clearExplorerCache(positions);
+    } catch (error) {
+      debugLog('Explorer cache maintenance failed', error, 'error');
+      const panel = document.createElement('section');
+      panel.className = 'auth-gate';
+      const heading = document.createElement('h1');
+      heading.textContent = 'Could not clear Explorer cache';
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.textContent = 'Reload Chessview';
+      retry.addEventListener('click', () => window.location.reload());
+      panel.append(heading, retry);
+      app.replaceChildren(panel);
+      throw error;
+    }
     window.location.reload();
   }
 

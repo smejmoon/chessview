@@ -29,8 +29,12 @@ export function createPositionRepository({
   const reads = new Map<string, Promise<any>>();
   const mutations = new Map<string, Promise<any>>();
   const activeSourceChannelLoads = new Map<string, SharedSourceChannelLoad>();
+  // Includes detached producers until their completion (including persistence).
+  const unsettledSourceLoads = new Set<SharedSourceChannelLoad>();
   const sourceChannels = new Map<string, any>();
   let observedVersion = version();
+  let quiescing = false;
+  let quiescence: Promise<void> | null = null;
 
   function sourceChannelId(position: any, sourceChannel: SourceChannel) {
     return `${sourceChannel}\u0000${canonicalPosition(position)}`;
@@ -69,6 +73,7 @@ export function createPositionRepository({
   }
 
   function mutate(key: string, operation: () => any) {
+    if (quiescing) return Promise.reject(obsoleteWork('Position writes stopped for cache maintenance'));
     const previous = mutations.get(key) ?? Promise.resolve();
     const pending = previous
       .catch(() => undefined)
@@ -182,6 +187,7 @@ export function createPositionRepository({
   }
 
   function load(position: any, sourceChannel: SourceChannel, producer: (context: any) => any, { signal, priority = 'foreground' }: { signal?: AbortSignal; priority?: LoadPriority } = {}) {
+    if (quiescing) return Promise.reject(obsoleteWork('Position loads stopped for cache maintenance'));
     if (signal?.aborted) {
       return Promise.reject(obsoleteWork('Position load participation became obsolete', signal.reason));
     }
@@ -207,8 +213,10 @@ export function createPositionRepository({
           priority: () => effectivePriority(created),
         }));
       });
+      unsettledSourceLoads.add(created);
       created.promise = work.finally(() => {
         created.settled = true;
+        unsettledSourceLoads.delete(created);
         if (activeSourceChannelLoads.get(id) === created) activeSourceChannelLoads.delete(id);
       });
       created.promise.catch(() => {});
@@ -222,11 +230,26 @@ export function createPositionRepository({
     }, priority);
   }
 
+  // One-way shutdown for rare cache maintenance followed by a page reload.
+  // Cancellation alone is insufficient: a detached producer may still be
+  // finishing a response or persisting a value.
+  function quiesceForMaintenance(): Promise<void> {
+    if (quiescence) return quiescence;
+    quiescing = true;
+    for (const load of unsettledSourceLoads) load.controller.abort();
+    quiescence = (async () => {
+      await Promise.allSettled([...unsettledSourceLoads].map((load) => load.promise!));
+      await Promise.allSettled([...mutations.values()]);
+    })();
+    return quiescence;
+  }
+
   return Object.freeze({
     get,
     put,
     merge,
     ensure,
+    quiesceForMaintenance,
     currentSourceChannel,
     admitSourceChannel,
     invalidateSourceChannel,

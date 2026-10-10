@@ -55,6 +55,12 @@ This gives the repository one coherent responsibility around source channels:
 
 It does **not** give the repository source policy.
 
+## One-way cache maintenance
+
+Explorer cache clearing is a rare, terminal application operation followed by a page reload. The application first disposes Current View, then asks PositionRepository to **quiesce** source work before deleting Explorer cache fields. Quiescence is not ordinary refresh or a new current-view lifetime.
+
+Quiescence refuses new source loads and position-record mutations, aborts shared source producers, and waits for every unsettled producer (including one whose last subscriber already detached) and already accepted position-record mutation to finish. Only after that drain may the Explorer provider invalidate its live Readings and the low-level position store clear selected or all Explorer fields. This prevents an already-started write from restoring cleared data. Quiescence is one-way for the page lifetime; failure to clear must not be presented as success, and recovery requires a reload. Other source-channel observations and durable Graph Edges are not targets of Explorer cache deletion.
+
 ## Source-provider boundary
 
 Lichess-backed endpoint clients own endpoint meaning and source policy. They decide:
@@ -99,6 +105,7 @@ Deterministic tests should cover:
 - effective shared urgency following the highest live caller demand;
 - last-caller cancellation aborting the shared producer;
 - replacement callers being able to start fresh work after a cancelled producer is detached;
+- terminal maintenance stopping new loads and mutations, aborting and draining even detached producers, and waiting for already accepted writes before cache deletion;
 - source-client freshness remaining independent per source channel;
 - source-channel eviction leaving `ChartedGraph` topology unchanged;
 - an incompatible node-cache schema clearing nodes without invalidating an independently compatible Graph Edge cache;

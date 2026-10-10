@@ -88,7 +88,6 @@ async function discoverRootPredecessors(center, { signal, priority }): Promise<R
   for (const nomination of nominations) {
     if (signal.aborted) return Object.freeze({ refinement: 'unavailable' as const });
     const outcome = await refineExplorerReading(nomination.source, { signal, priority });
-    if (outcome.refinement === 'retryable') return outcome;
     if (outcome.refinement === 'unavailable') unavailable = true;
   }
   return unavailable

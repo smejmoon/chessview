@@ -10,9 +10,9 @@ Own the generic position-facet cache behavior executed by `PositionRepository`. 
 - **A refresh interval does not impose a maximum age.** Do not delete otherwise valid positive data because time has passed. Persistent Graph Edges and canonical position identity are separate from refreshable source observations.
 - **Match the question.** Cache compatibility depends on canonical position, source/facet, meaningful filters and required response shape. Reject a cached result that cannot answer the current question, including as stale fallback; avoid comparing irrelevant wire-format details.
 - **Keep absence distinct from failure.** A supported successful absence (such as a cloud-eval 404) is a temporary cacheable observation with its own refresh decision. Network, HTTP, invalid data, and cache errors are not successful absence.
-- **Keep useful observations after failure.** New valid data can improve an admitted value. If refresh fails, return or retain the compatible cached value; do not manufacture empty readings or retract established graph knowledge.
+- **Keep useful observations after failure.** Source-specific quality rules decide whether a newer result improves an admitted positive value; do not replace stronger evidence solely because a response is newer. If refresh fails, return or retain the compatible cached value; do not manufacture empty readings or retract established graph knowledge.
 - **Use existing bounded work.** Coalesce equivalent due refreshes through repository-owned producer lifetime and forward source requests through existing `LichessGateway` scheduling. Trigger refresh by real demand; do not introduce a periodic polling engine or a second scheduler.
-- **Treat persistence as best-effort.** Retain a usable live value if writing fails. A failed read can proceed through ordinary source acquisition. Never report a write as persisted when it was not.
+- **Treat persistence as best-effort.** Retain a usable live value if writing fails, including across unrelated persisted node writes. Explicit whole-store reset remains an invalidation boundary. A failed read can proceed through ordinary source acquisition. Never report a write as persisted when it was not.
 
 ## Ownership
 
@@ -24,7 +24,7 @@ This does not move Lichess transport scheduling out of `LichessGateway`, graph a
 
 ## Presentation
 
-A background refresh can show source activity while the accepted Constellation and Rail remain usable. If the work is an admitted structural Explorer obligation, Weather may say `Updating…`. Supplementary Masters and cloud-eval refresh use Lichess source status without independently making Weather unsettled. New information may refine the view without relabeling old structure as a different Nodus.
+A background refresh can show source activity while the accepted Constellation and Rail remain usable. Successful refreshed observations are retained for the **next relevant Nodus composition or visit**; their arrival alone does not trigger live Knowledge Acquisition reconciliation or Current View recomposition. If a current structural Explorer refinement is still actively participating, Weather follows its existing settlement contract; a detached source refresh is not by itself a new structural obligation. Supplementary Masters and cloud-eval refresh use Lichess source status without independently making Weather unsettled.
 
 ## Diagnostics over speculative recovery
 
@@ -34,4 +34,4 @@ Bail out of the affected cache operation, not the whole application. Use an alre
 
 ## Verification
 
-Prefer one set of generic behavioral tests for immediate cached delivery, nonblocking shared refresh, successful improvement, compatible identity, persistence failure, diagnosable faults, and absence versus failure. Retain smaller source-specific tests for distinct parsing, quality, request parameters, and meaning. Avoid replicated test matrices of the same repository caching behavior.
+Prefer one set of generic behavioral tests for immediate cached delivery, nonblocking shared refresh, next-visit reuse, compatible identity, persistence failure, diagnosable faults, and absence versus failure. Source-specific tests own quality-based replacement and deliberately not degrading accepted positive values. Retain smaller source-specific tests for distinct parsing, quality, request parameters, and meaning. Avoid replicated test matrices of the same repository caching behavior.

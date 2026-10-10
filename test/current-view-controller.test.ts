@@ -510,6 +510,27 @@ test('obsolete refinement completion cannot mutate a replacement Nodus', async (
 });
 
 
+test('completed refinement participation detaches when its Current View run is replaced', async () => {
+  let participationSignal;
+  const { controller } = fixture({
+    refine: ({ center }) => center === 'A' ? [{
+      key: 'cache-first',
+      run: ({ signal }) => {
+        participationSignal = signal;
+        return { refinement: 'satisfied' };
+      },
+    }] : [],
+  });
+
+  await controller.start();
+  await flush(24);
+  assert.equal(participationSignal?.aborted, false);
+
+  await controller.recenter({ target: 'b' });
+  assert.equal(participationSignal?.aborted, true);
+});
+
+
 test('Root discovery is one semantic attempt per Current View run', async () => {
   const work = deferred();
   let attempts = 0;

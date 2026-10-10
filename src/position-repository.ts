@@ -1,4 +1,5 @@
-import { getNode, nodeStoreVersion, putNode } from './position-store.ts';
+import { CACHE_SCHEMA_VERSIONS, NODES_STORE } from './cache-schema.ts';
+import { getNode, nodeStoreResetVersion, nodeStoreVersion, putNode } from './position-store.ts';
 import { canonicalPosition, toPlayableFen } from './graph.ts';
 import { isObsoleteWork, obsoleteWork } from './obsolete-work.ts';
 import { debugLog } from './debug.ts';
@@ -12,6 +13,7 @@ export function createPositionRepository({
   read = getNode,
   write = putNode,
   version = nodeStoreVersion,
+  resetVersion = nodeStoreResetVersion,
   log = debugLog,
 } = {}) {
   const records = new Map<string, any>();
@@ -20,6 +22,7 @@ export function createPositionRepository({
   const loads = new Map<string, any>();
   const facets = new Map<string, any>();
   let observedVersion = version();
+  let observedResetVersion = resetVersion();
 
   function facetId(position: any, facet: string) {
     return `${facet}\u0000${canonicalPosition(position)}`;
@@ -27,11 +30,22 @@ export function createPositionRepository({
 
   function syncVersion() {
     const current = version();
-    if (current === observedVersion) return;
+    const reset = resetVersion();
+    if (current === observedVersion && reset === observedResetVersion) return;
+    const cleared = reset !== observedResetVersion;
     observedVersion = current;
+    observedResetVersion = reset;
     records.clear();
     reads.clear();
-    facets.clear();
+    if (cleared) {
+      facets.clear();
+    } else {
+      // Ordinary persisted node writes invalidate hydrated data, not valid
+      // source observations that could not be persisted.
+      for (const [id, admitted] of facets) {
+        if (admitted.persisted !== false) facets.delete(id);
+      }
+    }
   }
 
   async function get(position: any) {
@@ -112,6 +126,7 @@ export function createPositionRepository({
   }
 
   function currentFacet(position: any, facet: string) {
+    syncVersion();
     return facets.get(facetId(position, facet)) ?? null;
   }
 
@@ -212,6 +227,7 @@ export function createPositionRepository({
       position: key,
       facet,
       profile: profile ?? null,
+      schemaVersion: CACHE_SCHEMA_VERSIONS[NODES_STORE],
       errorType: error instanceof Error ? error.name : typeof error,
       error: error instanceof Error ? error.message : String(error),
       fallback,

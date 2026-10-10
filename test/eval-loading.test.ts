@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
+import { CACHE_SCHEMA_VERSIONS, NODES_STORE } from '../src/cache-schema.ts';
 
 globalThis.indexedDB = fakeIndexedDB;
 
@@ -89,6 +90,39 @@ test('invalid cloud eval JSON is a source-data issue rather than a network issue
   assert.equal(lichessEval.status.issue?.kind, 'invalid-data');
 });
 
+test('malformed cached cloud eval is diagnosed and replaced from source', async () => {
+  const fresh = { depth: 22, pvs: [{ cp: 18, moves: 'a1a2' }] };
+  let stored = {
+    cloudEval: { depth: 'broken', pvs: [] },
+    cloudEvalFetchedAt: 1_000,
+  };
+  const issues = [];
+  const repository = createPositionRepository({
+    read: async () => stored,
+    write: async (record) => { stored = record; },
+    version: () => 0,
+    log: (...args) => issues.push(args),
+  });
+  const lichessEval = createLichessEval({
+    repository,
+    gateway: {
+      request: async () => ({ ok: true, status: 200, json: async () => fresh }),
+    },
+    now: () => 2_000,
+  });
+
+  assert.strictEqual(await lichessEval.get(FAILED_EVAL), fresh);
+  assert.strictEqual(stored.cloudEval, fresh);
+  const [, detail] = issues.find(([event, value]) => (
+    event === 'Position cache operation failed'
+    && value?.operation === 'read/validate'
+    && value?.facet === 'cloud-eval'
+  )) ?? [];
+  assert.equal(detail?.schemaVersion, CACHE_SCHEMA_VERSIONS[NODES_STORE]);
+  assert.match(detail?.error ?? '', /Cached Lichess cloud eval data is invalid/);
+});
+
+
 test('usable cloud eval reports cache-write failure on its operational channel', async () => {
   const value = { depth: 22, pvs: [{ cp: 18, moves: 'a1a2' }] };
   const lichessEval = createLichessEval({
@@ -107,6 +141,68 @@ test('usable cloud eval reports cache-write failure on its operational channel',
   assert.strictEqual(await lichessEval.get(FAILED_EVAL), value);
   assert.equal(lichessEval.status.activity, 'idle');
   assert.equal(lichessEval.status.issue?.kind, 'storage');
+});
+
+test('stale cloud eval keeps its deeper positive result across a shallower refresh', async () => {
+  const deep = { depth: 40, pvs: [{ cp: 18, moves: 'a1a2' }] };
+  const shallow = { depth: 20, pvs: [{ cp: 20, moves: 'a1a2' }] };
+  const improved = { depth: 44, pvs: [{ cp: 16, moves: 'a1a2' }] };
+  const ttl = (await import('../src/config.ts')).LICHESS_EVAL_TTL_MS;
+  let now = ttl + 100;
+  let calls = 0;
+  let stored = {
+    cloudEval: deep,
+    cloudEvalFetchedAt: 1,
+    cloudEvalCheckedAt: 1,
+  };
+  const repository = createPositionRepository({
+    read: async () => stored,
+    write: async (record) => { stored = record; },
+    version: () => 0,
+    log: () => {},
+  });
+  const lichessEval = createLichessEval({
+    repository,
+    now: () => now,
+    gateway: {
+      request: async () => ({
+        status: 200,
+        ok: true,
+        json: async () => (++calls === 1 ? shallow : improved),
+      }),
+    },
+  });
+
+  function completedRefresh() {
+    let began = false;
+    let unsubscribe;
+    const done = new Promise((resolve) => {
+      unsubscribe = lichessEval.subscribe((status) => {
+        if (status.activity === 'requesting') began = true;
+        if (began && status.activity === 'idle') resolve();
+      });
+    });
+    return done.finally(() => unsubscribe());
+  }
+
+  const firstRefresh = completedRefresh();
+  assert.strictEqual(await lichessEval.get(FAILED_EVAL), deep);
+  await firstRefresh;
+  assert.strictEqual(await lichessEval.available(FAILED_EVAL), deep);
+  assert.strictEqual(stored.cloudEval, deep);
+  assert.equal(stored.cloudEvalFetchedAt, 1);
+  assert.equal(stored.cloudEvalCheckedAt, now);
+
+  assert.strictEqual(await lichessEval.get(FAILED_EVAL), deep);
+  assert.equal(calls, 1);
+
+  now += ttl + 1;
+  const secondRefresh = completedRefresh();
+  assert.strictEqual(await lichessEval.get(FAILED_EVAL), deep);
+  await secondRefresh;
+  assert.strictEqual(await lichessEval.available(FAILED_EVAL), improved);
+  assert.strictEqual(stored.cloudEval, improved);
+  assert.equal(calls, 2);
 });
 
 test('status presentation failure cannot interrupt cloud eval acquisition', async () => {

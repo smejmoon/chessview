@@ -111,6 +111,76 @@ test('Explorer request profile refreshes a legacy aggregate cache once and then 
 });
 
 
+test('a completed stale Explorer refresh improves graph knowledge on the next Nodus visit', async () => {
+  const old = explorerReading();
+  const newer = {
+    ...explorerReading(),
+    white: 100, // Enough source games for Graph Edge admission.
+    moves: [
+      ...explorerReading().moves,
+      { uci: 'd2d4', white: 4, draws: 1, black: 1 },
+    ],
+  };
+  let stored = {
+    explorer: old,
+    explorerFetchedAt: 1,
+    explorerRequestProfile: JSON.stringify({ variant: 'standard', moves: '30', topGames: '4', recentGames: '8' }),
+  };
+  let requestStarted;
+  const started = new Promise((resolve) => { requestStarted = resolve; });
+  let finishRequest;
+  let persisted;
+  const saved = new Promise((resolve) => { persisted = resolve; });
+  const repository = createPositionRepository({
+    read: async () => stored,
+    write: async (record) => { stored = record; persisted(); },
+    version: () => 0,
+    log: () => {},
+  });
+  const provider = createExplorerProvider({
+    repository,
+    now: () => 100_000_000,
+    request: async () => {
+      requestStarted();
+      return new Promise((resolve) => {
+        finishRequest = () => resolve({
+          ok: true,
+          status: 200,
+          json: async () => newer,
+          text: async () => '',
+        });
+      });
+    },
+    log: () => {},
+  });
+
+  const edges = [];
+  const { createKnowledgeAcquisition } = await import('../src/knowledge-acquisition.ts');
+  const acquisition = createKnowledgeAcquisition({
+    loadExplorer: provider.ensure,
+    readCachedExplorer: provider.readCached,
+    currentExplorer: provider.current,
+    repository,
+    graph: {
+      outgoing: async () => [],
+      ensureEdge: async (edge) => { edges.push(edge); return edge; },
+    },
+  });
+
+  assert.strictEqual(await provider.ensure(CENTER), old);
+  await started;
+  assert.strictEqual(stored.explorer, old);
+  assert.deepEqual(edges, []); // No automatic live incorporation.
+  finishRequest();
+  await saved;
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.strictEqual(stored.explorer, newer);
+  assert.deepEqual(edges, []);
+  assert.deepEqual(await acquisition.refineExplorerReading(CENTER), { refinement: 'satisfied' });
+  assert.deepEqual(edges.map((edge) => edge.uci), ['e2e4', 'd2d4']);
+});
+
 test('Explorer opening metadata stays source-local instead of becoming canonical position identity', async () => {
   const repository = createPositionRepository({
     read: async () => null,

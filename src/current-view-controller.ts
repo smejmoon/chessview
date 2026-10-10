@@ -850,7 +850,9 @@ export class CurrentViewController {
       })))
       .then((value) => {
         if (!this.#participantCurrent(run, participant, controller, attempt)) return;
-        participant.controller = null;
+        // Keep this participation scope until the run no longer needs the task.
+        // Cache-first providers may return a retained value while repository-owned
+        // refresh still uses the same signal in the background.
         const outcome = refinementOutcome(value);
         if (outcome?.refinement === 'retryable') {
           participant.phase = 'retry-waiting';

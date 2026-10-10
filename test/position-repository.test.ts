@@ -309,6 +309,29 @@ test('failed write preserves live value, diagnostics, and expired fallback', asy
   assert.strictEqual(repository.currentFacet(key, 'sample').value, live);
 });
 
+test('ordinary external node writes preserve unpersisted live observations, but full reset clears them', async () => {
+  let version = 0;
+  let resetVersion = 0;
+  const live = { moves: [{ uci: 'e2e4' }] };
+  const repository = createPositionRepository({
+    read: async () => null,
+    write: async () => {},
+    version: () => version,
+    resetVersion: () => resetVersion,
+  });
+  repository.admitFacet(key, 'explorer', live, { fetchedAt: 1, persisted: false });
+  repository.admitFacet(key, 'masters', { moves: [] }, { fetchedAt: 1, persisted: true });
+
+  version += 1; // An unrelated position write by another owner.
+  assert.strictEqual((await repository.peek(key, 'explorer', () => null))?.value, live);
+  assert.equal(repository.currentFacet(key, 'masters'), null);
+
+  version += 1;
+  resetVersion += 1; // Explicit whole-store maintenance/reset.
+  assert.equal(repository.currentFacet(key, 'explorer'), null);
+  assert.equal(await repository.peek(key, 'explorer', () => null), null);
+});
+
 test('successful absence is cached while acquisition failure is not', async () => {
   let attempts = 0;
   let record = null;

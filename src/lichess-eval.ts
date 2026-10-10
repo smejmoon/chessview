@@ -102,7 +102,9 @@ export function createLichessEval({
   function decodeCached(record: any) {
     if (!record?.cloudEvalFetchedAt) return null;
     const value = record.cloudEval;
-    if (value !== null && !validPayload(value)) return null;
+    if (value !== null && !validPayload(value)) {
+      throw new Error('Cached Lichess cloud eval data is invalid');
+    }
     return {
       value: isUsableLichessEval(value) ? value : null,
       fetchedAt: record.cloudEvalFetchedAt,
@@ -174,6 +176,17 @@ export function createLichessEval({
               fallback: cached?.value ? 'cached' : null,
               message: `Lichess cloud eval depth ${value.depth} is below ${LICHESS_EVAL_MIN_DEPTH}`,
             }),
+          };
+        }
+        // A newer timestamp does not improve a shallower usable evaluation.
+        // Keep the stronger value but record when the source was checked.
+        if (isUsableLichessEval(cached?.value) && cached.value.depth > value.depth) {
+          return {
+            value: cached.value,
+            raw: cached.value,
+            fetchedAt: cached.fetchedAt,
+            checkedAt,
+            issue: null,
           };
         }
         return { value, raw: value, fetchedAt: checkedAt, checkedAt, issue: null };

@@ -25,7 +25,7 @@ Callers ask whether usable engine data is already available or ask the provider 
 
 `PositionRepository`, not `LichessEval`, owns the generic live `(position, cloud-eval)` facet value and equivalent shared producer lifetime. `LichessEval` supplies validation and quality conditions for admitted values; `PositionRepository` applies generic caching under [Position cache](position-cache.md).
 
-The current minimum usable cloud-eval depth is `18`. A value below that threshold may be retained according to provider cache policy, but it is not exposed as a usable evaluation.
+The current minimum usable cloud-eval depth is `18`. A value below that threshold may be retained according to provider cache policy, but it is not exposed as a usable evaluation. Among usable cloud results for the same position, depth is the current source-quality ordering: a shallower successful refresh does not replace a deeper retained positive evaluation. The refresh check time can advance without rewriting the stronger value's observation time; an equally deep or deeper usable response may replace it.
 
 ## Consumer API
 

@@ -10,5 +10,5 @@ export { getIncoming, getOutgoing, mutateEdge, putEdges } from './edge-store.ts'
 
 export async function clearGraph(): Promise<void> {
   await clearStores([NODES_STORE, EDGES_STORE]);
-  invalidateNodeStore();
+  invalidateNodeStore({ reset: true });
 }

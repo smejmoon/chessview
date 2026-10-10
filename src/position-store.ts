@@ -11,13 +11,19 @@ export interface StoredPosition {
 }
 
 let nodeVersion = 0;
+let resetVersion = 0;
 
 export function nodeStoreVersion(): number {
   return nodeVersion;
 }
 
-export function invalidateNodeStore(): void {
+export function nodeStoreResetVersion(): number {
+  return resetVersion;
+}
+
+export function invalidateNodeStore({ reset = false }: { reset?: boolean } = {}): void {
   nodeVersion += 1;
+  if (reset) resetVersion += 1;
 }
 
 function withoutLegacyOpening(node: StoredPosition): StoredPosition {

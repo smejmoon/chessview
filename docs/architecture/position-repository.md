@@ -30,7 +30,7 @@ A live facet entry contains the admitted value plus generic metadata supplied by
 
 The source provider parses and validates observations and supplies source-specific admission and refresh conditions. The repository applies [Position cache](position-cache.md) to select retained values, decide when refresh is due, and coordinate background acquisition. It does not derive chess meaning from those observations.
 
-Live facet state is not a second durable cache. It is page-lifetime application state. Facet invalidation may remove selected live values without changing unrelated facets or Graph Edge topology.
+Live facet state is not a second durable cache. It is page-lifetime application state. Ordinary external node-store writes invalidate hydrated persisted-record views, but do not discard unpersisted live observations from unrelated facets. Explicit whole-store reset clears both; targeted facet maintenance may remove selected live values without changing unrelated facets or Graph Edge topology.
 
 ## Facet hydration and shared producer lifetime
 

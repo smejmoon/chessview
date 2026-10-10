@@ -1,6 +1,7 @@
 import { getNode, nodeStoreVersion, putNode } from './position-store.ts';
 import { canonicalPosition, toPlayableFen } from './graph.ts';
-import { obsoleteWork } from './obsolete-work.ts';
+import { isObsoleteWork, obsoleteWork } from './obsolete-work.ts';
+import { debugLog } from './debug.ts';
 
 function priorityValue(priority: any) {
   const value = typeof priority === 'function' ? priority() : priority;
@@ -11,6 +12,7 @@ export function createPositionRepository({
   read = getNode,
   write = putNode,
   version = nodeStoreVersion,
+  log = debugLog,
 } = {}) {
   const records = new Map<string, any>();
   const reads = new Map<string, Promise<any>>();
@@ -29,6 +31,7 @@ export function createPositionRepository({
     observedVersion = current;
     records.clear();
     reads.clear();
+    facets.clear();
   }
 
   async function get(position: any) {
@@ -202,8 +205,121 @@ export function createPositionRepository({
     }, priority);
   }
 
+
+  function cacheIssue(operation: string, key: string, facet: string, error: unknown, fallback: string, profile?: string) {
+    const detail = {
+      operation,
+      position: key,
+      facet,
+      profile: profile ?? null,
+      errorType: error instanceof Error ? error.name : typeof error,
+      error: error instanceof Error ? error.message : String(error),
+      fallback,
+    };
+    Reflect.apply(log, undefined, ['Position cache operation failed', detail, 'warn']);
+  }
+
+  // Hydrate a validated facet without acquiring anything from its source.
+  async function peek(position: any, facet: string, decode: (record: any) => any, profile?: string) {
+    syncVersion();
+    const key = canonicalPosition(position);
+    const live = currentFacet(key, facet);
+    if (live) return live;
+
+    let cached;
+    try {
+      const record = await get(key);
+      cached = record ? decode(record) : null;
+    } catch (error) {
+      cacheIssue('read/validate', key, facet, error, 'source acquisition or unavailable', profile);
+      return null;
+    }
+    if (!cached) return null;
+    return admitFacet(key, facet, cached.value, {
+      fetchedAt: cached.fetchedAt ?? 0,
+      checkedAt: cached.checkedAt ?? cached.fetchedAt ?? 0,
+      persisted: true,
+    });
+  }
+
+  // A cached observation is the immediate answer. Refresh is separate, shared
+  // work whose demand remains attached until completion or caller cancellation.
+  async function observe(
+    position: any,
+    facet: string,
+    {
+      decode,
+      acquire,
+      fields,
+      refreshAfterMs,
+      now = Date.now,
+      profile,
+      onError,
+      onComplete,
+      onStorageError,
+      fallbackOnError = 'throw',
+    }: any,
+    { signal, priority = 'foreground' }: any = {},
+  ) {
+    const key = canonicalPosition(position);
+    if (signal?.aborted) throw obsoleteWork('Position observation became obsolete', signal.reason);
+    const retained = await peek(key, facet, decode, profile);
+    if (signal?.aborted) throw obsoleteWork('Position observation became obsolete', signal.reason);
+
+    if (retained && now() - (retained.checkedAt ?? retained.fetchedAt ?? 0) < refreshAfterMs) {
+      return retained.value;
+    }
+
+    const pending = load(key, facet, async (work: any) => {
+      const cached = currentFacet(key, facet) ?? retained;
+      let result: any;
+      try {
+        result = await acquire(Object.freeze({ ...work, cached }));
+      } catch (error) {
+        const obsolete = isObsoleteWork(error, work.signal);
+        onError?.(error, { cached, obsolete, key });
+        if (obsolete) throw error;
+        if (cached) return cached.value;
+        if (fallbackOnError === 'null') return null;
+        throw error;
+      }
+
+      const fetchedAt = result.fetchedAt ?? now();
+      const checkedAt = result.checkedAt ?? fetchedAt;
+      const admitted = admitFacet(key, facet, result.value, {
+        fetchedAt,
+        checkedAt,
+        persisted: false,
+      });
+
+      let storageError: unknown = null;
+      try {
+        const changes = fields(result, { key, fetchedAt, checkedAt });
+        if (changes) await merge(key, changes);
+        if (currentFacet(key, facet) === admitted) {
+          admitFacet(key, facet, result.value, { fetchedAt, checkedAt, persisted: true });
+        }
+      } catch (error) {
+        storageError = error;
+        cacheIssue('write', key, facet, error, 'live observation retained', profile);
+        onStorageError?.(error, { key, value: result.value });
+      }
+      onComplete?.(result, { storageError, key });
+      return result.value;
+    }, { signal, priority: retained ? 'background' : priority });
+
+    if (retained) {
+      // Observing refresh failure must never hold the cached answer hostage.
+      pending.catch(() => {});
+      return retained.value;
+    }
+    return pending;
+  }
+
   return Object.freeze({
     get,
+    peek,
+    observe,
     put,
     merge,
     ensure,

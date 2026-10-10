@@ -20,7 +20,8 @@ globalThis.history = { state: null, replaceState() {} };
 
 const { clearGraph, putNode } = await import('../src/db.ts');
 const { clearDebugLog, getDebugEntries } = await import('../src/debug.ts');
-const { loadExplorerReading } = await import('../src/explorer.ts');
+const { loadExplorerReading, createExplorerProvider } = await import('../src/explorer.ts');
+const { createPositionRepository } = await import('../src/position-repository.ts');
 
 const center = canonicalPosition(START_FEN);
 
@@ -40,12 +41,15 @@ async function putStaleExplorer() {
     draws: 20,
     black: 30,
     moves: [{ uci: 'e2e4', white: 25, draws: 10, black: 15 }],
+    topGames: [],
+    recentGames: [],
   };
   await putNode({
     key: center,
     fen: START_FEN,
     explorer,
     explorerFetchedAt: Date.now() - EXPLORER_TTL_MS - 1,
+    explorerRequestProfile: JSON.stringify({ variant: 'standard', moves: '30', topGames: '4', recentGames: '8' }),
     games: 100,
   });
   return explorer;
@@ -79,36 +83,66 @@ test('aborted Explorer refresh propagates cancellation without failure diagnosti
   assert.equal(matchingEvents('Explorer refresh failed; using stale Reading').length, 0);
 });
 
-test('failed Explorer refresh with usable stale data emits only the stale-fallback warning', async () => {
-  await clearGraph();
-  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
-  const stale = await putStaleExplorer();
-  clearDebugLog();
-  globalThis.fetch = async () => { throw new Error('offline'); };
+test('failed Explorer refresh returns compatible stale data before reporting the failure', async () => {
+  const stale = {
+    white: 50, draws: 20, black: 30,
+    moves: [{ uci: 'e2e4', white: 25, draws: 10, black: 15 }],
+  };
+  const stored = {
+    explorer: stale,
+    explorerFetchedAt: 1,
+    explorerRequestProfile: JSON.stringify({ variant: 'standard', moves: '30', topGames: '4', recentGames: '8' }),
+  };
+  let startRequest;
+  const started = new Promise((resolve) => { startRequest = resolve; });
+  let completeFailure;
+  const failed = new Promise((resolve) => { completeFailure = resolve; });
+  const logs = [];
+  const repository = createPositionRepository({
+    read: async () => stored,
+    write: async () => {},
+    version: () => 0,
+    log: () => {},
+  });
+  const provider = createExplorerProvider({
+    repository,
+    now: () => EXPLORER_TTL_MS + 100,
+    request: async () => {
+      startRequest();
+      throw new Error('offline');
+    },
+    log: (message, detail, level) => {
+      logs.push({ message, detail, level });
+      if (message === 'Explorer refresh failed; using stale Reading') completeFailure();
+    },
+  });
 
-  assert.deepEqual(await loadExplorerReading(center), stale);
-
-  assert.equal(matchingEvents('explorer refresh failed').length, 0);
-  const fallback = matchingEvents('Explorer refresh failed; using stale Reading');
+  assert.strictEqual(await provider.ensure(center), stale);
+  await started;
+  await failed;
+  const fallback = logs.filter(({ message }) => message === 'Explorer refresh failed; using stale Reading');
   assert.equal(fallback.length, 1);
   assert.equal(fallback[0].level, 'warn');
   assert.equal(fallback[0].detail.error, 'offline');
 });
 
-test('failed Explorer refresh without usable stale data emits one error and propagates the failure', async () => {
-  await clearGraph();
-  localStorage.setItem('chessview.lichess.accessToken', 'test-token');
-  clearDebugLog();
-  globalThis.fetch = async () => { throw new Error('offline without cache'); };
+test('failed Explorer refresh without usable stale data reports once and rejects', async () => {
+  const logs = [];
+  const repository = createPositionRepository({
+    read: async () => null,
+    write: async () => {},
+    version: () => 0,
+    log: () => {},
+  });
+  const provider = createExplorerProvider({
+    repository,
+    request: async () => { throw new Error('offline without cache'); },
+    log: (message, detail, level) => logs.push({ message, detail, level }),
+  });
 
-  await assert.rejects(
-    loadExplorerReading(center),
-    /offline without cache/,
-  );
-
-  const failures = matchingEvents('explorer refresh failed');
+  await assert.rejects(provider.ensure(center), /offline without cache/);
+  const failures = logs.filter(({ message }) => message === 'explorer refresh failed');
   assert.equal(failures.length, 1);
   assert.equal(failures[0].level, 'error');
   assert.equal(failures[0].detail.error, 'offline without cache');
-  assert.equal(matchingEvents('Explorer refresh failed; using stale Reading').length, 0);
 });

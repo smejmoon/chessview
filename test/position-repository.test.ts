@@ -195,3 +195,77 @@ test('last obsolete caller aborts the producer and a replacement starts fresh wo
   assert.equal(await repository.load(key, 'masters', producer), 'replacement');
   assert.equal(producerCalls, 2);
 });
+
+test('compatible expired observation is returned before one shared background refresh completes', async () => {
+  let finish;
+  let calls = 0;
+  const old = { count: 1 };
+  const newer = { count: 2 };
+  let stored = { sample: old, fetchedAt: 1 };
+  const repository = createPositionRepository({
+    read: async () => stored,
+    write: async (value) => { stored = value; },
+    version: () => 0,
+    log: () => {},
+  });
+  const options = {
+    decode: (record) => record.sample ? { value: record.sample, fetchedAt: record.fetchedAt } : null,
+    acquire: async () => {
+      calls += 1;
+      return new Promise((resolve) => { finish = () => resolve({ value: newer }); });
+    },
+    fields: ({ value }, { fetchedAt }) => ({ sample: value, fetchedAt }),
+    refreshAfterMs: 10,
+    now: () => 100,
+  };
+
+  assert.strictEqual(await repository.observe(key, 'sample', options), old);
+  assert.strictEqual(await repository.observe(key, 'sample', options), old);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+  finish();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.strictEqual(await repository.observe(key, 'sample', options), newer);
+});
+
+test('failed cache read does not prevent source acquisition', async () => {
+  const issues = [];
+  const repository = createPositionRepository({
+    read: async () => { throw new Error('read failed'); },
+    write: async () => {},
+    version: () => 0,
+    log: (...args) => issues.push(args),
+  });
+  const value = { count: 4 };
+  const result = await repository.observe(key, 'sample', {
+    decode: (record) => ({ value: record.sample, fetchedAt: 1 }),
+    acquire: async () => ({ value }),
+    fields: () => ({}),
+    refreshAfterMs: 10,
+    now: () => 100,
+  });
+  assert.strictEqual(result, value);
+  assert.ok(issues.some(([event, detail]) =>
+    event === 'Position cache operation failed' && detail.operation === 'read/validate'));
+});
+
+test('an unpersisted admitted observation survives a failed later refresh regardless of age', async () => {
+  const value = { count: 7 };
+  const repository = createPositionRepository({
+    read: async () => null,
+    write: async () => { throw new Error('full'); },
+    version: () => 0,
+    log: () => {},
+  });
+  repository.admitFacet(key, 'sample', value, { fetchedAt: 1, persisted: false });
+  const result = await repository.observe(key, 'sample', {
+    decode: () => null,
+    acquire: async () => { throw new Error('offline'); },
+    fields: () => ({}),
+    refreshAfterMs: 10,
+    now: () => 100,
+  });
+  assert.strictEqual(result, value);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.strictEqual(repository.currentFacet(key, 'sample').value, value);
+});

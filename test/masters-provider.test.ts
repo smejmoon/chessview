@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { MASTERS_TTL_MS, createMastersProvider } from '../src/masters.ts';
 import { obsoleteWork } from '../src/obsolete-work.ts';
 import { START_FEN, canonicalPosition } from '../src/graph.ts';
+import { createPositionRepository } from '../src/position-repository.ts';
 
 const CENTER = canonicalPosition(START_FEN);
 
@@ -17,30 +18,16 @@ function reading(uci = 'e2e4') {
 }
 
 function repositoryStub({ record = null, merge = async () => {} } = {}) {
-  const facets = new Map();
-  const id = (position, facet) => `${facet}\u0000${position}`;
-  return {
-    get: async () => record,
-    merge,
-    currentFacet(position, facet) { return facets.get(id(position, facet)) ?? null; },
-    admitFacet(position, facet, value, metadata = {}) {
-      const admitted = Object.freeze({ value, ...metadata });
-      facets.set(id(position, facet), admitted);
-      return admitted;
+  let stored = record;
+  return createPositionRepository({
+    read: async () => stored,
+    write: async (value) => {
+      await merge(value.key, value);
+      stored = value;
     },
-    invalidateFacet(facet, positions) {
-      if (positions) {
-        for (const position of positions) facets.delete(id(position, facet));
-        return;
-      }
-      const prefix = `${facet}\u0000`;
-      for (const key of facets.keys()) if (key.startsWith(prefix)) facets.delete(key);
-    },
-    load: async (_position, _facet, producer) => producer({
-      signal: new AbortController().signal,
-      priority: () => 'foreground',
-    }),
-  };
+    version: () => 0,
+    log: () => {},
+  });
 }
 
 function response(value) {
@@ -97,6 +84,7 @@ test('malformed fresh Masters data falls back to a usable stale cached Reading',
   });
 
   assert.strictEqual(await provider.load(CENTER), stale);
+  await new Promise((resolve) => setImmediate(resolve));
   assert.ok(logs.some(([message, detail, level]) => (
     message === 'Masters refresh failed'
     && detail?.fallback === 'cached'
@@ -129,20 +117,25 @@ test('valid fresh Masters Reading remains usable and is reused when persistence 
   )));
 });
 
-test('semantic ObsoleteWork propagates through Masters without stale fallback', async () => {
+test('obsolete background Masters refresh leaves an immediately returned cached Reading intact', async () => {
   const stale = reading();
   const obsolete = obsoleteWork('superseded');
   const logs = [];
+  const controller = new AbortController();
   const provider = createMastersProvider({
     repository: repositoryStub({
       record: { mastersExplorer: stale, mastersFetchedAt: 1_000 },
     }),
-    request: async () => { throw obsolete; },
+    request: async (_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(obsolete), { once: true });
+    }),
     now: () => 1_000 + MASTERS_TTL_MS + 1,
     log: (...args) => logs.push(args),
   });
 
-  await assert.rejects(provider.load(CENTER), (error) => error === obsolete);
+  assert.strictEqual(await provider.load(CENTER, { signal: controller.signal }), stale);
+  controller.abort();
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(logs.some(([message]) => message === 'Masters refresh failed'), false);
 });
 

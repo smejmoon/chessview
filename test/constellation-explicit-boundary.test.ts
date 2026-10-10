@@ -52,6 +52,7 @@ test('explicit materialization stays navigation-only unless current Prevalence c
       moves: [{ uci: evidenced.uci, white: 600, draws: 0, black: 0 }],
     },
     explorerFetchedAt: Date.now(),
+    explorerRequestProfile: JSON.stringify({ variant: 'standard', moves: '30', topGames: '4', recentGames: '8' }),
     games: 1000,
   });
 

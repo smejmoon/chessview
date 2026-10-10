@@ -3,7 +3,6 @@ import { canonicalPosition, toPlayableFen, totalGames } from './graph.ts';
 import { debugLog } from './debug.ts';
 import { lichessSession } from './lichess-session.ts';
 import type { LichessRequestPriority } from './lichess-gateway.ts';
-import { isObsoleteWork } from './obsolete-work.ts';
 import { positionRepository } from './position-repository.ts';
 
 export { MASTERS_TTL_MS } from './config.ts';
@@ -44,11 +43,10 @@ function parseMastersReading(value: any) {
 
 function cachedMastersReading(record: any) {
   if (record?.mastersExplorer == null) return null;
-  try {
-    return parseMastersReading(record.mastersExplorer);
-  } catch {
-    return null;
-  }
+  return {
+    value: parseMastersReading(record.mastersExplorer),
+    fetchedAt: record.mastersFetchedAt ?? 0,
+  };
 }
 
 export function createMastersProvider({
@@ -61,52 +59,16 @@ export function createMastersProvider({
     Reflect.apply(log, undefined, [message, detail, level]);
   }
 
-  function admit(key: string, value: any, { fetchedAt = 0, persisted = true }: any = {}) {
-    if (!value) return value;
-    repository.admitFacet(key, 'masters', value, { fetchedAt, persisted });
-    return value;
-  }
-
-  function markPersisted(key: string, value: any, fetchedAt: number) {
-    const admitted = repository.currentFacet(key, 'masters');
-    if (!admitted || admitted.value !== value || admitted.fetchedAt !== fetchedAt) return;
-    repository.admitFacet(key, 'masters', value, { fetchedAt, persisted: true });
-  }
-
   function current(positionKey: string) {
     return repository.currentFacet(canonicalPosition(positionKey), 'masters')?.value ?? null;
   }
 
   async function readCached(positionKey: string) {
-    const key = canonicalPosition(positionKey);
-    return cachedMastersReading(await repository.get(key));
+    return (await repository.peek(positionKey, 'masters', cachedMastersReading))?.value ?? null;
   }
 
   async function available(positionKey: string) {
     return current(positionKey) ?? await readCached(positionKey);
-  }
-
-  function staleOrAbsent(error: unknown, cachedValue: any, cachedFetchedAt: number, signal: AbortSignal, key: string) {
-    if (isObsoleteWork(error, signal)) throw error;
-    report('Masters refresh failed', {
-      position: key,
-      error: error instanceof Error ? error.message : String(error),
-      fallback: cachedValue ? 'cached' : null,
-    }, 'warn');
-    return admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
-  }
-
-  async function persistMastersReading(key: string, value: any, fetchedAt: number) {
-    try {
-      await repository.merge(key, { mastersExplorer: value, mastersFetchedAt: fetchedAt });
-      return true;
-    } catch (error) {
-      report('Masters Reading persistence failed', {
-        position: key,
-        error: error instanceof Error ? error.message : String(error),
-      }, 'error');
-      return false;
-    }
   }
 
   function load(
@@ -114,39 +76,43 @@ export function createMastersProvider({
     { signal, priority = 'foreground' }: { signal?: AbortSignal; priority?: LichessRequestPriority } = {},
   ) {
     const key = canonicalPosition(positionKey);
-    return repository.load(key, 'masters', async ({ signal: requestSignal, priority: requestPriority }: any) => {
-      const cached = await repository.get(key);
-      const cachedValue = cachedMastersReading(cached);
-      const cachedFetchedAt = cached?.mastersFetchedAt ?? 0;
-      if (cachedValue && cachedFetchedAt && now() - cachedFetchedAt < MASTERS_TTL_MS) {
-        return admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
-      }
+    return repository.observe(key, 'masters', {
+      decode: cachedMastersReading,
+      refreshAfterMs: MASTERS_TTL_MS,
+      now,
+      fallbackOnError: 'null',
+      acquire: async ({ signal: requestSignal, priority: requestPriority }: any) => {
+        const url = new URL(MASTERS_ENDPOINT);
+        url.searchParams.set('fen', toPlayableFen(key));
+        url.searchParams.set('moves', '30');
+        url.searchParams.set('topGames', '0');
 
-      const live = repository.currentFacet(key, 'masters');
-      if (live && !live.persisted && now() - live.fetchedAt < MASTERS_TTL_MS) return live.value;
-
-      const url = new URL(MASTERS_ENDPOINT);
-      url.searchParams.set('fen', toPlayableFen(key));
-      url.searchParams.set('moves', '30');
-      url.searchParams.set('topGames', '0');
-
-      let value;
-      try {
         const response = await request(url, {
           signal: requestSignal,
           priority: requestPriority,
           headers: { Accept: 'application/json' },
         });
         if (!response.ok) throw new Error(`Lichess masters explorer returned ${response.status}`);
-        value = parseMastersReading(await response.json());
-      } catch (error) {
-        return staleOrAbsent(error, cachedValue, cachedFetchedAt, requestSignal, key);
-      }
-
-      const fetchedAt = now();
-      admit(key, value, { fetchedAt, persisted: false });
-      if (await persistMastersReading(key, value, fetchedAt)) markPersisted(key, value, fetchedAt);
-      return value;
+        return { value: parseMastersReading(await response.json()) };
+      },
+      fields: (result: any, { fetchedAt }: any) => ({
+        mastersExplorer: result.value,
+        mastersFetchedAt: fetchedAt,
+      }),
+      onError: (error: unknown, { cached, obsolete }: any) => {
+        if (obsolete) return;
+        report('Masters refresh failed', {
+          position: key,
+          error: error instanceof Error ? error.message : String(error),
+          fallback: cached?.value ? 'cached' : null,
+        }, 'warn');
+      },
+      onStorageError: (error: unknown) => {
+        report('Masters Reading persistence failed', {
+          position: key,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'error');
+      },
     }, { signal, priority });
   }
 

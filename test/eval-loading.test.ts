@@ -6,6 +6,7 @@ globalThis.indexedDB = fakeIndexedDB;
 
 const { clearGraph } = await import('../src/db.ts');
 const { createLichessEval } = await import('../src/lichess-eval.ts');
+const { createPositionRepository } = await import('../src/position-repository.ts');
 const { createLichessEvalStatusPresenter } = await import('../src/lichess-eval-presentation.ts');
 
 const NO_EVAL = '8/8/8/8/8/8/8/K6k w - -';
@@ -13,30 +14,16 @@ const FAILED_EVAL = '8/8/8/8/8/8/8/K5k1 w - -';
 const SHALLOW_EVAL = '8/8/8/8/8/8/8/K4k2 w - -';
 
 function repositoryStub({ record = null, merge = async () => {} } = {}) {
-  const facets = new Map();
-  const id = (position, facet) => `${facet}\u0000${position}`;
-  return {
-    get: async () => record,
-    merge,
-    currentFacet(position, facet) { return facets.get(id(position, facet)) ?? null; },
-    admitFacet(position, facet, value, metadata = {}) {
-      const admitted = Object.freeze({ value, ...metadata });
-      facets.set(id(position, facet), admitted);
-      return admitted;
+  let stored = record;
+  return createPositionRepository({
+    read: async () => stored,
+    write: async (value) => {
+      await merge(value.key, value);
+      stored = value;
     },
-    invalidateFacet(facet, positions) {
-      if (positions) {
-        for (const position of positions) facets.delete(id(position, facet));
-        return;
-      }
-      const prefix = `${facet}\u0000`;
-      for (const key of facets.keys()) if (key.startsWith(prefix)) facets.delete(key);
-    },
-    load: async (_position, _facet, producer) => producer({
-      signal: new AbortController().signal,
-      priority: () => 'foreground',
-    }),
-  };
+    version: () => 0,
+    log: () => {},
+  });
 }
 
 test('cloud eval 404 is successful absence and is cached', async () => {

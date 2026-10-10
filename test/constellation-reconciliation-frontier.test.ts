@@ -31,6 +31,7 @@ test('source-usable Explorer Reading stays on the structural frontier until reco
     fen: START_FEN,
     explorer,
     explorerFetchedAt: Date.now(),
+    explorerRequestProfile: JSON.stringify({ variant: 'standard', moves: '30', topGames: '4', recentGames: '8' }),
     games: 100,
   });
   let networkCalls = 0;

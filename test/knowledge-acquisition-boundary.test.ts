@@ -253,6 +253,7 @@ test('Explorer rejects move counts outside the source sample', async () => {
     fen: START_FEN,
     explorer: stale,
     explorerFetchedAt: staleFetchedAt,
+    explorerRequestProfile: JSON.stringify({ variant: 'standard', moves: '30', topGames: '4', recentGames: '8' }),
   });
   globalThis.fetch = async () => ({
     ok: true,

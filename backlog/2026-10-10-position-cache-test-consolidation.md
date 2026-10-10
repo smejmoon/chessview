@@ -1,6 +1,6 @@
 # Do:
 
-After repository-owned caching lands, simplify cache and provider tests. Keep shared cache behavior verified at the repository boundary, source-specific parsing and quality verified in source tests, and delete tests or helpers that no longer guard independent requirements.
+Simplify cache and provider tests now that the repository owns the generic cache lifecycle. Keep shared cache behavior verified at the repository boundary, source-specific parsing and quality verified in source tests, and delete tests or helpers that no longer guard independent requirements.
 
 Consolidate behavior that will have one owner rather than retaining the same assertions in every provider suite. Concrete reduction candidates:
 - Move generic cache-hit, freshness, stale-data-first delivery, due background refresh, shared refresh, and failed-persistence behavior to focused `PositionRepository` contract tests instead of testing equivalent branches through all three providers.
@@ -10,13 +10,9 @@ Consolidate behavior that will have one owner rather than retaining the same ass
 
 Inspect `test/position-repository.test.ts`, `test/explorer-provider.test.ts`, `test/masters-provider.test.ts`, `test/eval-loading.test.ts`, and other cache tests for any additional overlapping behavior, but do not delete a case purely because it resembles another: the same scenario may still guard a distinct source contract.
 
-# Blocked:
-
-Explorer, Masters, and LichessEval still implement separate caching lifecycles. Until [source consolidation](2026-10-10-position-cache-source-consolidation.md) replaces them, their tests cover live behavior and are not safe to remove solely for duplication.
-
 # Because:
 
-The agreed [Position cache](../docs/architecture/position-cache.md) contract intentionally centralizes generic caching; duplicate mock repository lifecycles and duplicate tests should not survive migration just because they once tested separate implementations.
+The agreed [Position cache](../docs/architecture/position-cache.md) contract centralizes generic caching. Provider suites still contain overlapping generic cache cases even though replacement repository coverage now exists; duplicate test lifecycles should not survive only because they once tested separate implementations.
 
 # Edges:
 

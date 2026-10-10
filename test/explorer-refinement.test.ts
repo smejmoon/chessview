@@ -13,30 +13,9 @@ function deferred() {
   return { promise, resolve };
 }
 
-test('Explorer 429 classification exposes the lower-owned cooldown as a retry gate', () => {
-  const gate = deferred();
-  let slept = null;
-  const classify = createExplorerRefinementFailureClassifier({
-    cooldownUntil: () => 61_000,
-    now: () => 1_000,
-    sleep: (ms) => {
-      slept = ms;
-      return gate.promise;
-    },
-  });
-
-  const outcome = classify(Object.assign(new Error('rate limited'), { status: 429 }));
-  assert.equal(outcome.refinement, 'retryable');
-  assert.equal(slept, 60_000);
-  assert.equal(outcome.retry, gate.promise);
-});
-
-test('post-fallback Explorer source failure is unavailable for this run while ObsoleteWork remains control flow', () => {
-  const classify = createExplorerRefinementFailureClassifier({
-    cooldownUntil: () => 0,
-    now: () => 0,
-  });
-
+test('Explorer 429 ends this attempt without a retry gate', () => {
+  const classify = createExplorerRefinementFailureClassifier();
+  assert.deepEqual(classify(Object.assign(new Error('rate limited'), { status: 429 })), { refinement: 'unavailable' });
   assert.deepEqual(classify(new Error('network failed')), { refinement: 'unavailable' });
   assert.equal(classify(obsoleteWork('old view')), null);
 });

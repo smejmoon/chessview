@@ -77,17 +77,17 @@ function constraintsFor(mode: 'roots' | 'lines') {
   return constraints;
 }
 
-async function discoverRootPredecessors(center, { signal, priority }): Promise<RefinementOutcome> {
-  const reading = await loadExplorerReading(center, { signal, priority });
+async function discoverRootPredecessors(center, { signal, urgency }): Promise<RefinementOutcome> {
+  const reading = await loadExplorerReading(center, { signal, urgency });
   const ids = sampleGameIds(reading);
   if (!ids.length) return Object.freeze({ refinement: 'satisfied' as const });
 
   debugLog('Root discovery replaying sampled games', { center, games: ids.length });
-  const nominations = await discoverSampledPredecessors(center, ids, { signal, priority });
+  const nominations = await discoverSampledPredecessors(center, ids, { signal, urgency });
   let unavailable = false;
   for (const nomination of nominations) {
     if (signal.aborted) return Object.freeze({ refinement: 'unavailable' as const });
-    const outcome = await refineExplorerReading(nomination.source, { signal, priority });
+    const outcome = await refineExplorerReading(nomination.source, { signal, urgency });
     if (outcome.refinement === 'unavailable') unavailable = true;
   }
   return unavailable
@@ -110,7 +110,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
       purpose: 'root-discovery',
       modes: ['roots'],
       nodusWide: false,
-      run: ({ signal, priority }) => discoverRootPredecessors(center, { signal, priority }),
+      run: ({ signal, urgency }) => discoverRootPredecessors(center, { signal, urgency }),
     });
   }
   if (rootTransposition) {
@@ -127,7 +127,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
       modes: target.modes,
       nodusWide: target.nodusWide,
       structuralReading: target.structuralModes.includes(mode) ? target.position : null,
-      run: ({ signal, priority }) => refineExplorerReading(target.position, { signal, priority }),
+      run: ({ signal, urgency }) => refineExplorerReading(target.position, { signal, urgency }),
     });
   }
 
@@ -136,7 +136,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
       key: `cloud-eval:${target.position}`,
       modes: target.modes,
       nodusWide: target.nodusWide,
-      run: ({ signal, priority }) => lichessEval.get(target.position, { signal, priority }),
+      run: ({ signal, urgency }) => lichessEval.get(target.position, { signal, urgency }),
     });
   }
 
@@ -145,7 +145,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
       key: `masters:${target.position}`,
       modes: target.modes,
       nodusWide: target.nodusWide,
-      run: ({ signal, priority }) => loadMasters(target.position, { signal, priority }),
+      run: ({ signal, urgency }) => loadMasters(target.position, { signal, urgency }),
     });
   }
 

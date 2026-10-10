@@ -63,18 +63,18 @@ export function createMastersProvider({
 
   function admit(key: string, value: any, { fetchedAt = 0, persisted = true }: any = {}) {
     if (!value) return value;
-    repository.admitFacet(key, 'masters', value, { fetchedAt, persisted });
+    repository.admitSourceChannel(key, 'masters', value, { fetchedAt, persisted });
     return value;
   }
 
   function markPersisted(key: string, value: any, fetchedAt: number) {
-    const admitted = repository.currentFacet(key, 'masters');
+    const admitted = repository.currentSourceChannel(key, 'masters');
     if (!admitted || admitted.value !== value || admitted.fetchedAt !== fetchedAt) return;
-    repository.admitFacet(key, 'masters', value, { fetchedAt, persisted: true });
+    repository.admitSourceChannel(key, 'masters', value, { fetchedAt, persisted: true });
   }
 
   function current(positionKey: string) {
-    return repository.currentFacet(canonicalPosition(positionKey), 'masters')?.value ?? null;
+    return repository.currentSourceChannel(canonicalPosition(positionKey), 'masters')?.value ?? null;
   }
 
   async function readCached(positionKey: string) {
@@ -122,7 +122,7 @@ export function createMastersProvider({
         return admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
       }
 
-      const live = repository.currentFacet(key, 'masters');
+      const live = repository.currentSourceChannel(key, 'masters');
       if (live && !live.persisted && now() - live.fetchedAt < MASTERS_TTL_MS) return live.value;
 
       const url = new URL(MASTERS_ENDPOINT);

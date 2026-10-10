@@ -16,6 +16,8 @@ export type ExplorerMove = GameCounts & Readonly<{
 
 export type ExplorerReading = GameCounts & Readonly<{
   moves?: readonly ExplorerMove[];
+  /** Source-supplied OpeningLabel metadata, not the user's opening route. */
+  opening?: unknown;
   [field: string]: unknown;
 }>;
 

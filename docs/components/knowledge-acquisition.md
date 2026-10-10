@@ -26,13 +26,13 @@ For Current View refinement, Knowledge Acquisition preserves that separation in 
 
 When reconciliation completes, [Current view](../architecture/current-view.md) may recompute the accepted view from facts now available. If that reconciliation was admitted as a structural obligation, completion alone is not enough for settlement: the result must be incorporated or made irrelevant by recomposition. Knowledge Acquisition does not push graph changes to Rail/Constellation and does not maintain a source-to-consumer event graph.
 
-Source clients own endpoint-specific access, authentication behavior, request parameters, parsing/source validation, facet freshness, stale fallback, provider-current retention, successful source absence, and semantic classification of exhausted source acquisition for refinement. They expose usable source observations or source-level refinement outcomes; they do not own Chessview graph-growth policy.
+Source clients own endpoint-specific access, authentication behavior, request parameters, parsing/source validation, source channel freshness, stale fallback, provider-current retention, successful source absence, and semantic classification of exhausted source acquisition for refinement. They expose usable source observations or source-level refinement outcomes; they do not own Chessview graph-growth policy.
 
 [`PositionGraph`](../architecture/position-graph.md) owns canonical Graph Edge identity, legal-edge validation, invariant-preserving mutation, and durable edge persistence. Knowledge Acquisition decides whether an observed unknown relationship receives Edge Admission and ensures admitted graph knowledge is established.
 
 [Evidence](evidence.md) owns semantic chess meaning from usable source observations. Knowledge Acquisition does not mirror mutable Explorer statistics onto Graph Edges and does not decide evaluation/human-result semantics.
 
-[`LichessGateway`](../architecture/lichess-gateway.md) owns application-wide Lichess transport scheduling, cooldown, and queued cancellation. `PositionRepository` owns shared producer lifetime for one position/facet. Knowledge Acquisition supplies foreground/background participation according to caller policy but does not create separate producer identities for current-view consumers.
+[`LichessGateway`](../architecture/lichess-gateway.md) owns application-wide Lichess transport scheduling, cooldown, and queued cancellation. `PositionRepository` owns shared producer lifetime for one position/source channel. Knowledge Acquisition supplies foreground/background participation according to caller policy but does not create separate producer identities for current-view consumers.
 
 ## Root bootstrap from sampled games
 
@@ -80,8 +80,8 @@ Supplementary lookahead is Constellation-directed and outside structural settlem
 - Lookahead nomination does not make a position visible, make Current View structurally Settling, or require graph reconciliation.
 - An obsolete nomination that has not started does no source work.
 - Once a supplementary warm starts, Knowledge Acquisition gives it a bounded background lifetime so reusable source data may finish into cache even if the old view changes.
-- Later foreground demand for the same position/facet may join the same shared producer and promote its transport urgency rather than duplicate retrieval.
-- Warming a graph-bearing source facet does not itself reconcile that observation into `ChartedGraph`; a later deliberate reconciliation may consume the warmed observation.
+- Later foreground demand for the same position/source channel may join the same shared producer and promote its transport urgency rather than duplicate retrieval.
+- Warming a graph-bearing source channel does not itself reconcile that observation into `ChartedGraph`; a later deliberate reconciliation may consume the warmed observation.
 - Knowledge Acquisition does not recursively crawl from warmed results or invent a second relevance ranking.
 - Supplementary lookahead does not keep Weather structurally unsettled.
 

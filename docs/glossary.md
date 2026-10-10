@@ -6,6 +6,14 @@ This glossary is the canonical index of Chessview terminology. It defines what a
 
 Chessview's stable identity for a playable chess state, independent of the route used to reach it. [ChartedGraph](components/charted-graph.md#nodes) owns the exact node-identity rule.
 
+## SourceChannel
+
+A named category of independently maintained source observations for a canonical position, such as `explorer`, `masters`, or `cloud-eval`. `PositionRepository` identifies admitted observations and equivalent shared acquisitions by the pair (canonical position, SourceChannel). A SourceChannel names a data category, not a transport connection or event stream. See [PositionRepository](architecture/position-repository.md).
+
+## OpeningLabel
+
+Optional source-supplied opening-classification metadata (typically an ECO code and opening name) carried inside the `opening` field of an Explorer observation or its move data. An OpeningLabel is not canonical-position identity and does not establish which move order the user actually followed. See [Opening Explorer databases](components/opening-explorer-databases.md).
+
 ## Nodus
 
 The canonical position currently organizing the map.

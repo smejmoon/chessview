@@ -4,13 +4,13 @@
 
 `LichessEval` is Chessview's application boundary for obtaining usable Lichess cloud evaluations for canonical positions.
 
-Callers ask whether usable engine data is already available or ask the provider to obtain it. They do not decide whether that data should come from persistence, a repository-owned live facet value, a fresh Lichess request, or a stale fallback.
+Callers ask whether usable engine data is already available or ask the provider to obtain it. They do not decide whether that data should come from persistence, a repository-owned live source channel value, a fresh Lichess request, or a stale fallback.
 
 ## Responsibilities
 
 `LichessEval` owns the source-facing quality and acquisition policy for Lichess cloud evaluation:
 
-- canonical-position lookup for the cloud-eval facet;
+- canonical-position lookup for the cloud-eval source channel;
 - cloud-eval endpoint parameters and response parsing;
 - source-payload validation;
 - the minimum depth required before a cloud evaluation is exposed to the rest of Chessview;
@@ -24,19 +24,19 @@ Callers ask whether usable engine data is already available or ask the provider 
 - routing every application-issued Lichess request through `LichessGateway`;
 - aggregate operational status for Interface diagnostics and user-visible source activity.
 
-`PositionRepository`, not `LichessEval`, owns the generic live `(position, cloud-eval)` facet value and equivalent shared producer lifetime. `LichessEval` decides what value may be admitted there and whether a retained value is acceptable under cloud-eval policy.
+`PositionRepository`, not `LichessEval`, owns the generic live `(position, cloud-eval)` source channel value and equivalent shared producer lifetime. `LichessEval` decides what value may be admitted there and whether a retained value is acceptable under cloud-eval policy.
 
 The current minimum usable cloud-eval depth is `18`. A value below that threshold may be retained according to provider cache policy, but it is not exposed as a usable evaluation.
 
 ## Consumer API
 
-`available(position)` returns an already available usable evaluation or `null`. It never starts Lichess acquisition. The provider checks repository-owned live facet state and durable position records, then applies cloud-eval usability policy. This exists for callers such as initial Constellation composition that may use existing engine knowledge but must not make engine acquisition relevant merely by inspecting a candidate.
+`available(position)` returns an already available usable evaluation or `null`. It never starts Lichess acquisition. The provider checks repository-owned live source channel state and durable position records, then applies cloud-eval usability policy. This exists for callers such as initial Constellation composition that may use existing engine knowledge but must not make engine acquisition relevant merely by inspecting a candidate.
 
 `get(position, { signal })` returns a usable evaluation or `null`. Once a caller has decided engine information is worth obtaining, `LichessEval` owns whether the result comes from an acceptable retained value, refresh, or stale fallback. The optional `AbortSignal` represents that caller's continued interest; equivalent producer lifetime remains owned by `PositionRepository`.
 
 Neither method exposes freshness, cache age, request-failure sentinels, HTTP status, or retrieval strategy as evaluation data.
 
-A valid usable Lichess response is admitted to repository-owned live facet state before best-effort persistence, so it remains usable even if updating local persistence fails. In that case `get()` returns the source value and the operational channel reports a local-cache issue. Failure to persist successful absence likewise remains a cache issue rather than being reclassified as a Lichess transport failure.
+A valid usable Lichess response is admitted to repository-owned live source channel state before best-effort persistence, so it remains usable even if updating local persistence fails. In that case `get()` returns the source value and the operational channel reports a local-cache issue. Failure to persist successful absence likewise remains a cache issue rather than being reclassified as a Lichess transport failure.
 
 `subscribe(listener)` publishes aggregate operational status separately from evaluation data. Status currently has:
 
@@ -60,7 +60,7 @@ Missing provider output remains unknown to Evidence. A provider issue must never
 
 `LichessGateway` owns application-wide HTTP scheduling and cooldown policy. `LichessEval` owns cloud-eval-specific request construction and interpretation of the source response.
 
-`PositionRepository` owns canonical position records, repository-current live cloud-eval facet state, shared per-facet producer lifetime, participant lifetime, and effective acquisition urgency. `LichessEval` owns the meaning of `cloudEval` / `cloudEvalFetchedAt`, validation, freshness, stale fallback, successful absence, and whether a live or persisted value is usable.
+`PositionRepository` owns canonical position records, repository-current live cloud-eval source channel state, shared per-source-channel producer lifetime, participant lifetime, and effective acquisition urgency. `LichessEval` owns the meaning of `cloudEval` / `cloudEvalFetchedAt`, validation, freshness, stale fallback, successful absence, and whether a live or persisted value is usable.
 
 Repository write failure is reported back to `LichessEval`; it does not revoke an already admitted usable live value. `LichessEval` decides how that local-cache issue appears on its operational channel.
 

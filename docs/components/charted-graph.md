@@ -69,7 +69,7 @@ Established graph knowledge survives reloads. Ordinary application behavior has 
 
 [`PositionGraph`](../architecture/position-graph.md) is the current application-level Graph Edge access and mutation boundary beneath this model. It owns edge normalization, legal source/Move/target validation, exact mutation API semantics, concurrency coordination for graph mutation, and persistence mechanics. It does not own Explorer freshness, source-observation ordering, source evidence, or Constellation selection state.
 
-[`PositionRepository`](../architecture/position-repository.md) separately owns canonical position records and their hydrated data facets. Source clients use those records for refreshable observations such as Explorer Readings; higher-level acquisition, materialization, and transposition workflows establish graph knowledge through `PositionGraph` without redefining `ChartedGraph` identity.
+[`PositionRepository`](../architecture/position-repository.md) separately owns canonical position records and their hydrated data source channels. Source clients use those records for refreshable observations such as Explorer Readings; higher-level acquisition, materialization, and transposition workflows establish graph knowledge through `PositionGraph` without redefining `ChartedGraph` identity.
 
 ## Verification
 

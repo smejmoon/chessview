@@ -53,16 +53,16 @@ test('Explorer provider invalidation drops repository-owned live readings', asyn
   const position = canonicalPosition(START_FEN);
   await provider.ensure(position);
   assert.ok(provider.current(position));
-  assert.ok(repository.currentFacet(position, 'explorer'));
+  assert.ok(repository.currentSourceChannel(position, 'explorer'));
 
   provider.invalidate([position]);
 
   assert.equal(provider.current(position), null);
-  assert.equal(repository.currentFacet(position, 'explorer'), null);
+  assert.equal(repository.currentSourceChannel(position, 'explorer'), null);
 });
 
 
-test('canonical position storage strips legacy top-level opening identity', async () => {
+test('canonical position storage strips legacy top-level OpeningLabel metadata', async () => {
   await clearGraph();
   const position = canonicalPosition(START_FEN);
   const stored = await putNode({

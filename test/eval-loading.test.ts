@@ -13,26 +13,26 @@ const FAILED_EVAL = '8/8/8/8/8/8/8/K5k1 w - -';
 const SHALLOW_EVAL = '8/8/8/8/8/8/8/K4k2 w - -';
 
 function repositoryStub({ record = null, merge = async () => {} } = {}) {
-  const facets = new Map();
-  const id = (position, facet) => `${facet}\u0000${position}`;
+  const sourceChannels = new Map();
+  const id = (position, sourceChannel) => `${sourceChannel}\u0000${position}`;
   return {
     get: async () => record,
     merge,
-    currentFacet(position, facet) { return facets.get(id(position, facet)) ?? null; },
-    admitFacet(position, facet, value, metadata = {}) {
+    currentSourceChannel(position, sourceChannel) { return sourceChannels.get(id(position, sourceChannel)) ?? null; },
+    admitSourceChannel(position, sourceChannel, value, metadata = {}) {
       const admitted = Object.freeze({ value, ...metadata });
-      facets.set(id(position, facet), admitted);
+      sourceChannels.set(id(position, sourceChannel), admitted);
       return admitted;
     },
-    invalidateFacet(facet, positions) {
+    invalidateSourceChannel(sourceChannel, positions) {
       if (positions) {
-        for (const position of positions) facets.delete(id(position, facet));
+        for (const position of positions) sourceChannels.delete(id(position, sourceChannel));
         return;
       }
-      const prefix = `${facet}\u0000`;
-      for (const key of facets.keys()) if (key.startsWith(prefix)) facets.delete(key);
+      const prefix = `${sourceChannel}\u0000`;
+      for (const key of sourceChannels.keys()) if (key.startsWith(prefix)) sourceChannels.delete(key);
     },
-    load: async (_position, _facet, producer) => producer({
+    load: async (_position, _sourceChannel, producer) => producer({
       signal: new AbortController().signal,
       priority: () => 'foreground',
     }),

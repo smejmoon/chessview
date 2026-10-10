@@ -42,7 +42,7 @@ test('position repository reuses an in-memory record before persistence fallback
   assert.equal(reads, 1);
 });
 
-test('concurrent facet merges preserve both updates on one canonical record', async () => {
+test('concurrent sourceChannel merges preserve both updates on one canonical record', async () => {
   let version = 0;
   const stored = new Map([[key, { key, fen: START_FEN }]]);
   const repository = createPositionRepository({
@@ -66,7 +66,7 @@ test('concurrent facet merges preserve both updates on one canonical record', as
   assert.deepEqual(record.mastersExplorer, { moves: [] });
 });
 
-test('repository retains admitted live facet state independently from persisted records', async () => {
+test('repository retains admitted live sourceChannel state independently from persisted records', async () => {
   const repository = createPositionRepository({
     read: async () => null,
     write: async () => { throw new Error('storage unavailable'); },
@@ -74,33 +74,33 @@ test('repository retains admitted live facet state independently from persisted 
   });
   const reading = { moves: [] };
 
-  const admitted = repository.admitFacet(key, 'explorer', reading, {
+  const admitted = repository.admitSourceChannel(key, 'explorer', reading, {
     fetchedAt: 123,
     persisted: false,
   });
 
-  assert.strictEqual(repository.currentFacet(key, 'explorer'), admitted);
-  assert.strictEqual(repository.currentFacet(key, 'explorer').value, reading);
-  assert.equal(repository.currentFacet(key, 'explorer').persisted, false);
+  assert.strictEqual(repository.currentSourceChannel(key, 'explorer'), admitted);
+  assert.strictEqual(repository.currentSourceChannel(key, 'explorer').value, reading);
+  assert.equal(repository.currentSourceChannel(key, 'explorer').persisted, false);
   assert.equal(await repository.get(key), null);
 });
 
-test('facet invalidation can target selected positions or one entire facet', () => {
+test('sourceChannel invalidation can target selected positions or one entire sourceChannel', () => {
   const second = canonicalPosition('8/8/8/8/8/4k3/4P3/4K3 w - - 0 1');
   const repository = createPositionRepository({ read: async () => null, write: async (value) => value, version: () => 0 });
 
-  repository.admitFacet(key, 'explorer', 'first', { fetchedAt: 1, persisted: true });
-  repository.admitFacet(second, 'explorer', 'second', { fetchedAt: 2, persisted: true });
-  repository.admitFacet(key, 'cloud-eval', 'eval', { fetchedAt: 3, persisted: true });
+  repository.admitSourceChannel(key, 'explorer', 'first', { fetchedAt: 1, persisted: true });
+  repository.admitSourceChannel(second, 'explorer', 'second', { fetchedAt: 2, persisted: true });
+  repository.admitSourceChannel(key, 'cloud-eval', 'eval', { fetchedAt: 3, persisted: true });
 
-  repository.invalidateFacet('explorer', [key]);
-  assert.equal(repository.currentFacet(key, 'explorer'), null);
-  assert.equal(repository.currentFacet(second, 'explorer').value, 'second');
-  assert.equal(repository.currentFacet(key, 'cloud-eval').value, 'eval');
+  repository.invalidateSourceChannel('explorer', [key]);
+  assert.equal(repository.currentSourceChannel(key, 'explorer'), null);
+  assert.equal(repository.currentSourceChannel(second, 'explorer').value, 'second');
+  assert.equal(repository.currentSourceChannel(key, 'cloud-eval').value, 'eval');
 
-  repository.invalidateFacet('explorer');
-  assert.equal(repository.currentFacet(second, 'explorer'), null);
-  assert.equal(repository.currentFacet(key, 'cloud-eval').value, 'eval');
+  repository.invalidateSourceChannel('explorer');
+  assert.equal(repository.currentSourceChannel(second, 'explorer'), null);
+  assert.equal(repository.currentSourceChannel(key, 'cloud-eval').value, 'eval');
 });
 
 test('one obsolete caller detaches without cancelling shared position work', async () => {

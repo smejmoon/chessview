@@ -10,7 +10,7 @@ Current examples include rated Explorer, Masters, and Lichess cloud evaluation. 
 
 A source observation provider owns the **meaning and policy** required to expose usable observations from one external source.
 
-`PositionRepository` owns the generic application lifetime of position-associated facet values and equivalent in-flight acquisition. Providers do not duplicate that lifetime state with their own per-position `latest` maps.
+`PositionRepository` owns the generic application lifetime of position-associated source channel values and equivalent in-flight acquisition. Providers do not duplicate that lifetime state with their own per-position `latest` maps.
 
 A provider keeps request construction, source-specific validation, freshness, fallback, absence, retry/recovery, and operational failure detail behind its boundary. Consumers receive usable source data or absence, plus only exceptional outcomes for which the consumer owns a meaningful decision.
 
@@ -24,13 +24,13 @@ A provider may expose operational activity/issues separately when useful for dia
 
 Requesting an observation and reading one already available are different relationships.
 
-An acquisition participant asks the provider to ensure usable source data exists. The provider may satisfy that request from durable cache, from a repository-owned live admitted facet value where source policy allows it, or by joining/starting retrieval. Concurrent acquisition participants for the same source facet and position share producer lifetime through `PositionRepository`; participation may affect request priority and last-participant cancellation.
+An acquisition participant asks the provider to ensure usable source data exists. The provider may satisfy that request from durable cache, from a repository-owned live admitted source channel value where source policy allows it, or by joining/starting retrieval. Concurrent acquisition participants for the same source channel and position share producer lifetime through `PositionRepository`; participation may affect request priority and last-participant cancellation.
 
-Reading available state is passive. A provider may inspect the repository-owned live facet value and/or durable record without starting a request, keeping a request alive, or affecting request priority. Current-view projections use this passive path: Rail, Constellation composition, and Evidence derive from facts already available rather than opening their own hydration lifecycles.
+Reading available state is passive. A provider may inspect the repository-owned live source channel value and/or durable record without starting a request, keeping a request alive, or affecting request priority. Current-view projections use this passive path: Rail, Constellation composition, and Evidence derive from facts already available rather than opening their own hydration lifecycles.
 
 Current-view synchronization does **not** require providers to route notifications to consumers. The current-view boundary already coordinates work it requested and may recompute projections when relevant work completes. Mere provider activity, run ownership, or task completion does not define whether the active Constellation is [Settling or Settled](../glossary.md#settled); that follows the current-view settlement contract. There is no requirement for a generic provider subscription API or source-to-consumer event bus.
 
-For Explorer, a fresh validated Reading is admitted to the repository's live `explorer` facet before best-effort cache persistence. That Reading remains usable in the current application lifetime when persistence fails, and repeated `ensure()` may reuse the fresh unpersisted observation rather than duplicate retrieval. Once successfully persisted, the same live facet remains available to passive consumers without becoming a shadow durable cache with independent freshness semantics.
+For Explorer, a fresh validated Reading is admitted to the repository's live `explorer` source channel before best-effort cache persistence. That Reading remains usable in the current application lifetime when persistence fails, and repeated `ensure()` may reuse the fresh unpersisted observation rather than duplicate retrieval. Once successfully persisted, the same live source channel remains available to passive consumers without becoming a shadow durable cache with independent freshness semantics.
 
 Masters and LichessEval use the same generic repository lifetime mechanism for their usable live values. Their exact freshness, fallback, absence, and usability rules remain source-specific.
 
@@ -38,7 +38,7 @@ Passive available state does not decide graph admission, Constellation selection
 
 ## PositionRepository relationship
 
-`PositionRepository` owns generic state for `(canonical position, facet)`:
+`PositionRepository` owns generic state for `(canonical position, source channel)`:
 
 - the live admitted value for the current application lifetime;
 - generic provider-supplied metadata such as observation timestamp and persistence status;
@@ -82,7 +82,7 @@ Reuse the generic state/lifetime mechanics already established by `PositionRepos
 
 The architectural abstraction is therefore:
 
-- `PositionRepository`: generic position-facet state and acquisition lifetime;
+- `PositionRepository`: generic position/source-channel state and acquisition lifetime;
 - source provider: source meaning and policy;
 - `LichessGateway`: generic transport state/policy.
 

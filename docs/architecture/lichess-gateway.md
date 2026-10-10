@@ -56,19 +56,19 @@ Explorer, Masters, cloud-evaluation, and authentication clients own endpoint-spe
 
 They do not thereby own every downstream semantic interpretation of that data. In particular, [`LichessEval`](lichess-eval.md) owns whether cloud-eval data is usable, while [Evidence](../components/evidence.md) owns derived chess meaning such as move loss and move quality.
 
-Position-backed clients use [`PositionRepository`](position-repository.md) for canonical node access and shared per-facet producer lifetime. That repository does not send Lichess traffic itself: the endpoint client still constructs and interprets its request, and the application-issued HTTP request still goes through `LichessGateway`.
+Position-backed clients use [`PositionRepository`](position-repository.md) for canonical node access and shared per-source-channel producer lifetime. That repository does not send Lichess traffic itself: the endpoint client still constructs and interprets its request, and the application-issued HTTP request still goes through `LichessGateway`.
 
 The repository may expose a live effective priority for shared work as subscribers join or leave. The gateway observes that transport urgency only when selecting the next queued request; it does not own subscriber lifetime or current-view relevance.
 
 ## Dependency direction
 
-Application and domain code depend on Lichess-backed clients and `PositionRepository`. Position-backed Lichess clients coordinate canonical records/shared facet work through `PositionRepository` and depend on `LichessGateway` for transport. `LichessGateway` is the only application transport that performs those Lichess HTTP requests.
+Application and domain code depend on Lichess-backed clients and `PositionRepository`. Position-backed Lichess clients coordinate canonical records/shared source channel work through `PositionRepository` and depend on `LichessGateway` for transport. `LichessGateway` is the only application transport that performs those Lichess HTTP requests.
 
 Higher layers do not bypass this direction with direct application-issued Lichess API access or a second request scheduler.
 
 ## Exclusions
 
-The gateway coordinates transport access to Lichess; it is not a general application service. It does not decide move quality, Root rarity, Line selection, graph expansion, Rail presentation, OAuth UI/navigation, canonical-position identity, facet freshness, shared parsed-result lifetime, or source-specific fallback.
+The gateway coordinates transport access to Lichess; it is not a general application service. It does not decide move quality, Root rarity, Line selection, graph expansion, Rail presentation, OAuth UI/navigation, canonical-position identity, source channel freshness, shared parsed-result lifetime, or source-specific fallback.
 
 Caching stays with the position repository/domain clients unless a concrete cross-client requirement earns moving some cache behavior into the gateway.
 

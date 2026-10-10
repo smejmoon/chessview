@@ -22,14 +22,14 @@ The endpoint can filter by variant, position/path, speeds, rating groups, and da
 
 Its response data includes:
 
-- optional opening metadata for the source position (`eco`, `name`);
+- optional [OpeningLabel](../glossary.md#openinglabel) metadata for the source position (`eco`, `name`), carried by the Lichess `opening` field;
 - source-position result counts (`white`, `draws`, `black`);
-- returned moves with UCI, SAN, average rating, move-specific result counts, an optional representative game, and optional opening metadata;
+- returned moves with UCI, SAN, average rating, move-specific result counts, an optional representative game, and optional OpeningLabel metadata;
 - optional top/recent game references and historical result buckets when requested.
 
 Chessview uses this as its current primary human-game population. Root bootstrap consumes the optional representative-game references from this source; [`Lichess access`](lichess-access.md) owns the exact live request parameters and transport behavior.
 
-Chessview's **Explorer Reading** is the data-only source observation exposed from `LichessGamesDB`. A Reading contains source facts; fetch time, freshness/staleness, authentication, request state, and downstream reconciliation/projection state are not elements of the Reading. Optional opening metadata remains part of that source observation only. It is not canonical Nodus identity and is not mirrored onto the top-level position record because one canonical position may be reached through different opening histories. The current implementation persists the validated source value in the position record's Explorer facet and keeps its fetch timestamp separately.
+Chessview's **Explorer Reading** is the data-only source observation exposed from `LichessGamesDB`. A Reading contains source facts; fetch time, freshness/staleness, authentication, request state, and downstream reconciliation/projection state are not elements of the Reading. Optional OpeningLabel metadata remains part of that source observation only. It is neither canonical Nodus identity nor a record of the user's actual move order, and is not mirrored onto the top-level position record because different opening histories can reach the same canonical position. The current implementation persists the validated source value in the position record's Explorer source channel and keeps its fetch timestamp separately.
 
 ## MastersGamesDB
 
@@ -41,12 +41,12 @@ Chessview's **Explorer Reading** is the data-only source observation exposed fro
 
 Its response data includes:
 
-- optional opening metadata for the source position;
+- optional OpeningLabel metadata for the source position;
 - source-position result counts (`white`, `draws`, `black`);
-- returned moves with UCI, SAN, average rating, move-specific result counts, an optional representative master game, and optional opening metadata;
+- returned moves with UCI, SAN, average rating, move-specific result counts, an optional representative master game, and optional OpeningLabel metadata;
 - optional top master-game references.
 
-Chessview currently requests up to 30 moves and no top games. The current client persists this source value as the Masters facet (`mastersExplorer`) with a separate fetch timestamp and uses it as a comparison population for evidence. This document does not require the Masters value to share the exact same local shape as an Explorer Reading.
+Chessview currently requests up to 30 moves and no top games. The current client persists this source value as the Masters source channel (`mastersExplorer`) with a separate fetch timestamp and uses it as a comparison population for evidence. This document does not require the Masters value to share the exact same local shape as an Explorer Reading.
 
 ## PlayerGamesDB
 
@@ -60,13 +60,13 @@ Unlike the other two databases, the player endpoint is an on-demand indexed stre
 
 Its response data includes:
 
-- optional opening metadata for the source position;
+- optional OpeningLabel metadata for the source position;
 - indexing queue position;
 - source-position result counts (`white`, `draws`, `black`);
-- returned moves with UCI, SAN, average opponent rating, performance, move-specific result counts, an optional representative game, and optional opening metadata;
+- returned moves with UCI, SAN, average opponent rating, performance, move-specific result counts, an optional representative game, and optional OpeningLabel metadata;
 - optional recent-game references.
 
-Chessview does not currently consume `PlayerGamesDB`, so it has no current persisted Player-games facet or product data structure. A future client must keep the endpoint's streaming/indexing lifecycle separate from whatever stable data value it exposes to Chessview consumers.
+Chessview does not currently consume `PlayerGamesDB`, so it has no current persisted Player-games source channel or product data structure. A future client must keep the endpoint's streaming/indexing lifecycle separate from whatever stable data value it exposes to Chessview consumers.
 
 ## Source-shape comparison
 
@@ -86,4 +86,4 @@ A database client owns the endpoint-specific request and response contract neede
 - it may retain only source fields needed by Chessview rather than treating the complete wire response as the domain model;
 - it does not decide graph admission, Constellation visibility, or semantic evidence meaning merely because those consumers use its data.
 
-Transport serialization and cooldown remain owned by [`LichessGateway`](../architecture/lichess-gateway.md). Shared position-record/facet lifetime remains owned by [`PositionRepository`](../architecture/position-repository.md). Source-specific cache and failure requirements remain in [Lichess access](lichess-access.md).
+Transport serialization and cooldown remain owned by [`LichessGateway`](../architecture/lichess-gateway.md). Shared position-record/source channel lifetime remains owned by [`PositionRepository`](../architecture/position-repository.md). Source-specific cache and failure requirements remain in [Lichess access](lichess-access.md).

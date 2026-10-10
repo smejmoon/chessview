@@ -38,6 +38,7 @@ export type ExplorerReading = Readonly<{
   draws: number;
   black: number;
   moves: readonly ExplorerMove[];
+  /** Source-supplied OpeningLabel metadata, not a route-specific opening history. */
   opening?: unknown;
   [key: string]: unknown;
 }>;

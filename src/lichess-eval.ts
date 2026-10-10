@@ -102,15 +102,15 @@ export function createLichessEval({
 
   function admit(key: string, value: any, { fetchedAt = 0, persisted = true }: any = {}) {
     if (isUsableLichessEval(value)) {
-      repository.admitFacet(key, 'cloud-eval', value, { fetchedAt, persisted });
+      repository.admitSourceChannel(key, 'cloud-eval', value, { fetchedAt, persisted });
     }
     return value;
   }
 
   function markPersisted(key: string, value: any, fetchedAt: number) {
-    const admitted = repository.currentFacet(key, 'cloud-eval');
+    const admitted = repository.currentSourceChannel(key, 'cloud-eval');
     if (!admitted || admitted.value !== value || admitted.fetchedAt !== fetchedAt) return;
-    repository.admitFacet(key, 'cloud-eval', value, { fetchedAt, persisted: true });
+    repository.admitSourceChannel(key, 'cloud-eval', value, { fetchedAt, persisted: true });
   }
 
   async function persist(key: string, fields: Record<string, any>) {
@@ -126,7 +126,7 @@ export function createLichessEval({
 
   async function available(position: string) {
     const key = canonicalPosition(position);
-    const admitted = repository.currentFacet(key, 'cloud-eval')?.value ?? null;
+    const admitted = repository.currentSourceChannel(key, 'cloud-eval')?.value ?? null;
     if (admitted) return admitted;
     const record = await repository.get(key);
     const cached = isUsableLichessEval(record?.cloudEval) ? record.cloudEval : null;
@@ -147,7 +147,7 @@ export function createLichessEval({
         && now() - cachedFetchedAt < LICHESS_EVAL_TTL_MS;
       if (fresh) return admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });
 
-      const live = repository.currentFacet(key, 'cloud-eval');
+      const live = repository.currentSourceChannel(key, 'cloud-eval');
       if (live && !live.persisted && now() - live.fetchedAt < LICHESS_EVAL_TTL_MS) return live.value;
 
       const url = new URL(ENDPOINT);
@@ -179,7 +179,7 @@ export function createLichessEval({
       }
 
       if (response.status === 404) {
-        repository.invalidateFacet('cloud-eval', [key]);
+        repository.invalidateSourceChannel('cloud-eval', [key]);
         const fetchedAt = now();
         const storageIssue = await persist(key, { cloudEval: null, cloudEvalFetchedAt: fetchedAt });
         finishRequest(storageIssue);
@@ -223,7 +223,7 @@ export function createLichessEval({
 
       if (!isUsableLichessEval(value)) {
         if (!cachedValue) {
-          repository.invalidateFacet('cloud-eval', [key]);
+          repository.invalidateSourceChannel('cloud-eval', [key]);
           await persist(key, { cloudEval: value, cloudEvalFetchedAt: now() });
         } else {
           admit(key, cachedValue, { fetchedAt: cachedFetchedAt, persisted: true });

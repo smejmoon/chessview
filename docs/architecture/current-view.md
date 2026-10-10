@@ -86,7 +86,7 @@ spatial projection for the same Nodus. An obsolete run cannot mutate, publish
 into, or settle its replacement.
 
 Reusable source producer/cache lifetime remains separate. [`PositionRepository`](position-repository.md)
-owns shared per-position facet producers and participants may detach from them;
+owns shared per-position source channel producers and participants may detach from them;
 providers own source-specific policy and `LichessGateway` owns transport policy.
 A refinement run owns only its current-view participation and interpretation of
 semantic run outcomes supplied by those lower boundaries.

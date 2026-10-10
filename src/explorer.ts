@@ -9,7 +9,7 @@ import {
 import { debugLog } from './debug.ts';
 import { lichessSession } from './lichess-session.ts';
 import { isObsoleteWork } from './obsolete-work.ts';
-import { positionRepository } from './position-repository.ts';
+import { positionRepository, type SourceChannel } from './position-repository.ts';
 
 const ENDPOINT = 'https://explorer.lichess.org/lichess';
 const REQUEST_PARAMETERS = Object.freeze({
@@ -56,7 +56,7 @@ type ProducerContext = Readonly<{
   priority: () => LoadPriority;
 }>;
 
-type ExplorerFacet = Readonly<{
+type ExplorerSourceChannelEntry = Readonly<{
   value: ParsedExplorerReading;
   fetchedAt: number;
   persisted: boolean;
@@ -65,17 +65,17 @@ type ExplorerFacet = Readonly<{
 type ExplorerRepository = Readonly<{
   get(position: string): Promise<PositionRecord | null>;
   merge(position: string, fields: Readonly<Record<string, unknown>>): Promise<unknown>;
-  currentFacet(position: string, facet: string): ExplorerFacet | null;
-  admitFacet(
+  currentSourceChannel(position: string, sourceChannel: SourceChannel): ExplorerSourceChannelEntry | null;
+  admitSourceChannel(
     position: string,
-    facet: string,
+    sourceChannel: SourceChannel,
     value: ParsedExplorerReading,
     metadata: Readonly<{ fetchedAt: number; persisted: boolean }>,
-  ): ExplorerFacet;
-  invalidateFacet(facet: string, positions?: readonly string[]): void;
+  ): ExplorerSourceChannelEntry;
+  invalidateSourceChannel(sourceChannel: SourceChannel, positions?: readonly string[]): void;
   load<T>(
     position: string,
-    facet: string,
+    sourceChannel: SourceChannel,
     producer: (context: ProducerContext) => Promise<T>,
     options?: Readonly<{ signal?: AbortSignal; priority?: Priority }>,
   ): Promise<T>;
@@ -193,21 +193,21 @@ export function createExplorerProvider({
     fetchedAt: number,
     persisted = true,
   ): ParsedExplorerReading {
-    const existing = repository.currentFacet(canonical, 'explorer');
+    const existing = repository.currentSourceChannel(canonical, 'explorer');
     if (existing?.fetchedAt === fetchedAt && existing.value === reading && existing.persisted === persisted) {
       return existing.value;
     }
-    return repository.admitFacet(canonical, 'explorer', reading, { fetchedAt, persisted }).value;
+    return repository.admitSourceChannel(canonical, 'explorer', reading, { fetchedAt, persisted }).value;
   }
 
   function markPersisted(canonical: string, reading: ParsedExplorerReading, fetchedAt: number): void {
-    const admitted = repository.currentFacet(canonical, 'explorer');
+    const admitted = repository.currentSourceChannel(canonical, 'explorer');
     if (!admitted || admitted.value !== reading || admitted.fetchedAt !== fetchedAt) return;
-    repository.admitFacet(canonical, 'explorer', reading, { fetchedAt, persisted: true });
+    repository.admitSourceChannel(canonical, 'explorer', reading, { fetchedAt, persisted: true });
   }
 
   function invalidate(keys?: readonly string[]): void {
-    repository.invalidateFacet('explorer', keys);
+    repository.invalidateSourceChannel('explorer', keys);
   }
 
   async function readCached(key: string): Promise<ParsedExplorerReading | null> {
@@ -216,7 +216,7 @@ export function createExplorerProvider({
   }
 
   function current(key: string): ParsedExplorerReading | null {
-    return repository.currentFacet(canonicalPosition(key), 'explorer')?.value ?? null;
+    return repository.currentSourceChannel(canonicalPosition(key), 'explorer')?.value ?? null;
   }
 
   function recoverRefresh(
@@ -293,7 +293,7 @@ export function createExplorerProvider({
           return admit(canonical, cachedExplorer, cachedFetchedAt);
         }
 
-        const admitted = repository.currentFacet(canonical, 'explorer');
+        const admitted = repository.currentSourceChannel(canonical, 'explorer');
         if (
           admitted
           && !admitted.persisted

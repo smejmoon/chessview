@@ -4,7 +4,7 @@
 
 Own authentication, endpoint access, shared request policy, endpoint caches, and transport/failure semantics for Chessview's Lichess-backed data.
 
-The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). Canonical position record and shared facet lifetime are defined in [`docs/architecture/position-repository.md`](../architecture/position-repository.md). Cloud-evaluation source usability is defined in [`docs/architecture/lichess-eval.md`](../architecture/lichess-eval.md). Opening Explorer source populations and their source-data peculiarities are cataloged in [Opening Explorer databases](opening-explorer-databases.md). This component owns the observable request-policy requirements those boundaries must enforce.
+The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). Canonical position record and shared source channel lifetime are defined in [`docs/architecture/position-repository.md`](../architecture/position-repository.md). Cloud-evaluation source usability is defined in [`docs/architecture/lichess-eval.md`](../architecture/lichess-eval.md). Opening Explorer source populations and their source-data peculiarities are cataloged in [Opening Explorer databases](opening-explorer-databases.md). This component owns the observable request-policy requirements those boundaries must enforce.
 
 ## Data sources
 
@@ -60,9 +60,9 @@ The voluntary start interval is Chessview pacing policy used to reduce burstines
 
 Foreground/background is generic application work urgency, not browser Fetch priority. The gateway does not decide which chess or current-view work is foreground. It consumes the effective live urgency carried by separate work metadata when choosing the next queued request; an already in-flight request is not preempted. HTTP `RequestInit` remains reserved for browser request semantics.
 
-Position-backed endpoint clients may coalesce equivalent work for one canonical position and endpoint facet. One caller becoming obsolete must stop only that caller's participation without cancelling equivalent work still needed by another live caller. The shared producer's effective urgency is the highest urgency among its live subscribers, so joining or leaving shared work may promote or demote a still-queued request without creating another producer. When every caller to shared queued work becomes obsolete, the shared producer must be cancelled so the queued request does not reach Lichess.
+Position-backed endpoint clients may coalesce equivalent work for one canonical position and endpoint source channel. One caller becoming obsolete must stop only that caller's participation without cancelling equivalent work still needed by another live caller. The shared producer's effective urgency is the highest urgency among its live subscribers, so joining or leaving shared work may promote or demote a still-queued request without creating another producer. When every caller to shared queued work becomes obsolete, the shared producer must be cancelled so the queued request does not reach Lichess.
 
-Endpoint clients retain responsibility for request parameters, parsing, source validation, persistence, cache policy, and deciding whether source data is fit to expose. Facets retain independent freshness; a position record is not globally fresh or stale. Downstream semantic meaning belongs to the component that owns that evidence or product decision rather than to transport by default.
+Endpoint clients retain responsibility for request parameters, parsing, source validation, persistence, cache policy, and deciding whether source data is fit to expose. Source channels retain independent freshness; a position record is not globally fresh or stale. Downstream semantic meaning belongs to the component that owns that evidence or product decision rather than to transport by default.
 
 ## Cache and failure semantics
 

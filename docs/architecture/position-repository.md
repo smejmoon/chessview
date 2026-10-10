@@ -1,6 +1,6 @@
 # PositionRepository
 
-`PositionRepository` is Chessview's application-level owner of canonical position records and generic lifetime/state for position-associated source facets.
+`PositionRepository` is Chessview's application-level owner of canonical position records and generic lifetime/state for position-associated source channels.
 
 The repository owns **state without source meaning**. Source providers own **meaning and policy without duplicating repository lifetime state**.
 
@@ -8,9 +8,11 @@ The repository owns **state without source meaning**. Source providers own **mea
 
 One repository record is keyed by the [canonical position](../glossary.md#canonical-position) defined by [`ChartedGraph`](../components/charted-graph.md#nodes). `PositionRepository` consumes that identity; it does not maintain a second position-identity rule. A stored `fen` remains a playable six-field representation attached to that identity.
 
-A source facet is identified by `(canonical position, facet)`, for example rated Explorer, Masters, or cloud evaluation. Facet identity is generic repository infrastructure; the repository does not interpret what the facet value means.
+A [SourceChannel](../glossary.md#sourcechannel) is a named category of position-associated source observations, such as rated Explorer, Masters, or cloud evaluation. Its identity is `(canonical position, SourceChannel)`; the repository treats it as an opaque category key and does not interpret the observation's meaning.
 
-Route-dependent source annotations are not canonical position-record fields. In particular, an Explorer `opening` label remains inside the Explorer observation; it must not be mirrored to the top-level position record because one canonical position may be reached through multiple opening histories. The low-level position store also ignores legacy top-level `opening` fields so stale browser cache cannot reintroduce that false identity.
+Route-dependent source annotations are not canonical position-record fields. Different move orders can reach the same canonical position, so storing one route's annotation on that shared record would wrongly attribute it to every route.
+
+An Explorer [OpeningLabel](../glossary.md#openinglabel) is source-supplied classification metadata in the observation's `opening` field, not canonical-position identity or proof of the user's route. It remains inside the Explorer observation rather than being mirrored to the top-level position record. The low-level position store also ignores legacy top-level `opening` fields so stale browser cache cannot reintroduce that false identity.
 
 ## Record lifetime
 
@@ -22,31 +24,31 @@ Position persistence is rebuildable browser cache. The `nodes` store has its own
 
 `src/db.ts` is retained only as the typed test/maintenance surface, including whole-store reset. Application position code does not use it as a mixed node/edge persistence API.
 
-## Live facet state
+## Live source channel state
 
-A validated source observation may become usable before or independently of successful persistence. `PositionRepository` therefore owns one optional **live admitted value** for each `(position, facet)` during the current application lifetime.
+A validated source observation may become usable before or independently of successful persistence. `PositionRepository` therefore owns one optional **live admitted value** for each `(position, source channel)` during the current application lifetime.
 
-A live facet entry contains the admitted value plus generic metadata supplied by the source provider, such as the observation timestamp and whether that exact admitted value has been persisted. This state exists so a usable source observation does not disappear merely because IndexedDB persistence failed.
+A live source channel entry contains the admitted value plus generic metadata supplied by the source provider, such as the observation timestamp and whether that exact admitted value has been persisted. This state exists so a usable source observation does not disappear merely because IndexedDB persistence failed.
 
 The repository does not decide whether an observation deserves admission. The source provider parses and validates source data first, then admits the usable value. Likewise, the repository does not decide whether a retained value is fresh, stale-but-usable, authoritative absence, or should be refreshed. Those remain source-specific decisions.
 
-Live facet state is not a second durable cache. It is page-lifetime application state. Facet invalidation may remove selected live values without changing unrelated facets or Graph Edge topology.
+Live source channel state is not a second durable cache. It is page-lifetime application state. Invalidating a SourceChannel may remove selected live values without changing unrelated source channels or Graph Edge topology.
 
-## Facet hydration and shared producer lifetime
+## SourceChannel hydration and shared producer lifetime
 
-Explorer, cloud evaluation, Masters, and future position-backed data are independently hydrated facets. There is no whole-node freshness flag: each endpoint client keeps its own TTL, request parameters, parsing, validation, fallback, absence, and failure semantics.
+Explorer, cloud evaluation, Masters, and future position-backed data are independently hydrated source channels. There is no whole-node freshness flag: each endpoint client keeps its own TTL, request parameters, parsing, validation, fallback, absence, and failure semantics.
 
-Equivalent concurrent loads for one facet and canonical key share one producer. Each caller participates with generic work demand: its own lifetime signal and urgency. One caller becoming obsolete detaches only that caller. The shared producer exposes the highest effective urgency among its live callers, so queued transport can promote or demote as callers join or leave without creating another producer. When the last caller detaches before the producer settles, the repository aborts the producer so cancellable downstream work can stop.
+Equivalent concurrent loads for one source channel and canonical key share one producer. Each caller participates with generic work demand: its own lifetime signal and urgency. One caller becoming obsolete detaches only that caller. The shared producer exposes the highest effective urgency among its live callers, so queued transport can promote or demote as callers join or leave without creating another producer. When the last caller detaches before the producer settles, the repository aborts the producer so cancellable downstream work can stop.
 
 The shared producer receives a repository-owned work context rather than any caller's context. Its abort signal represents the lifetime of the coalesced producer, and its urgency is live aggregate state derived from current participants. This keeps producer lifetime independent of first-caller lifetime while preserving cancellation when nobody still needs the work.
 
 Work demand is generic application coordination rather than a Lichess transport type. `PositionRepository` owns aggregation because coalescing happens here; it does not schedule HTTP requests. A source provider may forward the producer work context to a transport operation, while persistence and other useful completion work remain independent unless they explicitly consume that context.
 
-This gives the repository one coherent responsibility around source facets:
+This gives the repository one coherent responsibility around source channels:
 
-- what live value is currently admitted for `(position, facet)`;
+- what live value is currently admitted for `(position, source channel)`;
 - what persisted record fields currently exist for that position;
-- what shared producer is currently establishing that facet;
+- what shared producer is currently establishing that source channel;
 - which callers still participate in that producer;
 - the producer's effective urgency;
 - cancellation when no participant remains.
@@ -63,17 +65,17 @@ Lichess-backed endpoint clients own endpoint meaning and source policy. They dec
 - stale fallback;
 - successful absence versus failure;
 - source-specific retry/recovery;
-- which generic facet metadata to attach when admitting a value.
+- which generic source channel metadata to attach when admitting a value.
 
-Once a provider has established a usable observation, it uses `PositionRepository` to retain that live facet value, coordinate equivalent acquisition, and persist position fields. Providers must not maintain a parallel `latest`/current-value map for the same position facet.
+Once a provider has established a usable observation, it uses `PositionRepository` to retain that live source channel value, coordinate equivalent acquisition, and persist position fields. Providers must not maintain a parallel `latest`/current-value map for the same position source channel.
 
-`LichessGateway` owns application-wide serialization, cooldown, pre-send cancellation, and generic queued transport precedence. It does not own canonical-position identity, source-facet state, facet freshness, shared parsed-result semantics, or the domain reason a caller is foreground or background.
+`LichessGateway` owns application-wide serialization, cooldown, pre-send cancellation, and generic queued transport precedence. It does not own canonical-position identity, source-channel state, source channel freshness, shared parsed-result semantics, or the domain reason a caller is foreground or background.
 
 ## Graph boundary
 
-Refreshable source facets are not `ChartedGraph` state. Clearing or replacing Explorer/Masters/evaluation cache data must not retract established Graph Edges.
+Refreshable source channels are not `ChartedGraph` state. Clearing or replacing Explorer/Masters/evaluation cache data must not retract established Graph Edges.
 
-Conversely, whether a source observation has been incorporated into graph topology is **not source-facet state**. Knowledge Acquisition and `PositionGraph` own reconciliation/convergence against graph state. `PositionRepository` must not turn graph-incorporation status into source-facet meaning.
+Conversely, whether a source observation has been incorporated into graph topology is **not source-channel state**. Knowledge Acquisition and `PositionGraph` own reconciliation/convergence against graph state. `PositionRepository` must not turn graph-incorporation status into source-channel meaning.
 
 `PositionGraph` separately owns durable Graph Edge access, legal edge normalization, and edge mutation coordination. Node-record hydration and Graph Edge mutation share canonical position identity but remain independent technical boundaries.
 
@@ -91,14 +93,14 @@ Deterministic tests should cover:
 
 - in-memory persisted-record reuse before IndexedDB fallback;
 - persisted updates remaining visible through the repository;
-- live admitted facet values surviving persistence failure;
-- facet invalidation remaining scoped to the selected facet/positions;
-- independently cancellable callers sharing one facet load;
+- live admitted source channel values surviving persistence failure;
+- source channel invalidation remaining scoped to the selected source channel/positions;
+- independently cancellable callers sharing one source channel load;
 - effective shared urgency following the highest live caller demand;
 - last-caller cancellation aborting the shared producer;
 - replacement callers being able to start fresh work after a cancelled producer is detached;
-- source-client freshness remaining independent per facet;
-- source-facet eviction leaving `ChartedGraph` topology unchanged;
+- source-client freshness remaining independent per source channel;
+- source-channel eviction leaving `ChartedGraph` topology unchanged;
 - an incompatible node-cache schema clearing nodes without invalidating an independently compatible Graph Edge cache;
-- route-dependent Explorer opening metadata remaining source-local rather than becoming canonical position-record identity;
-- legacy top-level opening labels being ignored at the persisted position-store boundary.
+- source-supplied Explorer OpeningLabel metadata remaining source-local rather than becoming canonical position-record identity;
+- legacy top-level `opening` fields being ignored at the persisted position-store boundary.

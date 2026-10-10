@@ -50,7 +50,7 @@ Graph Edge persistence is rebuildable browser cache. It has its own logical sche
 
 ## Boundaries
 
-[`PositionRepository`](position-repository.md) owns canonical position records and their independently hydrated facets. It does not own Graph Edge identity or graph reconciliation.
+[`PositionRepository`](position-repository.md) owns canonical position records and their independently hydrated source channels. It does not own Graph Edge identity or graph reconciliation.
 
 [`Knowledge acquisition`](../components/knowledge-acquisition.md) decides whether an observed unknown relationship receives Edge Admission. For an already-known relationship, current Explorer evidence remains in the source/evidence path rather than being written through `PositionGraph`.
 

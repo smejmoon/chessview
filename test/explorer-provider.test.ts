@@ -155,7 +155,7 @@ test('Explorer request profile refreshes a legacy aggregate cache once and then 
 });
 
 
-test('Explorer opening metadata stays source-local instead of becoming canonical position identity', async () => {
+test('Explorer OpeningLabel metadata stays source-local instead of becoming canonical position identity', async () => {
   const repository = createPositionRepository({
     read: async () => null,
     write: async (value) => value,

@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  currentViewRefinementPriority,
-  deriveCurrentViewRefinementDemand,
-} from '../src/current-view-refinement.ts';
+import { deriveCurrentViewRefinementDemand } from '../src/current-view-refinement.ts';
 
 function target(items, position) {
   return items.find((item) => item.position === position);
@@ -25,6 +22,7 @@ test('Current View derives refinement demand from its one accepted Constellation
     },
   });
 
+  assert.equal(demand.rootDiscovery, 'A');
   assert.equal(demand.rootTransposition, 'A');
 
   const center = target(demand.explorer, 'A');
@@ -62,6 +60,7 @@ test('Root transposition demand waits for authoritative visible Root topology', 
       },
     },
   });
+  assert.equal(emptyRoots.rootDiscovery, 'A');
   assert.equal(emptyRoots.rootTransposition, null);
 
   const lines = deriveCurrentViewRefinementDemand({
@@ -74,6 +73,7 @@ test('Root transposition demand waits for authoritative visible Root topology', 
       },
     },
   });
+  assert.equal(lines.rootDiscovery, null);
   assert.equal(lines.rootTransposition, null);
 
   const roots = deriveCurrentViewRefinementDemand({
@@ -86,27 +86,45 @@ test('Root transposition demand waits for authoritative visible Root topology', 
       },
     },
   });
+  assert.equal(roots.rootDiscovery, 'A');
   assert.equal(roots.rootTransposition, 'A');
 });
 
-test('Current View demand priority follows active mode while Nodus-wide demand stays foreground', () => {
+
+test('Root discovery is nominated even before Root composition is established', () => {
+  const roots = deriveCurrentViewRefinementDemand({ center: 'A', mode: 'roots', structure: null });
+  const lines = deriveCurrentViewRefinementDemand({ center: 'A', mode: 'lines', structure: null });
+  assert.equal(roots.rootDiscovery, 'A');
+  assert.equal(roots.rootTransposition, null);
+  assert.equal(lines.rootDiscovery, null);
+});
+
+test('duplicate positions preserve single-mode relevance, structural admission and center fallback', () => {
   const demand = deriveCurrentViewRefinementDemand({
     center: 'A',
-    mode: 'roots',
+    mode: 'lines',
     structure: {
+      readingFrontier: ['B', 'B'],
       composition: {
-        nodes: [{ key: 'B' }],
-        relationships: [],
+        nodes: [{ key: 'B' }, { key: 'B' }],
+        relationships: [
+          { edge: { source: 'B', target: 'C' } },
+          { edge: { source: 'B', target: 'C' } },
+        ],
       },
     },
   });
 
-  const center = target(demand.explorer, 'A');
-  const roots = target(demand.explorer, 'B');
-  assert.ok(center);
-  assert.ok(roots);
-
-  assert.equal(currentViewRefinementPriority(center, 'lines'), 'foreground');
-  assert.equal(currentViewRefinementPriority(roots, 'roots'), 'foreground');
-  assert.equal(currentViewRefinementPriority(roots, 'lines'), 'background');
+  assert.deepEqual(demand.explorer.map(({ position }) => position), ['B', 'A']);
+  assert.deepEqual(target(demand.explorer, 'B')?.modes, ['lines']);
+  assert.deepEqual(target(demand.explorer, 'B')?.structuralModes, ['lines']);
+  assert.deepEqual(target(demand.explorer, 'A')?.modes, []);
+  assert.deepEqual(target(demand.explorer, 'A')?.structuralModes, []);
+  assert.deepEqual(target(demand.cloudEval, 'A')?.modes, []);
+  assert.deepEqual(target(demand.masters, 'A')?.modes, []);
+  assert.deepEqual(target(demand.cloudEval, 'B')?.modes, ['lines']);
+  assert.deepEqual(target(demand.cloudEval, 'C')?.modes, ['lines']);
+  assert.deepEqual(demand.masters.map(({ position }) => position), ['B', 'A']);
+  assert.ok(Object.isFrozen(target(demand.explorer, 'B')?.modes));
+  assert.ok(Object.isFrozen(target(demand.explorer, 'B')?.structuralModes));
 });

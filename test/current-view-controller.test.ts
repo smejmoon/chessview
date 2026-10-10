@@ -152,6 +152,55 @@ test('mode switches keep the same Nodus and recompose one semantic Constellation
   assert.equal(controller.snapshot.structure.value.marker, 'A:roots');
 });
 
+test('live refinement priority follows mode changes while Nodus-wide work stays foreground', async () => {
+  const modeWork = deferred();
+  const nodusWork = deferred();
+  let modePriority;
+  let nodusPriority;
+  const { controller } = fixture({
+    refine: () => [
+      {
+        key: 'mode-specific',
+        modes: ['roots'],
+        run: ({ priority }) => {
+          modePriority = priority;
+          return modeWork.promise;
+        },
+      },
+      {
+        key: 'nodus-wide',
+        modes: ['roots'],
+        nodusWide: true,
+        run: ({ priority }) => {
+          nodusPriority = priority;
+          return nodusWork.promise;
+        },
+      },
+    ],
+  });
+
+  try {
+    await controller.start();
+    await flush();
+    assert.equal(typeof modePriority, 'function');
+    assert.equal(typeof nodusPriority, 'function');
+    assert.equal(modePriority(), 'foreground');
+    assert.equal(nodusPriority(), 'foreground');
+
+    await controller.setMode('lines');
+    assert.equal(modePriority(), 'background');
+    assert.equal(nodusPriority(), 'foreground');
+
+    await controller.setMode('roots');
+    assert.equal(modePriority(), 'foreground');
+    assert.equal(nodusPriority(), 'foreground');
+  } finally {
+    controller.dispose();
+    modeWork.resolve();
+    nodusWork.resolve();
+  }
+});
+
 test('new refinement runs use presenter.start while redraw and accepted replacements use update', async () => {
   const { controller, publications } = fixture();
   await controller.start();

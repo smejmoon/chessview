@@ -129,7 +129,6 @@ export type CurrentViewControllerOptions = {
   initial?: {
     center?: unknown;
     view?: unknown;
-    mode?: unknown;
     orientation?: unknown;
   };
   canonicalize: (value: unknown) => string;
@@ -180,7 +179,6 @@ type RefinementRun = {
 type RestoreRoute = {
   center?: unknown;
   view?: unknown;
-  mode?: unknown;
 };
 
 function normalizeMode(mode: unknown): ViewMode {
@@ -263,7 +261,6 @@ function refinementOutcome(value: unknown): RefinementOutcome | null {
   return null;
 }
 
-export const refinementSatisfied: RefinementOutcome = Object.freeze({ refinement: 'satisfied' });
 export const refinementUnavailable: RefinementOutcome = Object.freeze({ refinement: 'unavailable' });
 
 export function refinementRetryable(retry: PromiseLike<unknown>): RefinementOutcome {
@@ -321,7 +318,7 @@ export class CurrentViewController {
     this.#log = log;
     this.#state = {
       nodus: canonicalize(initial?.center),
-      mode: normalizeMode(initial?.mode ?? initial?.view),
+      mode: normalizeMode(initial?.view),
       structure: lifecycle('idle'),
       rail: lifecycle('idle'),
     };
@@ -405,7 +402,7 @@ export class CurrentViewController {
     const previousNodus = this.#state.nodus;
     const previousMode = this.#state.mode;
     const nextNodus = this.#canonicalize(route.center ?? previousNodus);
-    const nextMode = normalizeMode(route.view ?? route.mode ?? previousMode);
+    const nextMode = normalizeMode(route.view ?? previousMode);
     const sameNodus = nextNodus === previousNodus;
     const sameProjection = sameNodus && nextMode === previousMode;
     this.#state.nodus = nextNodus;
@@ -486,7 +483,6 @@ export class CurrentViewController {
       run
       && !this.#disposed
       && this.#run === run
-      && run.revision === this.#revision
       && !run.abortController.signal.aborted,
     );
   }

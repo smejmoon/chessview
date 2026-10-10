@@ -4,7 +4,7 @@
 
 Own how accepted Chessview product state becomes an interactive visual experience without becoming a second owner of that product truth.
 
-Lens combines presentation preferences with the current presentation environment to derive the geometry and effective composition constraints under which the current Nodus is shown. It also owns presentation-local interaction choices such as global board orientation, Guide visibility, Debug visibility, and other ephemeral UI state. Domain objects remain owned by their components: Nodus owns position-centered behavior and refinement demand, Constellation owns visible-subgraph composition and structural admission, Evidence owns semantic evidence, Rail owns its Line inventory/evidence surface, Weather owns readiness meaning, and current-view coordination owns publication/currentness.
+Lens combines presentation preferences with the current presentation environment to derive the geometry and effective composition constraints under which the current Nodus is shown. It also owns presentation-local interaction choices such as global board orientation, Guide visibility, Debug visibility, and other ephemeral UI state. Domain objects remain owned by their components: Nodus identifies the position organizing the map, Current View coordinates refinement demand, Constellation owns visible-subgraph composition and structural admission, Evidence owns semantic evidence, Rail owns its Line inventory/evidence surface, Weather owns readiness meaning, and current-view coordination owns publication/currentness.
 
 `NodusRenderer` is Lens's rendering delegate. It owns DOM and Chessground mutation under the application root; it does not independently own presentation preferences or composition-capacity decisions.
 

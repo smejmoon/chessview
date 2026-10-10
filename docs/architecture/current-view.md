@@ -103,9 +103,11 @@ accepted current-view state. It may combine:
 - Root enrichment and other view-local enrichment;
 - bounded sampled-game Root bootstrap while Root context is active.
 
-Planning does not make Nodus an acquisition owner. Current View maps demand onto
-opaque keyed refinement work and coordinates run-local participation. Planning
-is a synchronous, side-effect-free derivation from the accepted structure:
+Planning does not make Nodus an acquisition owner. `current-view-refinement.ts`
+owns demand nomination, including Root discovery; `switchboard.ts` binds that
+demand to keyed executable provider operations without running them. Current View
+coordinates run-local participation. Planning is a synchronous, side-effect-free
+derivation from the accepted structure:
 planning never waits; the refinement work it describes may wait. A newly
 composed ready structure has its refinement participation reconciled before that
 structure is published, so a published Reading frontier has already had the
@@ -117,7 +119,7 @@ graph/topology enrichment, may have a different producer lifetime. Providers and
 Knowledge Acquisition retain source meaning, freshness/fallback/retry policy,
 and durable reconciliation behavior.
 
-While Root context is active, planning nominates one keyed sampled-game bootstrap participant for the current run. Recomposition with the same participant does not repeat an already terminal attempt; a replacement refinement run or leaving and later re-entering Root mode may create a new attempt. The bootstrap obtains the center Reading through the ordinary Explorer provider, reuses whatever representative game IDs that usable Reading contains, batch-exports/replays them to discover predecessor source positions, then asks ordinary Explorer refinement to reconcile those sources. The sampled games themselves never become accepted topology or quantitative Evidence. Once a predecessor Reading is reconciled, its outgoing graph knowledge naturally supplies both the Root relationship and sibling relationships from that source.
+While Root context is active, planning nominates one keyed sampled-game bootstrap participant for the current run. Recomposition with the same participant does not repeat an already terminal attempt; a replacement refinement run or leaving and later re-entering Root mode may create a new attempt. [Knowledge Acquisition §Root bootstrap from sampled games](../components/knowledge-acquisition.md#root-bootstrap-from-sampled-games) owns how sampled games nominate predecessor sources and how ordinary Explorer refinement reconciles them.
 
 A source name, task key, provider type, or mere run ownership cannot manufacture
 structural criticality. Only a Constellation-admitted obligation participates in

@@ -8,23 +8,19 @@ import './debug.css';
 import { canonicalPosition } from './graph.ts';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { CurrentViewController } from './current-view-controller.ts';
-import type { RefinementTask } from './current-view-controller.ts';
+import { switchboard } from './switchboard.ts';
 import { debugLog } from './debug.ts';
 import { clearExplorerCache } from './explorer-cache.ts';
-import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
-import { discoverRootPredecessors } from './root-bootstrap.ts';
+import { warmExplorerReading } from './knowledge-acquisition.ts';
 import { createLens } from './lens.ts';
-import { loadMasters } from './masters.ts';
 import { lichessSession } from './lichess-session.ts';
 import { materializeMove } from './move-materialization.ts';
-import { deriveCurrentViewRefinementDemand } from './current-view-refinement.ts';
 import { composeNodusStructure } from './nodus-structure.ts';
 import { lichessEval } from './lichess-eval.ts';
 import { createLichessEvalStatusPresenter } from './lichess-eval-presentation.ts';
 import { createNodusRenderer } from './nodus-renderer.ts';
 import { createNodusPresenter } from './nodus-presenter.ts';
 import { composeNodusRail } from './rail-source.ts';
-import { rootTranspositionEnricher } from './root-enrichment.ts';
 import { createRouteLedger } from './route-ledger.ts';
 import { preferenceStore } from './preference-store.ts';
 import { decorateWeatherDiagnostics } from './weather-diagnostics.ts';
@@ -109,58 +105,6 @@ async function startApplication(): Promise<void> {
     return constraints;
   }
 
-  function tasksForCurrentView({ center, mode, structure }): readonly RefinementTask[] {
-    const demand = deriveCurrentViewRefinementDemand({ center, mode, structure });
-    const tasks: RefinementTask[] = [];
-
-    const rootTransposition = demand.rootTransposition;
-    if (mode === 'roots') {
-      tasks.push({
-        key: `root-discovery:${center}`,
-        purpose: 'root-discovery',
-        modes: ['roots'],
-        run: ({ signal, priority }) => discoverRootPredecessors(center, { signal, priority }),
-      });
-    }
-    if (rootTransposition) {
-      tasks.push({
-        key: `root-transpositions:${rootTransposition}`,
-        nodusWide: true,
-        run: ({ signal }) => rootTranspositionEnricher.ensure(rootTransposition, { signal }),
-      });
-    }
-
-    for (const target of demand.explorer) {
-      tasks.push({
-        key: `explorer:${target.position}`,
-        modes: target.modes,
-        nodusWide: target.nodusWide,
-        structuralReading: target.structuralModes.includes(mode) ? target.position : null,
-        run: ({ signal, priority }) => refineExplorerReading(target.position, { signal, priority }),
-      });
-    }
-
-    for (const target of demand.cloudEval) {
-      tasks.push({
-        key: `cloud-eval:${target.position}`,
-        modes: target.modes,
-        nodusWide: target.nodusWide,
-        run: ({ signal, priority }) => lichessEval.get(target.position, { signal, priority }),
-      });
-    }
-
-    for (const target of demand.masters) {
-      tasks.push({
-        key: `masters:${target.position}`,
-        modes: target.modes,
-        nodusWide: target.nodusWide,
-        run: ({ signal, priority }) => loadMasters(target.position, { signal, priority }),
-      });
-    }
-
-    return tasks;
-  }
-
   async function warmLookahead({ center, structure, signal }) {
     const nominations = nominateConstellationLookahead({ center, structure });
     await Promise.all(nominations.map((position) => warmExplorerReading(position, { signal })));
@@ -185,7 +129,7 @@ async function startApplication(): Promise<void> {
       });
     },
     rail: composeNodusRail,
-    refine: tasksForCurrentView,
+    refine: switchboard,
     lookahead: warmLookahead,
     materializeMove,
     presenter,

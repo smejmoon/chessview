@@ -11,78 +11,74 @@ type StructureLike = Readonly<{
 }>;
 
 type MutableTarget = {
-  modes: Set<ViewMode>;
+  relevant: boolean;
 };
 
 type MutableExplorerTarget = MutableTarget & {
-  structuralModes: Set<ViewMode>;
+  structural: boolean;
 };
 
-export type CurrentViewRefinementTarget = Readonly<{
+type CurrentViewRefinementTarget = Readonly<{
   position: string;
   modes: readonly ViewMode[];
   nodusWide: boolean;
 }>;
 
-export type CurrentViewExplorerDemand = CurrentViewRefinementTarget & Readonly<{
+type CurrentViewExplorerDemand = CurrentViewRefinementTarget & Readonly<{
   structuralModes: readonly ViewMode[];
 }>;
 
-export type CurrentViewRefinementDemand = Readonly<{
+type CurrentViewRefinementDemand = Readonly<{
+  rootDiscovery: string | null;
   rootTransposition: string | null;
   explorer: readonly CurrentViewExplorerDemand[];
   cloudEval: readonly CurrentViewRefinementTarget[];
   masters: readonly CurrentViewRefinementTarget[];
 }>;
 
-export type CurrentViewRefinementInput = Readonly<{
+type CurrentViewRefinementInput = Readonly<{
   center: string;
   mode: ViewMode;
   structure: unknown | null;
 }>;
 
-export type CurrentViewRefinementPriority = 'foreground' | 'background';
-
 function addTarget(
   demand: Map<string, MutableTarget>,
   position: string | null | undefined,
-  mode?: ViewMode,
+  relevant = false,
 ): void {
   if (!position) return;
   let target = demand.get(position);
   if (!target) {
-    target = { modes: new Set<ViewMode>() };
+    target = { relevant: false };
     demand.set(position, target);
   }
-  if (mode) target.modes.add(mode);
+  if (relevant) target.relevant = true;
 }
 
 function addExplorer(
   demand: Map<string, MutableExplorerTarget>,
   position: string | null | undefined,
-  mode: ViewMode,
   structural = false,
 ): void {
   if (!position) return;
   let target = demand.get(position);
   if (!target) {
-    target = {
-      modes: new Set<ViewMode>(),
-      structuralModes: new Set<ViewMode>(),
-    };
+    target = { relevant: true, structural: false };
     demand.set(position, target);
   }
-  target.modes.add(mode);
-  if (structural) target.structuralModes.add(mode);
+  target.relevant = true;
+  if (structural) target.structural = true;
 }
 
 function freezeTargets(
   demand: Map<string, MutableTarget>,
   center: string,
+  mode: ViewMode,
 ): readonly CurrentViewRefinementTarget[] {
   return Object.freeze([...demand].map(([position, target]) => Object.freeze({
     position,
-    modes: Object.freeze([...target.modes]),
+    modes: Object.freeze(target.relevant ? [mode] : []),
     nodusWide: position === center,
   })));
 }
@@ -90,11 +86,12 @@ function freezeTargets(
 function freezeExplorerTargets(
   demand: Map<string, MutableExplorerTarget>,
   center: string,
+  mode: ViewMode,
 ): readonly CurrentViewExplorerDemand[] {
   return Object.freeze([...demand].map(([position, target]) => Object.freeze({
     position,
-    modes: Object.freeze([...target.modes]),
-    structuralModes: Object.freeze([...target.structuralModes]),
+    modes: Object.freeze(target.relevant ? [mode] : []),
+    structuralModes: Object.freeze(target.structural ? [mode] : []),
     nodusWide: position === center,
   })));
 }
@@ -121,40 +118,31 @@ export function deriveCurrentViewRefinementDemand({
   const structure = inputStructure as StructureLike | null;
 
   for (const position of structure?.readingFrontier ?? []) {
-    addExplorer(explorerDemand, position, mode, true);
+    addExplorer(explorerDemand, position, true);
   }
   for (const node of structure?.composition?.nodes ?? []) {
-    addExplorer(explorerDemand, node.key, mode);
+    addExplorer(explorerDemand, node.key);
   }
   for (const relationship of structure?.composition?.relationships ?? []) {
     const edge = relationship.edge;
     if (!edge?.source || !edge.target) continue;
-    addExplorer(explorerDemand, edge.source, mode);
-    addTarget(evalDemand, edge.source, mode);
-    addTarget(evalDemand, edge.target, mode);
-    addTarget(mastersDemand, edge.source, mode);
+    addExplorer(explorerDemand, edge.source);
+    addTarget(evalDemand, edge.source, true);
+    addTarget(evalDemand, edge.target, true);
+    addTarget(mastersDemand, edge.source, true);
   }
 
   if (!explorerDemand.has(center)) {
-    explorerDemand.set(center, {
-      modes: new Set<ViewMode>(),
-      structuralModes: new Set<ViewMode>(),
-    });
+    explorerDemand.set(center, { relevant: false, structural: false });
   }
   addTarget(evalDemand, center);
   addTarget(mastersDemand, center);
 
   return Object.freeze({
+    rootDiscovery: mode === 'roots' ? center : null,
     rootTransposition: hasAuthoritativeRoot(center, mode, structure) ? center : null,
-    explorer: freezeExplorerTargets(explorerDemand, center),
-    cloudEval: freezeTargets(evalDemand, center),
-    masters: freezeTargets(mastersDemand, center),
+    explorer: freezeExplorerTargets(explorerDemand, center, mode),
+    cloudEval: freezeTargets(evalDemand, center, mode),
+    masters: freezeTargets(mastersDemand, center, mode),
   });
-}
-
-export function currentViewRefinementPriority(
-  demand: CurrentViewRefinementTarget,
-  activeMode: ViewMode,
-): CurrentViewRefinementPriority {
-  return demand.nodusWide || demand.modes.includes(activeMode) ? 'foreground' : 'background';
 }

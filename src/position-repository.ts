@@ -1,6 +1,6 @@
 import { getNode, nodeStoreVersion, putNode } from './position-store.ts';
 import { canonicalPosition, toPlayableFen } from './graph.ts';
-import { obsoleteWork } from './obsolete-work.ts';
+import { obsoleteWork, throwIfObsolete } from './obsolete-work.ts';
 
 // An independent category of observations attached to a canonical position.
 export type SourceChannel = string;
@@ -182,6 +182,9 @@ export function createPositionRepository({
   }
 
   function load(position: any, sourceChannel: SourceChannel, producer: (context: any) => any, { signal, priority = 'foreground' }: { signal?: AbortSignal; priority?: LoadPriority } = {}) {
+    if (signal?.aborted) {
+      return Promise.reject(obsoleteWork('Position load participation became obsolete', signal.reason));
+    }
     syncVersion();
     const key = canonicalPosition(position);
     const id = `${sourceChannel}\u0000${key}`;
@@ -196,11 +199,14 @@ export function createPositionRepository({
         subscribers: new Set(),
       };
       shared = created;
-      const work = Promise.resolve().then(() => producer(Object.freeze({
-        key,
-        signal: controller.signal,
-        priority: () => effectivePriority(created),
-      })));
+      const work = Promise.resolve().then(() => {
+        throwIfObsolete(controller.signal, 'Shared position load became obsolete before starting');
+        return producer(Object.freeze({
+          key,
+          signal: controller.signal,
+          priority: () => effectivePriority(created),
+        }));
+      });
       created.promise = work.finally(() => {
         created.settled = true;
         if (activeSourceChannelLoads.get(id) === created) activeSourceChannelLoads.delete(id);

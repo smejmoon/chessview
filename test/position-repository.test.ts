@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { START_FEN, canonicalPosition } from '../src/graph.ts';
 import { createPositionRepository } from '../src/position-repository.ts';
+import { isObsoleteWork } from '../src/obsolete-work.ts';
 
 const key = canonicalPosition(START_FEN);
 
@@ -101,6 +102,63 @@ test('sourceChannel invalidation can target selected positions or one entire sou
   repository.invalidateSourceChannel('explorer');
   assert.equal(repository.currentSourceChannel(second, 'explorer'), null);
   assert.equal(repository.currentSourceChannel(key, 'cloud-eval').value, 'eval');
+});
+
+test('already-obsolete first caller does not start a source-channel producer', async () => {
+  const repository = createPositionRepository({ read: async () => null, write: async (value) => value, version: () => 0 });
+  const obsolete = new AbortController();
+  obsolete.abort('superseded');
+  let producerCalls = 0;
+
+  await assert.rejects(
+    repository.load(key, 'explorer', () => { producerCalls += 1; return 'unwanted'; }, { signal: obsolete.signal }),
+    (error) => isObsoleteWork(error) && error.cause === 'superseded',
+  );
+  assert.equal(producerCalls, 0);
+
+  assert.equal(await repository.load(key, 'explorer', () => { producerCalls += 1; return 'fresh'; }), 'fresh');
+  assert.equal(producerCalls, 1);
+});
+
+test('last caller cancelling before producer startup prevents obsolete work', async () => {
+  const repository = createPositionRepository({ read: async () => null, write: async (value) => value, version: () => 0 });
+  const first = new AbortController();
+  let obsoleteProducerCalls = 0;
+  const abandoned = repository.load(key, 'masters', () => {
+    obsoleteProducerCalls += 1;
+    return 'unwanted';
+  }, { signal: first.signal });
+  const rejected = assert.rejects(abandoned, isObsoleteWork);
+
+  first.abort('no subscribers');
+  const replacement = repository.load(key, 'masters', () => 'fresh');
+  await rejected;
+  assert.equal(await replacement, 'fresh');
+  assert.equal(obsoleteProducerCalls, 0);
+});
+
+test('already-obsolete second caller cannot disturb a shared producer', async () => {
+  const repository = createPositionRepository({ read: async () => null, write: async (value) => value, version: () => 0 });
+  let sharedSignal;
+  let resolveShared;
+  let extraProducerCalls = 0;
+  const active = repository.load(key, 'cloud-eval', ({ signal }) => {
+    sharedSignal = signal;
+    return new Promise((resolve) => { resolveShared = resolve; });
+  });
+  await Promise.resolve();
+
+  const obsolete = new AbortController();
+  obsolete.abort();
+  await assert.rejects(repository.load(key, 'cloud-eval', () => {
+    extraProducerCalls += 1;
+    return 'wrong';
+  }, { signal: obsolete.signal }), isObsoleteWork);
+  assert.equal(extraProducerCalls, 0);
+  assert.equal(sharedSignal.aborted, false);
+
+  resolveShared('shared');
+  assert.equal(await active, 'shared');
 });
 
 test('one obsolete caller detaches without cancelling shared position work', async () => {

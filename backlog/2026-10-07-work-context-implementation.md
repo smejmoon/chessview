@@ -12,7 +12,7 @@ Define the explicit minimal `createLichessSession` dependency contract as part o
 
 ChessView currently overloads `RequestInit.priority` with application scheduling meaning, forcing `LichessRequestInit` to omit and redefine a browser field. The architecture decision keeps HTTP request description and application work metadata independent while retaining one gateway-owned scheduler.
 
-`PositionRepository` already creates a distinct shared producer lifetime and live effective urgency when it coalesces equivalent callers. Naming and typing that contract removes repeated ad-hoc `signal`/`priority` shapes without making repository semantics Lichess-specific.
+`PositionRepository` already names its shared-load state `SharedSourceChannelLoad` / `activeSourceChannelLoads`, coalesces equivalent callers, and guards deferred producer startup against obsolete demand. The remaining work is to type the shared producer context and caller demand consistently without repeating ad-hoc `signal`/`priority` shapes or making repository semantics Lichess-specific.
 
 Explorer refinement currently reads the gateway's absolute cooldown clock and recreates timing/sleep behavior. A semantic gate keeps cooldown ownership inside the transport boundary.
 
@@ -22,7 +22,7 @@ Preserve all observable scheduling behavior: one Lichess request in flight, requ
 
 Do not create another request scheduler. Generic work demand is metadata and lifetime coordination; `LichessGateway` remains the only owner of Lichess transport scheduling.
 
-Do not equate caller demand, coalesced producer lifetime, and HTTP operation lifetime. `PositionRepository` must continue creating a producer-owned abort signal, and persistence or other useful completion work must remain uncancelled unless it explicitly consumes that signal.
+Do not equate caller demand, coalesced producer lifetime, and HTTP operation lifetime. `PositionRepository` must continue creating a producer-owned abort signal, and persistence or other useful completion work must remain uncancelled unless it explicitly consumes that signal. Preserve its cancellation guards: an already-aborted caller does not create or disturb shared work, and an abandoned producer must not start after its final participant detaches.
 
 Keep gateway responses as `Response`; narrow dependency/test interfaces at their consumers instead of introducing a generic response wrapper.
 
@@ -40,4 +40,4 @@ Position-backed providers forward the repository-owned producer context into eac
 
 The gateway exposes a semantic active retry gate for 429 cooldown and no longer requires Explorer refinement to read `cooldownUntil`, compute delays, or own cooldown sleeping.
 
-Deterministic tests cover live urgency promotion/demotion, queued cancellation, session forwarding, semantic cooldown retry behavior, and the intended authorization retry-vs-redirect-coalescing lifecycle. Typecheck, tests, and build pass.
+Deterministic tests cover pre-aborted first/joining callers, cancellation before deferred producer startup, independent participant cancellation, live urgency promotion/demotion, queued cancellation, session forwarding, semantic cooldown retry behavior, and the intended authorization retry-vs-redirect-coalescing lifecycle. Typecheck, tests, and build pass.

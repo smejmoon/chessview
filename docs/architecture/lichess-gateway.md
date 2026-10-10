@@ -24,17 +24,13 @@ There are three distinct lifetimes:
 
 Those lifetimes must not be collapsed. In particular, an endpoint client may continue useful validation or persistence after a response has arrived even when the initiating view has disappeared, unless that work explicitly consumes the producer signal.
 
-The target gateway shape is conceptually `request(input, requestInit, work)`, where `requestInit` is ordinary `RequestInit` and `work` carries the ChessView signal/urgency contract. Exact exported type names may be introduced during implementation, but browser `RequestInit.priority` must never be repurposed for ChessView urgency.
+The gateway exposes `request(input, requestInit, work)`: `requestInit` is ordinary `RequestInit`; `work` carries application urgency and optional lifetime signal. `RequestInit.priority` retains browser Fetch meaning. When HTTP and work signals are both supplied they must be identical; conflicting signals are rejected so the signal delivered to Fetch always supplies exact cancellation provenance.
 
 `LichessSession.authorizedRequest` follows the same separation: authentication modifies HTTP headers and delegates the request plus work metadata; it does not reinterpret urgency or lifetime.
 
-## Cooldown and retry exposure
+## Cooldown and source availability
 
-The gateway owns the cooldown clock. Higher layers should not reconstruct transport timing from a raw `cooldownUntil` timestamp.
-
-Where a source policy needs to retry after a gateway-owned 429 cooldown, the gateway should expose a semantic retry gate (for example, a promise-like gate that is present only while retry is blocked). Explorer refinement can then classify a 429 as retryable using that gate without owning the cooldown duration, clock arithmetic, or sleep policy.
-
-This keeps one source of truth for transport availability while preserving Current View's existing rule that it waits on a lower-owned gate rather than busy-retrying.
+The gateway owns the shared 429 cooldown clock, keeps subsequent requests waiting for at least one minute, and does not publish that timestamp to source clients. Explorer treats HTTP 429 as unavailable for the current refinement attempt after retained-source fallback. No automatic same-run retry gate or extra scheduler is needed; a later refresh or visit can request that still-unknown Reading again. The current accepted Constellation remains usable.
 
 ## Transport response contract
 

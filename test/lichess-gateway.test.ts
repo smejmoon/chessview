@@ -263,8 +263,8 @@ test('Fetch priority remains an HTTP option, independent of work urgency', async
   await gateway.request('x', { priority: 'high' }, { urgency: 'background', signal: controller.signal });
   assert.equal(received[0].priority, 'high');
   assert.equal(received[0].signal, controller.signal);
-  await assert.rejects(
-    gateway.request('x', { signal: new AbortController().signal }, { signal: controller.signal }),
+  assert.throws(
+    () => gateway.request('x', { signal: new AbortController().signal }, { signal: controller.signal }),
     /Conflicting HTTP and work cancellation signals/,
   );
 });

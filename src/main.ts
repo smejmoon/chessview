@@ -8,7 +8,7 @@ import './debug.css';
 import { canonicalPosition } from './graph.ts';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { CurrentViewController } from './current-view-controller.ts';
-import type { RefinementOutcome, RefinementTask } from './current-view-controller.ts';
+import type { RefinementTask } from './current-view-controller.ts';
 import { debugLog } from './debug.ts';
 import { lichessSession } from './lichess-session.ts';
 import { clearExplorerCache } from './explorer-cache.ts';

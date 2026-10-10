@@ -17,14 +17,10 @@ function reading(uci = 'e2e4') {
   };
 }
 
-function repositoryStub({ record = null, merge = async () => {} } = {}) {
-  let stored = record;
+function repositoryWith(record = null, onWrite = async () => {}) {
   return createPositionRepository({
-    read: async () => stored,
-    write: async (value) => {
-      await merge(value.key, value);
-      stored = value;
-    },
+    read: async () => record,
+    write: onWrite,
     version: () => 0,
     log: () => {},
   });
@@ -34,33 +30,14 @@ function response(value) {
   return { ok: true, status: 200, json: async () => value };
 }
 
-test('fresh cached Masters Reading is returned without a source request', async () => {
-  const value = reading();
-  let requests = 0;
-  const provider = createMastersProvider({
-    repository: repositoryStub({
-      record: { mastersExplorer: value, mastersFetchedAt: 1_000 },
-    }),
-    request: async () => { requests += 1; return response(reading('d2d4')); },
-    now: () => 1_000 + MASTERS_TTL_MS - 1,
-    log: () => {},
-  });
-
-  assert.strictEqual(await provider.load(CENTER), value);
-  assert.equal(requests, 0);
-});
-
 test('malformed cached Masters data is ignored and replaced by valid fresh source data', async () => {
   const fresh = reading('d2d4');
   let persisted = null;
   const provider = createMastersProvider({
-    repository: repositoryStub({
-      record: {
-        mastersExplorer: { white: -1, draws: 0, black: 0, moves: [] },
-        mastersFetchedAt: 1_000,
-      },
-      merge: async (_key, fields) => { persisted = fields; },
-    }),
+    repository: repositoryWith({
+      mastersExplorer: { white: -1, draws: 0, black: 0, moves: [] },
+      mastersFetchedAt: 1_000,
+    }, async (value) => { persisted = value; }),
     request: async () => response(fresh),
     now: () => 2_000,
     log: () => {},
@@ -75,9 +52,7 @@ test('malformed fresh Masters data falls back to a usable stale cached Reading',
   const stale = reading();
   const logs = [];
   const provider = createMastersProvider({
-    repository: repositoryStub({
-      record: { mastersExplorer: stale, mastersFetchedAt: 1_000 },
-    }),
+    repository: repositoryWith({ mastersExplorer: stale, mastersFetchedAt: 1_000 }),
     request: async () => response({ white: 10, draws: 5, black: 5, moves: [{ uci: 'bad', white: 1, draws: 0, black: 0 }] }),
     now: () => 1_000 + MASTERS_TTL_MS + 1,
     log: (...args) => logs.push(args),
@@ -92,40 +67,13 @@ test('malformed fresh Masters data falls back to a usable stale cached Reading',
   )));
 });
 
-test('valid fresh Masters Reading remains usable and is reused when persistence fails', async () => {
-  const fresh = reading();
-  const logs = [];
-  let requests = 0;
-  const provider = createMastersProvider({
-    repository: repositoryStub({
-      merge: async () => { throw new Error('storage unavailable'); },
-    }),
-    request: async () => {
-      requests += 1;
-      return response(fresh);
-    },
-    now: () => 3_000,
-    log: (...args) => logs.push(args),
-  });
-
-  assert.strictEqual(await provider.load(CENTER), fresh);
-  assert.strictEqual(provider.current(CENTER), fresh);
-  assert.strictEqual(await provider.load(CENTER), fresh);
-  assert.equal(requests, 1);
-  assert.ok(logs.some(([message, _detail, level]) => (
-    message === 'Masters Reading persistence failed' && level === 'error'
-  )));
-});
-
 test('obsolete background Masters refresh leaves an immediately returned cached Reading intact', async () => {
   const stale = reading();
   const obsolete = obsoleteWork('superseded');
   const logs = [];
   const controller = new AbortController();
   const provider = createMastersProvider({
-    repository: repositoryStub({
-      record: { mastersExplorer: stale, mastersFetchedAt: 1_000 },
-    }),
+    repository: repositoryWith({ mastersExplorer: stale, mastersFetchedAt: 1_000 }),
     request: async (_url, { signal }) => new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(obsolete), { once: true });
     }),
@@ -142,7 +90,7 @@ test('obsolete background Masters refresh leaves an immediately returned cached 
 test('genuine Masters source failure returns absence without a failure sentinel', async () => {
   const logs = [];
   const provider = createMastersProvider({
-    repository: repositoryStub(),
+    repository: repositoryWith(),
     request: async () => { throw new Error('offline'); },
     now: () => 4_000,
     log: (...args) => logs.push(args),

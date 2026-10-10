@@ -19,7 +19,7 @@ Source clients continue supplying endpoint requests, meaningful cache identity, 
 
 Preserve startup authorization, explicit reconnect, accepted Constellation/Rail, Root representative-game requirements, Masters versus rated source identity, cloud-eval minimum depth and 404 semantics, source operational status, and cancellation. Do not add polling or a new Lichess scheduler. Coordinate shared work-demand changes with [work-context implementation](2026-10-07-work-context-implementation.md) without absorbing its transport/API migration.
 
-Concrete TTL numbers remain in `src/config.ts` and should change only with a source-stability rationale. Preserve real cache maintenance/debug entry points such as `src/explorer-cache.ts` while they have callers, rather than equating a small adapter with unnecessary code. The independently tracked [test consolidation](2026-10-10-position-cache-test-consolidation.md) removes obsolete provider-cache tests once the replacement is verified.
+Concrete TTL numbers remain in `src/config.ts` and should change only with a source-stability rationale. Preserve real cache maintenance/debug entry points such as `src/explorer-cache.ts` while they have callers, rather than equating a small adapter with unnecessary code.
 
 # Complete:
 

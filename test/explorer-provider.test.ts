@@ -28,50 +28,6 @@ function explorerReading() {
   };
 }
 
-test('Explorer admits once and reuses the live observation when persistence fails', async () => {
-  let requests = 0;
-  let writes = 0;
-  const repository = createPositionRepository({
-    read: async () => null,
-    write: async () => {
-      writes += 1;
-      throw new Error('storage unavailable');
-    },
-    version: () => 0,
-  });
-  const reading = explorerReading();
-  const provider = createExplorerProvider({
-    repository,
-    request: async () => {
-      requests += 1;
-      return {
-        ok: true,
-        status: 200,
-        json: async () => reading,
-        text: async () => '',
-      };
-    },
-    now: () => 1_000,
-    log: () => {},
-  });
-
-  assert.equal(provider.current(CENTER), null);
-  const [first, second] = await Promise.all([
-    provider.ensure(CENTER),
-    provider.ensure(CENTER),
-  ]);
-
-  assert.equal(requests, 1);
-  assert.equal(writes, 1);
-  assert.strictEqual(first, second);
-  assert.strictEqual(provider.current(CENTER), first);
-
-  const later = await provider.ensure(CENTER);
-  assert.strictEqual(later, first);
-  assert.equal(requests, 1);
-  assert.equal(writes, 1);
-});
-
 test('reading current Explorer state is passive and does not start acquisition', async () => {
   let requests = 0;
   const repository = createPositionRepository({

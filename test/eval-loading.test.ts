@@ -13,14 +13,10 @@ const NO_EVAL = '8/8/8/8/8/8/8/K6k w - -';
 const FAILED_EVAL = '8/8/8/8/8/8/8/K5k1 w - -';
 const SHALLOW_EVAL = '8/8/8/8/8/8/8/K4k2 w - -';
 
-function repositoryStub({ record = null, merge = async () => {} } = {}) {
-  let stored = record;
+function emptyRepository() {
   return createPositionRepository({
-    read: async () => stored,
-    write: async (value) => {
-      await merge(value.key, value);
-      stored = value;
-    },
+    read: async () => null,
+    write: async () => {},
     version: () => 0,
     log: () => {},
   });
@@ -59,7 +55,7 @@ test('a later successful request replaces an earlier operational issue', async (
   let calls = 0;
   const value = { depth: 22, pvs: [{ cp: 18, moves: 'a1a2' }] };
   const lichessEval = createLichessEval({
-    repository: repositoryStub(),
+    repository: emptyRepository(),
     gateway: {
       request: async () => {
         calls += 1;
@@ -79,7 +75,7 @@ test('a later successful request replaces an earlier operational issue', async (
 
 test('invalid cloud eval JSON is a source-data issue rather than a network issue', async () => {
   const lichessEval = createLichessEval({
-    repository: repositoryStub(),
+    repository: emptyRepository(),
     gateway: {
       request: async () => ({
         ok: true,
@@ -93,34 +89,30 @@ test('invalid cloud eval JSON is a source-data issue rather than a network issue
   assert.equal(lichessEval.status.issue?.kind, 'invalid-data');
 });
 
-test('usable cloud eval survives local cache-write failure and reuses repository-current value', async () => {
+test('usable cloud eval reports cache-write failure on its operational channel', async () => {
   const value = { depth: 22, pvs: [{ cp: 18, moves: 'a1a2' }] };
-  let requests = 0;
   const lichessEval = createLichessEval({
-    repository: repositoryStub({
-      merge: async () => { throw new Error('quota exceeded'); },
+    repository: createPositionRepository({
+      read: async () => null,
+      write: async () => { throw new Error('quota exceeded'); },
+      version: () => 0,
+      log: () => {},
     }),
     gateway: {
-      request: async () => {
-        requests += 1;
-        return { ok: true, status: 200, json: async () => value };
-      },
+      request: async () => ({ ok: true, status: 200, json: async () => value }),
     },
     now: () => 5_000,
   });
 
-  assert.equal(await lichessEval.get(FAILED_EVAL), value);
+  assert.strictEqual(await lichessEval.get(FAILED_EVAL), value);
   assert.equal(lichessEval.status.activity, 'idle');
   assert.equal(lichessEval.status.issue?.kind, 'storage');
-
-  assert.equal(await lichessEval.get(FAILED_EVAL), value);
-  assert.equal(requests, 1);
 });
 
 test('status presentation failure cannot interrupt cloud eval acquisition', async () => {
   const value = { depth: 22, pvs: [{ cp: 24, moves: 'a1a2' }] };
   const lichessEval = createLichessEval({
-    repository: repositoryStub(),
+    repository: emptyRepository(),
     gateway: {
       request: async () => ({ ok: true, status: 200, json: async () => value }),
     },

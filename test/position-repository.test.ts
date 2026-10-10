@@ -66,25 +66,6 @@ test('concurrent facet merges preserve both updates on one canonical record', as
   assert.deepEqual(record.mastersExplorer, { moves: [] });
 });
 
-test('repository retains admitted live facet state independently from persisted records', async () => {
-  const repository = createPositionRepository({
-    read: async () => null,
-    write: async () => { throw new Error('storage unavailable'); },
-    version: () => 0,
-  });
-  const reading = { moves: [] };
-
-  const admitted = repository.admitFacet(key, 'explorer', reading, {
-    fetchedAt: 123,
-    persisted: false,
-  });
-
-  assert.strictEqual(repository.currentFacet(key, 'explorer'), admitted);
-  assert.strictEqual(repository.currentFacet(key, 'explorer').value, reading);
-  assert.equal(repository.currentFacet(key, 'explorer').persisted, false);
-  assert.equal(await repository.get(key), null);
-});
-
 test('facet invalidation can target selected positions or one entire facet', () => {
   const second = canonicalPosition('8/8/8/8/8/4k3/4P3/4K3 w - - 0 1');
   const repository = createPositionRepository({ read: async () => null, write: async (value) => value, version: () => 0 });
@@ -249,23 +230,110 @@ test('failed cache read does not prevent source acquisition', async () => {
     event === 'Position cache operation failed' && detail.operation === 'read/validate'));
 });
 
-test('an unpersisted admitted observation survives a failed later refresh regardless of age', async () => {
-  const value = { count: 7 };
+test('fresh compatible cached observation avoids acquisition', async () => {
+  const cached = { games: 12 };
+  let requests = 0;
+  const repository = createPositionRepository({
+    read: async () => ({ sample: cached, fetchedAt: 50 }),
+    version: () => 0,
+  });
+
+  const result = await repository.observe(key, 'sample', {
+    decode: (record) => ({ value: record.sample, fetchedAt: record.fetchedAt }),
+    acquire: async () => { requests += 1; return { value: { games: 13 } }; },
+    fields: () => ({}),
+    refreshAfterMs: 20,
+    now: () => 60,
+  });
+  assert.strictEqual(result, cached);
+  assert.equal(requests, 0);
+});
+
+test('incompatible cached observation cannot suppress acquisition', async () => {
+  const fresh = { games: 13 };
+  let requests = 0;
+  const repository = createPositionRepository({
+    read: async () => ({ sample: { games: 12 }, profile: 'legacy', fetchedAt: 59 }),
+    write: async () => {},
+    version: () => 0,
+  });
+  const options = {
+    decode: (record) => record.profile === 'current'
+      ? { value: record.sample, fetchedAt: record.fetchedAt }
+      : null,
+    acquire: async () => { requests += 1; return { value: fresh }; },
+    fields: ({ value }, { fetchedAt }) => ({ sample: value, profile: 'current', fetchedAt }),
+    refreshAfterMs: 20,
+    now: () => 60,
+  };
+  assert.strictEqual(await repository.observe(key, 'sample', options), fresh);
+  assert.strictEqual(await repository.observe(key, 'sample', options), fresh);
+  assert.equal(requests, 1);
+});
+
+test('failed write preserves live value, diagnostics, and expired fallback', async () => {
+  let now = 5;
+  let requests = 0;
+  let writes = 0;
+  const warnings = [];
+  const live = { moves: [] };
   const repository = createPositionRepository({
     read: async () => null,
-    write: async () => { throw new Error('full'); },
+    write: async () => { writes += 1; throw new Error('quota exceeded'); },
     version: () => 0,
-    log: () => {},
+    log: (...args) => warnings.push(args),
   });
-  repository.admitFacet(key, 'sample', value, { fetchedAt: 1, persisted: false });
-  const result = await repository.observe(key, 'sample', {
-    decode: () => null,
-    acquire: async () => { throw new Error('offline'); },
-    fields: () => ({}),
+  const options = {
+    decode: (record) => ({ value: record.sample, fetchedAt: record.fetchedAt }),
+    acquire: async () => {
+      requests += 1;
+      if (requests === 1) return { value: live };
+      throw new Error('offline');
+    },
+    fields: ({ value }, { fetchedAt }) => ({ sample: value, fetchedAt }),
     refreshAfterMs: 10,
-    now: () => 100,
-  });
-  assert.strictEqual(result, value);
+    now: () => now,
+  };
+
+  assert.strictEqual(await repository.observe(key, 'sample', options), live);
+  assert.equal(writes, 1);
+  assert.equal(repository.currentFacet(key, 'sample').persisted, false);
+  assert.ok(warnings.some(([event, detail]) =>
+    event === 'Position cache operation failed'
+    && detail.operation === 'write'
+    && detail.fallback === 'live observation retained'));
+  now = 50;
+  assert.strictEqual(await repository.observe(key, 'sample', options), live);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.strictEqual(repository.currentFacet(key, 'sample').value, value);
+  assert.equal(requests, 2);
+  assert.strictEqual(repository.currentFacet(key, 'sample').value, live);
+});
+
+test('successful absence is cached while acquisition failure is not', async () => {
+  let attempts = 0;
+  let record = null;
+  const repository = createPositionRepository({
+    read: async () => record,
+    write: async (value) => { record = value; },
+    version: () => 0,
+  });
+  const options = {
+    decode: (value) => Object.hasOwn(value, 'sample')
+      ? { value: value.sample, fetchedAt: value.fetchedAt }
+      : null,
+    acquire: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('offline');
+      return { value: null };
+    },
+    fields: ({ value }, { fetchedAt }) => ({ sample: value, fetchedAt }),
+    refreshAfterMs: 10,
+    now: () => 30,
+  };
+
+  await assert.rejects(repository.observe(key, 'sample', options), /offline/);
+  assert.equal(record, null);
+  assert.equal(await repository.observe(key, 'sample', options), null);
+  assert.equal(await repository.observe(key, 'sample', options), null);
+  assert.equal(attempts, 2);
 });

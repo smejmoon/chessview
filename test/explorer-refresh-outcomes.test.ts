@@ -18,7 +18,7 @@ globalThis.sessionStorage = new MemoryStorage();
 globalThis.window = { location: { href: 'https://example.test/chessview/', search: '' } };
 globalThis.history = { state: null, replaceState() {} };
 
-const { clearGraph, putNode } = await import('../src/db.ts');
+const { clearGraph } = await import('../src/db.ts');
 const { clearDebugLog, getDebugEntries } = await import('../src/debug.ts');
 const { loadExplorerReading, createExplorerProvider } = await import('../src/explorer.ts');
 const { createPositionRepository } = await import('../src/position-repository.ts');
@@ -33,26 +33,6 @@ function abortError() {
 
 function matchingEvents(event) {
   return getDebugEntries().filter((entry) => entry.event === event);
-}
-
-async function putStaleExplorer() {
-  const explorer = {
-    white: 50,
-    draws: 20,
-    black: 30,
-    moves: [{ uci: 'e2e4', white: 25, draws: 10, black: 15 }],
-    topGames: [],
-    recentGames: [],
-  };
-  await putNode({
-    key: center,
-    fen: START_FEN,
-    explorer,
-    explorerFetchedAt: Date.now() - EXPLORER_TTL_MS - 1,
-    explorerRequestProfile: JSON.stringify({ variant: 'standard', moves: '30', topGames: '4', recentGames: '8' }),
-    games: 100,
-  });
-  return explorer;
 }
 
 test('aborted Explorer refresh propagates cancellation without failure diagnostics or stale fallback', async () => {

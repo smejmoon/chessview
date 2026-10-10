@@ -881,16 +881,16 @@ export class CurrentViewController {
     const pendingIncorporation = [...run.incorporationPending]
       .map((key) => {
         const participant = run.participants.get(key);
-        return participant ? Object.freeze({ key, retryToken: participant.retryToken }) : null;
+        return participant ? Object.freeze({ key, controller: participant.controller }) : null;
       })
-      .filter((item): item is Readonly<{ key: string; retryToken: number }> => item != null);
+      .filter((item): item is Readonly<{ key: string; controller: AbortController | null }> => item != null);
 
     await this.#queueStructure(run, { preserveEstablished: true, publish: false });
     if (!this.#isCurrent(run)) return;
 
     for (const pending of pendingIncorporation) {
       const participant = run.participants.get(pending.key);
-      if (participant?.phase === 'satisfied' && participant.retryToken === pending.retryToken) {
+      if (participant?.phase === 'satisfied' && participant.controller === pending.controller) {
         run.incorporationPending.delete(pending.key);
       }
     }

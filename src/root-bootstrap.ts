@@ -1,6 +1,10 @@
 import { Chess } from 'chess.js';
 import { canonicalPosition, START_FEN } from './graph.ts';
 import { lichessSession } from './lichess-session.ts';
+import { debugLog } from './debug.ts';
+import { loadExplorerReading } from './explorer.ts';
+import { classifyExplorerRefinementFailure, type ExplorerRefinementFailureClassifier } from './explorer-refinement.ts';
+import { refineExplorerReading, type ExplorerRefinementRunOutcome } from './knowledge-acquisition.ts';
 
 const EXPORT_ENDPOINT = 'https://lichess.org/api/games/export/_ids';
 const GAME_ID = /^[A-Za-z0-9]{8}$/;
@@ -130,4 +134,50 @@ export async function discoverSampledPredecessors(
     if (!nominations.has(key)) nominations.set(key, nomination);
   }
   return Object.freeze([...nominations.values()]);
+}
+
+type RootBootstrapWork = Readonly<{
+  signal: AbortSignal;
+  priority: 'foreground' | 'background' | (() => 'foreground' | 'background');
+}>;
+
+// Dependencies may be supplied by deterministic tests without changing source or graph ownership.
+type RootBootstrapDependencies = Readonly<{
+  load?: typeof loadExplorerReading;
+  classifyLoadFailure?: ExplorerRefinementFailureClassifier;
+  discover?: typeof discoverSampledPredecessors;
+  refine?: typeof refineExplorerReading;
+}>;
+
+export async function discoverRootPredecessors(
+  center: string,
+  { signal, priority }: RootBootstrapWork,
+  {
+    load = loadExplorerReading,
+    classifyLoadFailure = classifyExplorerRefinementFailure,
+    discover = discoverSampledPredecessors,
+    refine = refineExplorerReading,
+  }: RootBootstrapDependencies = {},
+): Promise<ExplorerRefinementRunOutcome> {
+  let reading;
+  try {
+    reading = await load(center, { signal, priority });
+  } catch (error) {
+    const outcome = classifyLoadFailure(error);
+    if (outcome) return outcome;
+    throw error;
+  }
+  const ids = sampleGameIds(reading);
+  if (!ids.length) return { refinement: 'satisfied' };
+
+  debugLog('Root discovery replaying sampled games', { center, games: ids.length });
+  const nominations = await discover(center, ids, { signal, priority });
+  let unavailable = false;
+  for (const nomination of nominations) {
+    if (signal.aborted) return { refinement: 'unavailable' };
+    const outcome = await refine(nomination.source, { signal, priority });
+    if (outcome.refinement === 'retryable') return outcome;
+    if (outcome.refinement === 'unavailable') unavailable = true;
+  }
+  return unavailable ? { refinement: 'unavailable' } : { refinement: 'satisfied' };
 }

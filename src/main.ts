@@ -8,15 +8,11 @@ import './debug.css';
 import { canonicalPosition } from './graph.ts';
 import { nominateConstellationLookahead } from './constellation-lookahead.ts';
 import { CurrentViewController } from './current-view-controller.ts';
-import type { RefinementOutcome, RefinementTask } from './current-view-controller.ts';
+import type { RefinementTask } from './current-view-controller.ts';
 import { debugLog } from './debug.ts';
 import { clearExplorerCache } from './explorer-cache.ts';
 import { refineExplorerReading, warmExplorerReading } from './knowledge-acquisition.ts';
-import { loadExplorerReading } from './explorer.ts';
-import {
-  discoverSampledPredecessors,
-  sampleGameIds,
-} from './sampled-predecessors.ts';
+import { discoverRootPredecessors } from './root-bootstrap.ts';
 import { createLens } from './lens.ts';
 import { loadMasters } from './masters.ts';
 import { lichessSession } from './lichess-session.ts';
@@ -108,45 +104,21 @@ function constraintsFor(mode: 'roots' | 'lines') {
   return constraints;
 }
 
-async function discoverRootPredecessors(center, { signal, priority }): Promise<RefinementOutcome> {
-  const reading = await loadExplorerReading(center, { signal, priority });
-  const ids = sampleGameIds(reading);
-  if (!ids.length) return Object.freeze({ refinement: 'satisfied' as const });
-
-  debugLog('Root discovery replaying sampled games', { center, games: ids.length });
-  const nominations = await discoverSampledPredecessors(center, ids, { signal, priority });
-  let unavailable = false;
-  for (const nomination of nominations) {
-    if (signal.aborted) return Object.freeze({ refinement: 'unavailable' as const });
-    const outcome = await refineExplorerReading(nomination.source, { signal, priority });
-    if (outcome.refinement === 'retryable') return outcome;
-    if (outcome.refinement === 'unavailable') unavailable = true;
-  }
-  return unavailable
-    ? Object.freeze({ refinement: 'unavailable' as const })
-    : Object.freeze({ refinement: 'satisfied' as const });
-}
-
 function tasksForCurrentView({ center, mode, structure }): readonly RefinementTask[] {
   const demand = deriveCurrentViewRefinementDemand({ center, mode, structure });
-  const tasks = new Map<string, RefinementTask>();
-
-  function add(task: RefinementTask) {
-    if (!tasks.has(task.key)) tasks.set(task.key, Object.freeze(task));
-  }
+  const tasks: RefinementTask[] = [];
 
   const rootTransposition = demand.rootTransposition;
   if (mode === 'roots') {
-    add({
+    tasks.push({
       key: `root-discovery:${center}`,
       purpose: 'root-discovery',
       modes: ['roots'],
-      nodusWide: false,
       run: ({ signal, priority }) => discoverRootPredecessors(center, { signal, priority }),
     });
   }
   if (rootTransposition) {
-    add({
+    tasks.push({
       key: `root-transpositions:${rootTransposition}`,
       nodusWide: true,
       run: ({ signal }) => rootTranspositionEnricher.ensure(rootTransposition, { signal }),
@@ -154,7 +126,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
   }
 
   for (const target of demand.explorer) {
-    add({
+    tasks.push({
       key: `explorer:${target.position}`,
       modes: target.modes,
       nodusWide: target.nodusWide,
@@ -164,7 +136,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
   }
 
   for (const target of demand.cloudEval) {
-    add({
+    tasks.push({
       key: `cloud-eval:${target.position}`,
       modes: target.modes,
       nodusWide: target.nodusWide,
@@ -173,7 +145,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
   }
 
   for (const target of demand.masters) {
-    add({
+    tasks.push({
       key: `masters:${target.position}`,
       modes: target.modes,
       nodusWide: target.nodusWide,
@@ -181,7 +153,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
     });
   }
 
-  return Object.freeze([...tasks.values()]);
+  return tasks;
 }
 
 async function warmLookahead({ center, structure, signal }) {

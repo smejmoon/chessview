@@ -18,7 +18,7 @@ test('LichessGateway reports queued, dispatch, and response lifecycle without qu
     fetchImpl: async () => ({ status: 200, ok: true }),
   });
 
-  await gateway.request('https://explorer.lichess.org/lichess?fen=SECRET&moves=30', { priority: 'background' });
+  await gateway.request('https://explorer.lichess.org/lichess?fen=SECRET&moves=30', {}, { urgency: 'background' });
 
   assert.deepEqual(captured.entries.map(({ event }) => event), [
     'lichess gateway queued',

@@ -3,10 +3,6 @@ import test from 'node:test';
 import { CurrentViewController } from '../src/current-view-controller.ts';
 
 const refinementUnavailable = Object.freeze({ refinement: 'unavailable' as const });
-function refinementRetryable(retry: PromiseLike<unknown>) {
-  return Object.freeze({ refinement: 'retryable' as const, retry });
-}
-
 function deferred() {
   let resolve;
   let reject;
@@ -26,7 +22,6 @@ function structure(frontier) {
 }
 
 test('Weather exposes aggregate refinement measures without task or position identity', async () => {
-  const retry = deferred();
   const structuralWorking = deferred();
   const supplementaryWorking = deferred();
   const frontier = ['B', 'C', 'D', 'E', 'F', 'G'];
@@ -38,7 +33,7 @@ test('Weather exposes aggregate refinement measures without task or position ide
     refine: () => [
       { key: 'unavailable', structuralReading: 'B', run: async () => refinementUnavailable },
       { key: 'failed', structuralReading: 'C', run: async () => { throw new Error('reconciliation failed'); } },
-      { key: 'retry', structuralReading: 'D', run: async () => refinementRetryable(retry.promise) },
+      { key: 'unavailable-429', structuralReading: 'D', run: async () => refinementUnavailable },
       { key: 'satisfied', structuralReading: 'F', run: async () => undefined },
       { key: 'working', structuralReading: 'G', run: () => structuralWorking.promise },
       { key: 'supplementary', run: () => supplementaryWorking.promise },
@@ -54,10 +49,9 @@ test('Weather exposes aggregate refinement measures without task or position ide
     frontier: 6,
     structural: {
       working: 1,
-      retryWaiting: 1,
       satisfied: 1,
       incorporationPending: 0,
-      unavailable: 1,
+      unavailable: 2,
       failed: 1,
       unplanned: 1,
       detached: 0,
@@ -135,7 +129,6 @@ test('failed and unplanned structural coordination remain diagnostic without imp
   assert.equal(controller.snapshot.weather.structural.failed, 1);
   assert.equal(controller.snapshot.weather.structural.unplanned, 1);
   assert.equal(controller.snapshot.weather.structural.working, 0);
-  assert.equal(controller.snapshot.weather.structural.retryWaiting, 0);
   assert.equal(controller.snapshot.weather.structural.incorporationPending, 0);
   assert.equal(controller.snapshot.settling, false);
 

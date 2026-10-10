@@ -1,5 +1,5 @@
 import { workUrgency } from './work-demand.ts';
-import type { WorkDemand, ProducerWork } from './work-demand.ts';
+import type { WorkDemand } from './work-demand.ts';
 import { CACHE_SCHEMA_VERSIONS, NODES_STORE } from './cache-schema.ts';
 import { getNode, nodeStoreResetVersion, nodeStoreVersion, putNode } from './position-store.ts';
 import { canonicalPosition, toPlayableFen } from './graph.ts';
@@ -151,9 +151,9 @@ export function createPositionRepository({
     return 'background';
   }
 
-  function subscribe(load: any, signal: AbortSignal | undefined, releaseLast: () => void, priority: any) {
+  function subscribe(load: any, signal: AbortSignal | undefined, releaseLast: () => void, urgency: WorkDemand['urgency']) {
     if (signal?.aborted) return Promise.reject(obsoleteWork('Position load participation became obsolete', signal.reason));
-    const subscriber = { urgency: priority };
+    const subscriber = { urgency };
     load.subscribers.add(subscriber);
 
     return new Promise<any>((resolve, reject) => {

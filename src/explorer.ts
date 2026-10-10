@@ -1,3 +1,4 @@
+import type { WorkDemand, ProducerWork } from './work-demand.ts';
 import { EXPLORER_TTL_MS } from './config.ts';
 import {
   canonicalPosition,
@@ -19,13 +20,6 @@ const REQUEST_PARAMETERS = Object.freeze({
 });
 const REQUEST_PROFILE = JSON.stringify(REQUEST_PARAMETERS);
 const UCI_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
-
-type LoadPriority = 'foreground' | 'background';
-type Priority = LoadPriority | (() => LoadPriority);
-type LoadOptions = Readonly<{
-  signal?: AbortSignal;
-  priority?: Priority;
-}>;
 
 type ParsedExplorerMove = ExplorerMove & Readonly<{
   white: number;
@@ -59,14 +53,7 @@ type ExplorerResponse = Readonly<{
   text(): Promise<string>;
 }>;
 
-type ExplorerRequest = (
-  url: URL,
-  options: Readonly<{
-    signal: AbortSignal;
-    priority: () => LoadPriority;
-    headers: Readonly<Record<string, string>>;
-  }>,
-) => Promise<ExplorerResponse>;
+type ExplorerRequest = (url: URL, init: RequestInit, work: ProducerWork) => Promise<ExplorerResponse>;
 
 type DebugLevel = 'info' | 'warn' | 'error';
 type Log = (message: string, detail?: unknown, level?: DebugLevel) => void;
@@ -140,7 +127,7 @@ function cachedExplorerReading(record: PositionRecord | null | undefined) {
 
 export function createExplorerProvider({
   repository = positionRepository as unknown as ExplorerRepository,
-  request = (url, options) => lichessSession.authorizedRequest(url, options) as Promise<ExplorerResponse>,
+  request = (url, init, work) => lichessSession.authorizedRequest(url, init, work) as Promise<ExplorerResponse>,
   now = () => Date.now(),
   log = debugLog,
 }: ExplorerProviderOptions = {}) {
@@ -162,7 +149,7 @@ export function createExplorerProvider({
 
   function ensure(
     key: string,
-    { signal, priority = 'foreground' }: LoadOptions = {},
+    { signal, urgency = 'foreground' }: WorkDemand = {},
   ): Promise<ParsedExplorerReading> {
     const canonical = canonicalPosition(key);
     return repository.observe(canonical, 'explorer', {
@@ -170,14 +157,10 @@ export function createExplorerProvider({
       profile: REQUEST_PROFILE,
       refreshAfterMs: EXPLORER_TTL_MS,
       now,
-      acquire: async ({ signal: requestSignal, priority: requestPriority }: any) => {
+      acquire: async (work: ProducerWork) => {
         const url = explorerUrl(canonical);
         report('explorer request queued', { position: canonical, url: url.toString(), authenticated: true });
-        const response = await request(url, {
-          signal: requestSignal,
-          priority: requestPriority,
-          headers: { Accept: 'application/json' },
-        });
+        const response = await request(url, { headers: { Accept: 'application/json' } }, work);
 
         report('explorer response', { position: canonical, status: response.status, ok: response.ok });
         if (!response.ok) {
@@ -221,7 +204,7 @@ export function createExplorerProvider({
           games: totalGames(result.value),
         });
       },
-    }, { signal, priority });
+    }, { signal, urgency });
   }
 
   return Object.freeze({ ensure, current, readCached, invalidate });

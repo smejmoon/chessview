@@ -4,7 +4,7 @@ import { isObsoleteWork } from './obsolete-work.ts';
 import type { Route, RouteLedger, ViewMode } from './route-ledger.ts';
 
 type LifecycleStatus = 'idle' | 'loading' | 'ready' | 'failed';
-type RefinementPriority = 'foreground' | 'background';
+type RefinementUrgency = 'foreground' | 'background';
 type RefinementPhase = 'working' | 'satisfied' | 'unavailable' | 'failed';
 type RefinementPurpose = 'root-discovery';
 type RefinementActivityPhase = RefinementPhase | 'idle';
@@ -76,7 +76,7 @@ type RailInput = Readonly<{
 
 type RefinementTaskInput = Readonly<{
   signal: AbortSignal;
-  priority: () => RefinementPriority;
+  urgency: () => RefinementUrgency;
 }>;
 
 export type RefinementOutcome =
@@ -794,7 +794,7 @@ export class CurrentViewController {
     return 'idle';
   }
 
-  #participantPriority(participant: RefinementParticipant): RefinementPriority {
+  #participantUrgency(participant: RefinementParticipant): RefinementUrgency {
     return participant.nodusWide || participant.modes.includes(this.#state.mode) ? 'foreground' : 'background';
   }
 
@@ -809,7 +809,7 @@ export class CurrentViewController {
     void Promise.resolve()
       .then(() => participant.task.run(Object.freeze({
         signal: controller.signal,
-        priority: () => this.#participantPriority(participant),
+        urgency: () => this.#participantUrgency(participant),
       })))
       .then((value) => {
         if (!this.#participantCurrent(run, participant, controller)) return;

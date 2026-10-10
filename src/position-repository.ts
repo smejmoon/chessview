@@ -1,13 +1,10 @@
+import { workUrgency } from './work-demand.ts';
+import type { WorkDemand, ProducerWork } from './work-demand.ts';
 import { CACHE_SCHEMA_VERSIONS, NODES_STORE } from './cache-schema.ts';
 import { getNode, nodeStoreResetVersion, nodeStoreVersion, putNode } from './position-store.ts';
 import { canonicalPosition, toPlayableFen } from './graph.ts';
 import { isObsoleteWork, obsoleteWork } from './obsolete-work.ts';
 import { debugLog } from './debug.ts';
-
-function priorityValue(priority: any) {
-  const value = typeof priority === 'function' ? priority() : priority;
-  return value === 'background' ? 'background' : 'foreground';
-}
 
 export function createPositionRepository({
   read = getNode,
@@ -149,14 +146,14 @@ export function createPositionRepository({
 
   function effectivePriority(load: any) {
     for (const subscriber of load.subscribers) {
-      if (priorityValue(subscriber.priority) === 'foreground') return 'foreground';
+      if (workUrgency(subscriber.urgency) === 'foreground') return 'foreground';
     }
     return 'background';
   }
 
   function subscribe(load: any, signal: AbortSignal | undefined, releaseLast: () => void, priority: any) {
     if (signal?.aborted) return Promise.reject(obsoleteWork('Position load participation became obsolete', signal.reason));
-    const subscriber = { priority };
+    const subscriber = { urgency: priority };
     load.subscribers.add(subscriber);
 
     return new Promise<any>((resolve, reject) => {
@@ -186,7 +183,7 @@ export function createPositionRepository({
     });
   }
 
-  function load(position: any, facet: string, producer: (context: any) => any, { signal, priority = 'foreground' }: { signal?: AbortSignal; priority?: 'foreground' | 'background' | (() => 'foreground' | 'background') } = {}) {
+  function load(position: any, facet: string, producer: (context: any) => any, { signal, urgency = 'foreground' }: WorkDemand = {}) {
     syncVersion();
     const key = canonicalPosition(position);
     const id = `${facet}\u0000${key}`;
@@ -203,7 +200,7 @@ export function createPositionRepository({
       const work = Promise.resolve().then(() => producer(Object.freeze({
         key,
         signal: controller.signal,
-        priority: () => effectivePriority(shared),
+        urgency: () => effectivePriority(shared),
       })));
       shared.promise = work.finally(() => {
         shared.settled = true;
@@ -217,7 +214,7 @@ export function createPositionRepository({
       if (loads.get(id) !== shared) return;
       loads.delete(id);
       shared.controller.abort();
-    }, priority);
+    }, urgency);
   }
 
 
@@ -275,7 +272,7 @@ export function createPositionRepository({
       onStorageError,
       fallbackOnError = 'throw',
     }: any,
-    { signal, priority = 'foreground' }: any = {},
+    { signal, urgency = 'foreground' }: WorkDemand = {},
   ) {
     const key = canonicalPosition(position);
     if (signal?.aborted) throw obsoleteWork('Position observation became obsolete', signal.reason);
@@ -322,7 +319,7 @@ export function createPositionRepository({
       }
       onComplete?.(result, { storageError, key });
       return result.value;
-    }, { signal, priority: retained ? 'background' : priority });
+    }, { signal, urgency: retained ? 'background' : urgency });
 
     if (retained) {
       // Observing refresh failure must never hold the cached answer hostage.

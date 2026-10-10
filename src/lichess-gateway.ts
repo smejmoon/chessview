@@ -1,15 +1,12 @@
 import { LICHESS_REQUEST_MIN_INTERVAL_MS } from './config.ts';
 import { debugLog } from './debug.ts';
 import type { DebugLevel } from './debug.ts';
+import { workUrgency } from './work-demand.ts';
+import type { WorkDemand, WorkUrgencyInput } from './work-demand.ts';
 import { obsoleteFromAbort, obsoleteWork, throwIfObsolete } from './obsolete-work.ts';
 
-export type LichessPriority = 'foreground' | 'background';
-export type LichessRequestPriority = LichessPriority | (() => LichessPriority);
-export type LichessRequestInit = Omit<RequestInit, 'priority'> & { priority?: LichessRequestPriority };
-
 export type LichessGateway = Readonly<{
-  request(input: RequestInfo | URL, init?: LichessRequestInit): Promise<Response>;
-  readonly cooldownUntil: number;
+  request(input: RequestInfo | URL, init?: RequestInit, work?: WorkDemand): Promise<Response>;
 }>;
 
 type GatewayLog = (event: string, detail?: unknown, level?: DebugLevel) => unknown;
@@ -29,18 +26,13 @@ type QueueJob = {
   method: string;
   requestInit: RequestInit;
   signal?: AbortSignal;
-  priority: LichessRequestPriority;
+  urgency: WorkUrgencyInput;
   queuedAt: number;
   resolve: (response: Response | PromiseLike<Response>) => void;
   reject: (error: unknown) => void;
   queued: boolean;
   onAbort: (() => void) | null;
 };
-
-function priorityValue(priority: LichessRequestPriority): LichessPriority {
-  const value = typeof priority === 'function' ? priority() : priority;
-  return value === 'background' ? 'background' : 'foreground';
-}
 
 function requestEndpoint(input: RequestInfo | URL) {
   const value = typeof Request !== 'undefined' && input instanceof Request
@@ -119,7 +111,7 @@ export function createLichessGateway({
 
   function takeNext(): QueueJob | null {
     if (!queue.length) return null;
-    const foreground = queue.findIndex((job) => priorityValue(job.priority) === 'foreground');
+    const foreground = queue.findIndex((job) => workUrgency(job.urgency) === 'foreground');
     const index = foreground >= 0 ? foreground : 0;
     const [job] = queue.splice(index, 1);
     job.queued = false;
@@ -131,7 +123,7 @@ export function createLichessGateway({
     throwIfObsolete(job.signal, 'Lichess request became obsolete before dispatch');
     const startedAt = now();
     lastRequestAt = startedAt;
-    const priority = priorityValue(job.priority);
+    const priority = workUrgency(job.urgency);
     report('lichess gateway dispatch', {
       id: job.id,
       endpoint: job.endpoint,
@@ -197,9 +189,14 @@ export function createLichessGateway({
     }
   }
 
-  function request(input: RequestInfo | URL, init: LichessRequestInit = {}): Promise<Response> {
-    const { priority = 'foreground', ...requestInit } = init;
-    const signal = requestInit.signal ?? undefined;
+  function request(input: RequestInfo | URL, requestInit: RequestInit = {}, work: WorkDemand = {}): Promise<Response> {
+    // Fetch must receive the same signal used for cancellation provenance.
+    if (work.signal && requestInit.signal && work.signal !== requestInit.signal) {
+      throw new TypeError('Conflicting HTTP and work cancellation signals');
+    }
+    const signal = work.signal ?? requestInit.signal ?? undefined;
+    const urgency = work.urgency ?? 'foreground';
+    requestInit = { ...requestInit, ...(signal ? { signal } : {}) };
     const id = ++nextRequestId;
     const endpoint = requestEndpoint(input);
     const method = requestMethod(input, requestInit);
@@ -218,7 +215,7 @@ export function createLichessGateway({
         method,
         requestInit,
         signal,
-        priority,
+        urgency,
         queuedAt: now(),
         resolve,
         reject,
@@ -231,7 +228,7 @@ export function createLichessGateway({
         report('lichess gateway cancelled queued request', {
           id: job.id,
           endpoint: job.endpoint,
-          priority: priorityValue(job.priority),
+          priority: workUrgency(job.urgency),
           queueDepth: queue.length,
         });
         reject(obsoleteWork('Queued Lichess request became obsolete', signal?.reason));
@@ -242,7 +239,7 @@ export function createLichessGateway({
         id,
         endpoint,
         method,
-        priority: priorityValue(priority),
+        priority: workUrgency(urgency),
         queueDepth: queue.length,
       });
       void drain();
@@ -251,7 +248,6 @@ export function createLichessGateway({
 
   return {
     request,
-    get cooldownUntil() { return cooldownUntil; },
   };
 }
 

@@ -28,6 +28,7 @@ test('history restoration preserves an established projection only when Nodus an
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'roots' },
     canonicalize: (value) => String(value).toUpperCase(),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async ({ center, mode }) => {
       if (hold) await hold.promise;
       return structure(center, mode, `${center}:${mode}:${revision}`);

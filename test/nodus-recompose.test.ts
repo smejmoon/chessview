@@ -27,6 +27,7 @@ test('same-run recomposition can admit structural work after presentation constr
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async ({ center, mode }) => {
       compositions += 1;
       const readingFrontier = roomy && !incorporated ? ['B'] : [];
@@ -100,6 +101,7 @@ test('supplementary refinement during settlement recomposition drains another pa
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async ({ center, mode }) => {
       compositions += 1;
       const observed = fact;
@@ -165,6 +167,7 @@ test('accepted unchanged recomposition discharges supplementary completion witho
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async ({ center, mode }) => {
       compositions += 1;
       return {

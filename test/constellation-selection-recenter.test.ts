@@ -7,8 +7,9 @@ test('Recenter rebuilds structure without carrying the previous Candidate set in
   const inputs = [];
   const candidateSetsByCenter = new Map();
   const controller = new CurrentViewController({
-    initial: { center: 'A', view: 'lines', orientation: 'white', navDepth: 0 },
+    initial: { center: 'A', view: 'lines', navDepth: 0 },
     canonicalize: (value) => String(value).toUpperCase(),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     routeLedger: {
       push() {},
       replace() {},

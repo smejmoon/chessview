@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  CurrentViewController,
-  refinementRetryable,
-  refinementUnavailable,
-} from '../src/current-view-controller.ts';
+import { CurrentViewController } from '../src/current-view-controller.ts';
+
+const refinementUnavailable = Object.freeze({ refinement: 'unavailable' as const });
+function refinementRetryable(retry: PromiseLike<unknown>) {
+  return Object.freeze({ refinement: 'retryable' as const, retry });
+}
 
 function deferred() {
   let resolve;
@@ -32,6 +33,7 @@ test('Weather exposes aggregate refinement measures without task or position ide
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async () => structure(frontier),
     refine: () => [
       { key: 'unavailable', structuralReading: 'B', run: async () => refinementUnavailable },
@@ -77,6 +79,7 @@ test('successful structural work blocks only until its settlement pass has attem
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async () => {
       compositions += 1;
       if (compositions === 2) await secondComposition.promise;
@@ -116,6 +119,7 @@ test('failed and unplanned structural coordination remain diagnostic without imp
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async () => structure(['B', 'C']),
     refine: () => [{
       key: 'failed',
@@ -145,6 +149,7 @@ test('ready frontier is published only after synchronous structural participatio
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async () => structure(['B']),
     refine: () => [{
       key: 'explorer:B',

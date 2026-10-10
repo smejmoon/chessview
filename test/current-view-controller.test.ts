@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  CurrentViewController,
-  refinementRetryable,
-  refinementUnavailable,
-} from '../src/current-view-controller.ts';
+import { CurrentViewController } from '../src/current-view-controller.ts';
+
+const refinementUnavailable = Object.freeze({ refinement: 'unavailable' as const });
+function refinementRetryable(retry: PromiseLike<unknown>) {
+  return Object.freeze({ refinement: 'retryable' as const, retry });
+}
 
 function deferred() {
   let resolve;

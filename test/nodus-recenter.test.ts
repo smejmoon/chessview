@@ -15,8 +15,9 @@ function fixture(materializeMove = null) {
     update() {},
   };
   const controller = new CurrentViewController({
-    initial: { center: 'A', view: 'roots', orientation: 'white', navDepth: 0 },
+    initial: { center: 'A', view: 'roots', navDepth: 0 },
     canonicalize: (value) => String(value).toUpperCase(),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     routeLedger: {
       replace(route) { calls.push(['replace', route]); },
       push(route) { calls.push(['push', route]); },

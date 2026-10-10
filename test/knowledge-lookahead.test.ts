@@ -232,6 +232,7 @@ test('current-view lookahead participation is private, replaceable, and detached
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'roots' },
     canonicalize: (value) => String(value).toUpperCase(),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async ({ center: position, mode }) => ({
       composition: { nodes: [{ key: `${position}:${mode}` }] },
       marker: `${position}:${mode}`,

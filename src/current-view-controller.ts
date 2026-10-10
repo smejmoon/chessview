@@ -3,20 +3,19 @@ import type { MaterializeMoveInput, MaterializeMoveResult, Move } from './move-m
 import { isObsoleteWork } from './obsolete-work.ts';
 import type { Route, RouteLedger, ViewMode } from './route-ledger.ts';
 
-export type { Orientation } from './lens.ts';
-export type LifecycleStatus = 'idle' | 'loading' | 'ready' | 'failed';
-export type RefinementPriority = 'foreground' | 'background';
-export type RefinementPhase = 'working' | 'retry-waiting' | 'satisfied' | 'unavailable' | 'failed';
-export type RefinementPurpose = 'root-discovery';
-export type RefinementActivityPhase = RefinementPhase | 'idle';
+type LifecycleStatus = 'idle' | 'loading' | 'ready' | 'failed';
+type RefinementPriority = 'foreground' | 'background';
+type RefinementPhase = 'working' | 'retry-waiting' | 'satisfied' | 'unavailable' | 'failed';
+type RefinementPurpose = 'root-discovery';
+type RefinementActivityPhase = RefinementPhase | 'idle';
 
-export type Lifecycle = Readonly<{
+type Lifecycle = Readonly<{
   status: LifecycleStatus;
   value: unknown;
   error: string | null;
 }>;
 
-export type WeatherStructuralMeasures = Readonly<{
+type WeatherStructuralMeasures = Readonly<{
   working: number;
   retryWaiting: number;
   satisfied: number;
@@ -27,7 +26,7 @@ export type WeatherStructuralMeasures = Readonly<{
   detached: number;
 }>;
 
-export type WeatherMeasures = Readonly<{
+type WeatherMeasures = Readonly<{
   structure: LifecycleStatus;
   frontier: number;
   structural: WeatherStructuralMeasures;
@@ -37,7 +36,7 @@ export type WeatherMeasures = Readonly<{
   }>;
 }>;
 
-export type CurrentViewSnapshot = Readonly<{
+type CurrentViewSnapshot = Readonly<{
   center: string;
   mode: ViewMode;
   orientation: Orientation;
@@ -51,7 +50,7 @@ export type CurrentViewSnapshot = Readonly<{
   }>;
 }>;
 
-export type RecenterRequest =
+type RecenterRequest =
   | Readonly<{ target: string; move?: never }>
   | Readonly<{ move: Move; target?: never }>;
 
@@ -65,18 +64,18 @@ export type CurrentViewActions = Readonly<{
   redraw(): Promise<boolean>;
 }>;
 
-export type StructureInput = Readonly<{
+type StructureInput = Readonly<{
   center: string;
   mode: ViewMode;
   signal: AbortSignal;
 }>;
 
-export type RailInput = Readonly<{
+type RailInput = Readonly<{
   center: string;
   signal: AbortSignal;
 }>;
 
-export type RefinementTaskInput = Readonly<{
+type RefinementTaskInput = Readonly<{
   signal: AbortSignal;
   priority: () => RefinementPriority;
 }>;
@@ -95,14 +94,14 @@ export type RefinementTask = Readonly<{
   run(input: RefinementTaskInput): unknown | Promise<unknown>;
 }>;
 
-export type RefinementInput = Readonly<{
+type RefinementInput = Readonly<{
   center: string;
   mode: ViewMode;
   structure: unknown | null;
   signal: AbortSignal;
 }>;
 
-export type LookaheadInput = Readonly<{
+type LookaheadInput = Readonly<{
   center: string;
   mode: ViewMode;
   structure: unknown;
@@ -125,17 +124,15 @@ type Presenter = {
   update(view: CurrentViewSnapshot, actions: CurrentViewActions): unknown | Promise<unknown>;
 };
 
-export type CurrentViewControllerOptions = {
+type CurrentViewControllerOptions = {
   initial?: {
     center?: unknown;
     view?: unknown;
-    mode?: unknown;
-    orientation?: unknown;
   };
   canonicalize: (value: unknown) => string;
   routeLedger?: Partial<RouteLedger> | null;
   preferences?: Preferences | null;
-  lens?: OrientationLens | null;
+  lens: OrientationLens;
   structure: Contributor<StructureInput>;
   rail?: Contributor<RailInput> | null;
   refine?: RefinementPlanner | null;
@@ -180,26 +177,10 @@ type RefinementRun = {
 type RestoreRoute = {
   center?: unknown;
   view?: unknown;
-  mode?: unknown;
 };
 
 function normalizeMode(mode: unknown): ViewMode {
   return mode === 'roots' ? 'roots' : 'lines';
-}
-
-function normalizeOrientation(orientation: unknown): Orientation {
-  return orientation === 'black' ? 'black' : 'white';
-}
-
-function localLens(initialOrientation: unknown): OrientationLens {
-  let orientation = normalizeOrientation(initialOrientation);
-  return Object.freeze({
-    orientation: () => orientation,
-    flipOrientation: () => {
-      orientation = orientation === 'white' ? 'black' : 'white';
-      return orientation;
-    },
-  });
 }
 
 function errorMessage(error: unknown): string | null {
@@ -263,13 +244,6 @@ function refinementOutcome(value: unknown): RefinementOutcome | null {
   return null;
 }
 
-export const refinementSatisfied: RefinementOutcome = Object.freeze({ refinement: 'satisfied' });
-export const refinementUnavailable: RefinementOutcome = Object.freeze({ refinement: 'unavailable' });
-
-export function refinementRetryable(retry: PromiseLike<unknown>): RefinementOutcome {
-  return Object.freeze({ refinement: 'retryable', retry });
-}
-
 export class CurrentViewController {
   #actions: CurrentViewActions;
   #canonicalize: (value: unknown) => string;
@@ -311,7 +285,10 @@ export class CurrentViewController {
     this.#canonicalize = canonicalize;
     this.#routeLedger = routeLedger ?? {};
     this.#preferences = preferences ?? {};
-    this.#lens = lens ?? localLens(initial?.orientation);
+    if (!lens || typeof lens.orientation !== 'function' || typeof lens.flipOrientation !== 'function') {
+      throw new TypeError('CurrentViewController requires Lens orientation controls');
+    }
+    this.#lens = lens;
     this.#structure = structure;
     this.#rail = rail;
     this.#refine = refine;
@@ -321,7 +298,7 @@ export class CurrentViewController {
     this.#log = log;
     this.#state = {
       nodus: canonicalize(initial?.center),
-      mode: normalizeMode(initial?.mode ?? initial?.view),
+      mode: normalizeMode(initial?.view),
       structure: lifecycle('idle'),
       rail: lifecycle('idle'),
     };
@@ -405,7 +382,7 @@ export class CurrentViewController {
     const previousNodus = this.#state.nodus;
     const previousMode = this.#state.mode;
     const nextNodus = this.#canonicalize(route.center ?? previousNodus);
-    const nextMode = normalizeMode(route.view ?? route.mode ?? previousMode);
+    const nextMode = normalizeMode(route.view ?? previousMode);
     const sameNodus = nextNodus === previousNodus;
     const sameProjection = sameNodus && nextMode === previousMode;
     this.#state.nodus = nextNodus;
@@ -433,7 +410,7 @@ export class CurrentViewController {
     this.#routeLedger.replace?.(this.#route());
     this.#log('view mode changed', { mode: next, center: this.#state.nodus });
     await this.#presentCurrent('update');
-    await this.#settleProjection(run, { preserveEstablished: false, publish: true });
+    await this.#settleProjection(run, { preserveEstablished: false });
     return this.#isCurrent(run);
   }
 
@@ -459,7 +436,7 @@ export class CurrentViewController {
     if (this.#disposed) return false;
     const run = this.#run;
     if (!this.#isCurrent(run)) return false;
-    await this.#settleProjection(run, { preserveEstablished: true, publish: true });
+    await this.#settleProjection(run, { preserveEstablished: true });
     return this.#isCurrent(run);
   }
 
@@ -486,7 +463,6 @@ export class CurrentViewController {
       run
       && !this.#disposed
       && this.#run === run
-      && run.revision === this.#revision
       && !run.abortController.signal.aborted,
     );
   }
@@ -968,11 +944,9 @@ export class CurrentViewController {
       }
     }
 
-    const refinements: Promise<boolean>[] = [];
     if (typeof this.#rail === 'function') {
-      refinements.push(this.#queueRail(run, { preserveEstablished: true, publish: false }));
+      await this.#queueRail(run, { preserveEstablished: true, publish: false });
     }
-    await Promise.all(refinements);
     if (!this.#isCurrent(run)) return;
 
     this.#planRefinements(run);
@@ -985,7 +959,7 @@ export class CurrentViewController {
 
   async #settleProjection(
     run: RefinementRun,
-    { preserveEstablished, publish }: { preserveEstablished: boolean; publish: boolean },
+    { preserveEstablished }: { preserveEstablished: boolean },
   ): Promise<void> {
     if (!this.#isCurrent(run)) return;
     const before = this.snapshot;
@@ -995,6 +969,6 @@ export class CurrentViewController {
     if (!this.#isCurrent(run)) return;
     this.#refreshLookahead(run);
     const after = this.snapshot;
-    if (publish && !sameValue(before, after)) await this.#presentCurrent('update');
+    if (!sameValue(before, after)) await this.#presentCurrent('update');
   }
 }

@@ -28,8 +28,9 @@ test('a played legal move outside current Constellation selection recenters with
   const resolved = resolveMove(START, { uci: 'e2e4' });
   const compositions = [];
   const controller = new CurrentViewController({
-    initial: { center: START, view: 'roots', orientation: 'white', navDepth: 0 },
+    initial: { center: START, view: 'roots', navDepth: 0 },
     canonicalize: canonicalPosition,
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     routeLedger: { replace() {}, push() {} },
     structure: async ({ center, mode }) => {
       const composition = { center, direction: mode, nodes: [{ key: center }] };

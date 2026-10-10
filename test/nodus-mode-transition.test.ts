@@ -32,6 +32,7 @@ test('same-Nodus mode switch recomposes the one accepted Constellation and keeps
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value).toUpperCase(),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async ({ center, mode }) => {
       structureCalls.push([center, mode]);
       if (mode === 'roots') return roots.promise;
@@ -75,6 +76,7 @@ test('recenter starts fresh Rail state without waiting for Rail before accepting
   const controller = new CurrentViewController({
     initial: { center: 'A', view: 'lines' },
     canonicalize: (value) => String(value).toUpperCase(),
+    lens: { orientation: () => 'white', flipOrientation: () => 'black' },
     structure: async ({ center, mode }) => structure(center, mode),
     rail: async ({ center }) => {
       if (center === 'B') return nextRail.promise;

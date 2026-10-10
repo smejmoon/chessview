@@ -11,7 +11,6 @@ function view() {
       frontier: 3,
       structural: {
         working: 1,
-        retryWaiting: 1,
         satisfied: 0,
         incorporationPending: 1,
         unavailable: 1,
@@ -30,7 +29,6 @@ test('Weather diagnostic labels expose independent measures', () => {
     'settling yes',
     'frontier 3',
     'working 1',
-    'retry 1',
     'satisfied 0',
     'incorporating 1',
     'unavailable 1',
@@ -66,7 +64,7 @@ test('Weather diagnostics decorate only Debug presentation', () => {
 
   assert.equal(decorateWeatherDiagnostics(app, view(), { debug: true }), true);
   assert.equal(status.dataset.weatherDiagnostics, 'true');
-  assert.equal(status.child.children.length, 12);
+  assert.equal(status.child.children.length, 11);
   const frontier = status.child.children.find((item) => item.textContent === 'frontier 3');
   const incorporating = status.child.children.find((item) => item.textContent === 'incorporating 1');
   const supplementary = status.child.children.find((item) => item.textContent === 'supplementary 2/5');

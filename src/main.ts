@@ -19,6 +19,7 @@ import {
 } from './sampled-predecessors.ts';
 import { createLens } from './lens.ts';
 import { loadMasters } from './masters.ts';
+import { lichessSession } from './lichess-session.ts';
 import { materializeMove } from './move-materialization.ts';
 import { deriveCurrentViewRefinementDemand } from './current-view-refinement.ts';
 import { composeNodusStructure } from './nodus-structure.ts';
@@ -33,9 +34,41 @@ import { preferenceStore } from './preference-store.ts';
 import { decorateWeatherDiagnostics } from './weather-diagnostics.ts';
 
 const RESIZE_UPDATE_DEBOUNCE_MS = 120;
+const app = document.querySelector('#app');
+if (!app) throw new Error('ChessView requires an app element');
+
+function showAuthorizationFailure(error: unknown): void {
+  const panel = document.createElement('section');
+  panel.className = 'auth-gate';
+  const heading = document.createElement('h1');
+  heading.textContent = 'Lichess sign-in required';
+  const message = document.createElement('p');
+  message.textContent = error instanceof Error ? error.message : 'Could not authorize with Lichess.';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.textContent = 'Try again';
+  retry.addEventListener('click', () => {
+    app.textContent = 'Redirecting to Lichess…';
+    void lichessSession.establishAuthorization()
+      .then((token) => { if (token) window.location.reload(); })
+      .catch(showAuthorizationFailure);
+  });
+  panel.append(heading, message, retry);
+  app.replaceChildren(panel);
+}
+
+let authorized = false;
+try {
+  authorized = Boolean(await lichessSession.establishAuthorization());
+  if (!authorized) app.textContent = 'Redirecting to Lichess…';
+} catch (error) {
+  showAuthorizationFailure(error);
+}
+
+// No view or source work is started until authentication is established.
+if (authorized) {
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
 const initialRoute = routeLedger.read();
-const app = document.querySelector('#app');
 const lens = createLens({ app, preferences: preferenceStore });
 let controller: CurrentViewController;
 
@@ -206,3 +239,4 @@ window.addEventListener('beforeunload', () => {
 }, { once: true });
 
 await controller.start();
+}

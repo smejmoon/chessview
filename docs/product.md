@@ -17,6 +17,10 @@ A user should be able to:
 
 The visible Constellation adapts to the available presentation space and the shape of the position. Broad positions may spend space on breadth; forcing Lines may spend it on useful depth. A fixed surrounding-board count or fixed opening depth is not a product rule.
 
+## Authorization
+
+ChessView establishes visitor Lichess authorization at application startup before starting Current View source work. If authorization is denied or fails, it offers an explicit retry rather than letting an incidental Explorer or Masters request navigate the browser. The interactive view starts after authorization; once started, source outages and missing observations do not erase known graph knowledge or prevent using a trustworthy cached view.
+
 ## Progressive truth
 
 Chessview shows the best trustworthy current view it can establish instead of waiting for every useful refinement to finish.

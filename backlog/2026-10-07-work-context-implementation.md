@@ -28,7 +28,7 @@ Keep gateway responses as `Response`; narrow dependency/test interfaces at their
 
 Preserve zero-argument production construction for factories whose defaults provide complete behavior.
 
-Assay finding: `LichessSession.requireAccessToken()` currently retains a rejected `pendingAuthorization` unless an access token exists. Do not casually change that to unconditional clearing: after the redirect sentinel rejects, clearing immediately can permit repeated OAuth redirects before navigation completes. Decide and test the intended retry lifecycle separately—terminal callback/network failure may need a fresh attempt, while an in-progress redirect handoff should remain coalesced.
+Preserve startup-owned Lichess authorization while changing the transport work API. `LichessSession.authorizedRequest` consumes an established token without initiating sign-in; bootstrap alone owns OAuth redirect, callback, and explicit retry. Do not reintroduce per-request authorization coordination.
 
 # Complete:
 
@@ -40,4 +40,8 @@ Position-backed providers forward the repository-owned producer context into eac
 
 The gateway exposes a semantic active retry gate for 429 cooldown and no longer requires Explorer refinement to read `cooldownUntil`, compute delays, or own cooldown sleeping.
 
-Deterministic tests cover pre-aborted first/joining callers, cancellation before deferred producer startup, independent participant cancellation, live urgency promotion/demotion, queued cancellation, session forwarding, semantic cooldown retry behavior, and the intended authorization retry-vs-redirect-coalescing lifecycle. Typecheck, tests, and build pass.
+Deterministic tests cover pre-aborted first/joining callers, cancellation before deferred producer startup, independent participant cancellation, live urgency promotion/demotion, queued cancellation, session forwarding, and semantic cooldown retry behavior. Typecheck, tests, and build pass.
+
+# Sync:
+
+Use `backlog-tend` for routine synchronization of this open outcome.

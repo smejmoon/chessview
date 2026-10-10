@@ -26,7 +26,7 @@ Those lifetimes must not be collapsed. In particular, an endpoint client may con
 
 The target gateway shape is conceptually `request(input, requestInit, work)`, where `requestInit` is ordinary `RequestInit` and `work` carries the ChessView signal/urgency contract. Exact exported type names may be introduced during implementation, but browser `RequestInit.priority` must never be repurposed for ChessView urgency.
 
-`LichessSession.authorizedRequest` follows the same separation: authentication modifies HTTP headers and delegates the request plus work metadata; it does not reinterpret urgency or lifetime.
+Application bootstrap owns session establishment before Current View starts. `LichessSession.authorizedRequest` only attaches an already-established token and delegates request plus work metadata; it never starts OAuth or reinterprets urgency/lifetime. A missing token is a session failure for the caller, not a transport retry.
 
 ## Cooldown and retry exposure
 

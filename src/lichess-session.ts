@@ -29,8 +29,6 @@ export function createLichessSession({
   redirect = (url: string) => globalThis.window?.location?.assign(url),
   log = debugLog,
 } = {}) {
-  let pendingAuthorization: Promise<string> | null = null;
-
   function currentLocation() {
     const value = resolve(location);
     if (!value) throw new Error('LichessSession requires a location');
@@ -75,10 +73,6 @@ export function createLichessSession({
 
   function clearAccessToken() {
     persistentStorage()?.removeItem(TOKEN_KEY);
-  }
-
-  function isAuthenticated() {
-    return Boolean(accessToken());
   }
 
   function randomUrlSafe(size: number) {
@@ -185,28 +179,17 @@ export function createLichessSession({
     return token.access_token;
   }
 
-  async function requireAccessToken() {
-    const current = accessToken();
-    if (current) return current;
-
-    if (!pendingAuthorization) {
-      pendingAuthorization = (async () => {
-        const token = await completeCallback();
-        if (token) return token;
-        await signIn();
-        throw new Error('Redirecting to Lichess sign-in…');
-      })();
-    }
-
-    try {
-      return await pendingAuthorization;
-    } finally {
-      if (accessToken()) pendingAuthorization = null;
-    }
+  // Only the application bootstrap initiates authorization.
+  async function establishAuthorization(): Promise<string | null> {
+    const token = await completeCallback();
+    if (token) return token;
+    await signIn();
+    return null; // Browser navigation replaces this page.
   }
 
   async function authorizedRequest(input: RequestInfo | URL, init: LichessRequestInit = {}): Promise<Response> {
-    const token = await requireAccessToken();
+    const token = accessToken();
+    if (!token) throw new Error('Lichess authorization required. Reload to sign in again.');
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${token}`);
     const response = await gateway.request(input, { ...init, headers });
@@ -214,15 +197,7 @@ export function createLichessSession({
     return response;
   }
 
-  return Object.freeze({
-    accessToken,
-    clearAccessToken,
-    isAuthenticated,
-    signIn,
-    completeCallback,
-    requireAccessToken,
-    authorizedRequest,
-  });
+  return Object.freeze({ establishAuthorization, authorizedRequest });
 }
 
 export const lichessSession = createLichessSession();

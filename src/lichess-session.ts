@@ -1,6 +1,6 @@
 import { debugLog } from './debug.ts';
 import { lichessGateway } from './lichess-gateway.ts';
-import type { LichessRequestInit } from './lichess-gateway.ts';
+import type { WorkDemand } from './work-demand.ts';
 
 const LICHESS_HOST = 'https://lichess.org';
 const CLIENT_ID = 'chessview.smejmoon.github.io';
@@ -19,6 +19,18 @@ function base64Url(bytes: Uint8Array) {
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/g, '');
 }
 
+type RequestGateway = Pick<typeof lichessGateway, 'request'>;
+type SessionOptions = Readonly<{
+  gateway?: RequestGateway;
+  location?: () => any;
+  history?: () => any;
+  localStorage?: () => any;
+  sessionStorage?: () => any;
+  crypto?: () => any;
+  redirect?: (url: string) => unknown;
+  log?: typeof debugLog;
+}>;
+
 export function createLichessSession({
   gateway = lichessGateway,
   location = () => globalThis.window?.location ?? globalThis.location,
@@ -28,7 +40,7 @@ export function createLichessSession({
   crypto = () => globalThis.crypto,
   redirect = (url: string) => globalThis.window?.location?.assign(url),
   log = debugLog,
-} = {}) {
+}: SessionOptions = {}) {
   const authorizationLostListeners = new Set<() => void>();
 
   function currentLocation() {
@@ -220,11 +232,11 @@ export function createLichessSession({
     return () => authorizationLostListeners.delete(listener);
   }
 
-  async function authorizedRequest(input: RequestInfo | URL, init: LichessRequestInit = {}): Promise<Response> {
+  async function authorizedRequest(input: RequestInfo | URL, init: RequestInit = {}, work?: WorkDemand): Promise<Response> {
     const token = await requireAccessToken();
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${token}`);
-    const response = await gateway.request(input, { ...init, headers });
+    const response = await gateway.request(input, { ...init, headers }, work);
     if (response?.status === 401 && accessToken() === token) {
       clearAccessToken();
       for (const listener of authorizationLostListeners) {

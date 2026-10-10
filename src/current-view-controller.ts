@@ -5,7 +5,7 @@ import type { Route, RouteLedger, ViewMode } from './route-ledger.ts';
 
 type LifecycleStatus = 'idle' | 'loading' | 'ready' | 'failed';
 type RefinementPriority = 'foreground' | 'background';
-type RefinementPhase = 'working' | 'retry-waiting' | 'satisfied' | 'unavailable' | 'failed';
+type RefinementPhase = 'working' | 'satisfied' | 'unavailable' | 'failed';
 type RefinementPurpose = 'root-discovery';
 type RefinementActivityPhase = RefinementPhase | 'idle';
 
@@ -17,7 +17,6 @@ type Lifecycle = Readonly<{
 
 type WeatherStructuralMeasures = Readonly<{
   working: number;
-  retryWaiting: number;
   satisfied: number;
   incorporationPending: number;
   unavailable: number;
@@ -82,8 +81,7 @@ type RefinementTaskInput = Readonly<{
 
 export type RefinementOutcome =
   | Readonly<{ refinement: 'satisfied' }>
-  | Readonly<{ refinement: 'unavailable' }>
-  | Readonly<{ refinement: 'retryable'; retry: PromiseLike<unknown> }>;
+  | Readonly<{ refinement: 'unavailable' }>;
 
 export type RefinementTask = Readonly<{
   key: string;
@@ -158,7 +156,6 @@ type RefinementParticipant = {
   structuralReading: string | null;
   phase: RefinementPhase;
   controller: AbortController | null;
-  retryToken: number;
 };
 
 type RefinementRun = {
@@ -238,9 +235,6 @@ function refinementOutcome(value: unknown): RefinementOutcome | null {
   if (!isPlainRecord(value)) return null;
   if (value.refinement === 'satisfied') return value as RefinementOutcome;
   if (value.refinement === 'unavailable') return value as RefinementOutcome;
-  if (value.refinement === 'retryable' && value.retry && typeof (value.retry as PromiseLike<unknown>).then === 'function') {
-    return value as RefinementOutcome;
-  }
   return null;
 }
 
@@ -472,7 +466,6 @@ export class CurrentViewController {
     const frontierSet = new Set(frontier);
     const structural = {
       working: 0,
-      retryWaiting: 0,
       satisfied: 0,
       incorporationPending: 0,
       unavailable: 0,
@@ -490,7 +483,7 @@ export class CurrentViewController {
         const reading = participant.structuralReading;
         if (reading == null) {
           supplementaryTotal += 1;
-          if (participant.phase === 'working' || participant.phase === 'retry-waiting') {
+          if (participant.phase === 'working') {
             supplementaryActive += 1;
           }
           continue;
@@ -510,7 +503,6 @@ export class CurrentViewController {
         continue;
       }
       if (participant.phase === 'working') structural.working += 1;
-      else if (participant.phase === 'retry-waiting') structural.retryWaiting += 1;
       else if (participant.phase === 'satisfied') {
         structural.satisfied += 1;
         if (run?.incorporationPending.has(participant.key)) structural.incorporationPending += 1;
@@ -533,7 +525,6 @@ export class CurrentViewController {
     if (weather.structure !== 'ready' || weather.frontier === 0) return false;
     const structural = weather.structural;
     return structural.working > 0
-      || structural.retryWaiting > 0
       || structural.incorporationPending > 0;
   }
 
@@ -754,7 +745,6 @@ export class CurrentViewController {
 
     for (const [key, participant] of run.participants) {
       if (planned.has(key)) continue;
-      participant.retryToken += 1;
       participant.controller?.abort();
       run.incorporationPending.delete(key);
       run.participants.delete(key);
@@ -774,7 +764,6 @@ export class CurrentViewController {
           structuralReading,
           phase: 'working',
           controller: null,
-          retryToken: 0,
         };
         run.participants.set(key, participant);
         this.#startParticipant(run, participant);
@@ -816,8 +805,6 @@ export class CurrentViewController {
     const controller = new AbortController();
     participant.controller = controller;
     participant.phase = 'working';
-    const attempt = participant.retryToken + 1;
-    participant.retryToken = attempt;
 
     void Promise.resolve()
       .then(() => participant.task.run(Object.freeze({
@@ -825,18 +812,11 @@ export class CurrentViewController {
         priority: () => this.#participantPriority(participant),
       })))
       .then((value) => {
-        if (!this.#participantCurrent(run, participant, controller, attempt)) return;
+        if (!this.#participantCurrent(run, participant, controller)) return;
         // Keep this participation scope until the run no longer needs the task.
         // Cache-first providers may return a retained value while repository-owned
         // refresh still uses the same signal in the background.
         const outcome = refinementOutcome(value);
-        if (outcome?.refinement === 'retryable') {
-          participant.phase = 'retry-waiting';
-          run.incorporationPending.delete(participant.key);
-          this.#waitForRetry(run, participant, attempt, outcome.retry);
-          this.#queueSettlement(run);
-          return;
-        }
         participant.phase = outcome?.refinement === 'unavailable' ? 'unavailable' : 'satisfied';
         if (participant.phase === 'satisfied' && participant.structuralReading != null) {
           run.incorporationPending.add(participant.key);
@@ -846,7 +826,7 @@ export class CurrentViewController {
         this.#queueSettlement(run);
       })
       .catch((error: unknown) => {
-        if (!this.#participantCurrent(run, participant, controller, attempt)) return;
+        if (!this.#participantCurrent(run, participant, controller)) return;
         if (controller.signal.aborted || isObsoleteWork(error, controller.signal)) return;
         participant.controller = null;
         participant.phase = 'failed';
@@ -860,41 +840,12 @@ export class CurrentViewController {
     run: RefinementRun,
     participant: RefinementParticipant,
     controller: AbortController,
-    attempt: number,
   ): boolean {
     return Boolean(
       this.#isCurrent(run)
       && run.participants.get(participant.key) === participant
-      && participant.controller === controller
-      && participant.retryToken === attempt,
+      && participant.controller === controller,
     );
-  }
-
-  #waitForRetry(
-    run: RefinementRun,
-    participant: RefinementParticipant,
-    attempt: number,
-    retry: PromiseLike<unknown>,
-  ): void {
-    void Promise.resolve(retry)
-      .then(() => {
-        if (!this.#isCurrent(run)) return;
-        if (run.participants.get(participant.key) !== participant) return;
-        if (participant.phase !== 'retry-waiting' || participant.retryToken !== attempt) return;
-        this.#startParticipant(run, participant);
-      })
-      .catch((error: unknown) => {
-        if (!this.#isCurrent(run)) return;
-        if (run.participants.get(participant.key) !== participant) return;
-        if (participant.phase !== 'retry-waiting' || participant.retryToken !== attempt) return;
-        participant.phase = 'failed';
-        run.incorporationPending.delete(participant.key);
-        this.#log('Current View refinement retry gate failed', {
-          key: participant.key,
-          error: errorMessage(error),
-        });
-        this.#queueSettlement(run);
-      });
   }
 
   #queueSettlement(run: RefinementRun): void {

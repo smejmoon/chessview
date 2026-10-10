@@ -35,7 +35,7 @@ The current diagnostic surface may include:
 
 - accepted structure lifecycle (`idle`, `loading`, `ready`, or `failed`);
 - the derived Settling boolean and Constellation Reading-frontier size;
-- current frontier participation counts for `working`, retry-waiting, satisfied, unavailable, failed, and unplanned structural obligations;
+- current frontier participation counts for `working`, `satisfied`, `unavailable`, `failed`, and `unplanned` structural obligations;
 - the subset of successful structural participation whose settlement recomposition is still incorporation-pending;
 - structurally tagged participants whose Reading is no longer present in the accepted frontier;
 - active and total supplementary refinement participation.

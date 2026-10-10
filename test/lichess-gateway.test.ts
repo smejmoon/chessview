@@ -249,3 +249,22 @@ test('matching request-signal cancellation translates a transport abort into Obs
     (error) => isObsoleteWork(error) && error !== rawAbort && error.cause === rawAbort,
   );
 });
+
+test('Fetch priority remains an HTTP option, independent of work urgency', async () => {
+  const received = [];
+  const gateway = createLichessGateway({
+    minIntervalMs: 0,
+    fetchImpl: async (_input, init) => {
+      received.push(init);
+      return { status: 200, ok: true };
+    },
+  });
+  const controller = new AbortController();
+  await gateway.request('x', { priority: 'high' }, { urgency: 'background', signal: controller.signal });
+  assert.equal(received[0].priority, 'high');
+  assert.equal(received[0].signal, controller.signal);
+  await assert.rejects(
+    gateway.request('x', { signal: new AbortController().signal }, { signal: controller.signal }),
+    /Conflicting HTTP and work cancellation signals/,
+  );
+});

@@ -17,7 +17,7 @@ Weather presents the structural readiness derived by [Current View](../architect
 - Generic asynchronous, run-owned, or provider activity does not by itself make Weather `Updating…`. Only Current View's structural-readiness derivation controls the primary status.
 - Supplementary engine, Masters, Rail, Evidence, and lookahead work may continue after structural settlement and must not reopen or downgrade a successfully established Weather state by itself.
 - Supplementary failures remain local to their evidence surfaces and do not by themselves change global Weather.
-- Readiness is scoped to the active refinement run/current projection. Completion, retry gates, or unavailable outcomes from obsolete work must not settle a replacement view.
+- Readiness is scoped to the active refinement run/current projection. Completion or unavailable outcomes from obsolete work must not settle a replacement view.
 - Root/Line mode change or Nodus change establishes a different spatial projection; Weather may therefore return to establishment even though Nodus-scoped Rail or other independent values remain usable.
 - Ongoing structural Settling must remain perceptible. Presentation may delay, debounce, or coalesce transient status and recomposition updates to avoid distracting fidgeting, but must not present an unresolved live structural obligation as Ready merely to suppress motion.
 - The normal acknowledgement stays subtle: delayed `Updating…`, a brief `Ready`, then a persistent low-emphasis settled check.
@@ -63,7 +63,7 @@ Deterministic/browser contract tests should cover:
 - fast cached structural work avoiding a distracting `Updating…` flash while still acknowledging successful settlement;
 - coalesced/debounced structural recomposition avoiding unnecessary visual fidgeting without concealing unresolved structural work;
 - no Ready publication occurring between Reading-frontier admission and synchronous refinement-participation reconciliation;
-- failed and unplanned structural coordination remaining visible in Debug while primary Weather is Ready when no working, retry-waiting, or incorporation-pending witness remains;
+- failed and unplanned structural coordination remaining visible in Debug while primary Weather is Ready when no working or incorporation-pending witness remains;
 - Debug Weather reporting aggregate frontier/phase/incorporation/supplementary measures supplied by Current View without exposing per-task or per-position identity;
 - disabling Debug removing the diagnostic readout without changing structural readiness;
 - presentation failure replacing stale success feedback with a degraded/unavailable state.

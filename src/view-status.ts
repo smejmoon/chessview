@@ -1,6 +1,8 @@
 function statusSpec(presentation: string) {
   if (presentation === 'updating') return { mark: '●', label: 'Updating…', title: 'Current view is updating' };
   if (presentation === 'ready') return { mark: '✓', label: 'Ready', title: 'Current view finished updating' };
+  if (presentation === 'ready-limited') return { mark: '✓', label: 'Ready · Limited data', title: 'Current map is usable; some opening data could not be loaded. Refresh or revisit to try again.' };
+  if (presentation === 'check-limited') return { mark: '✓', label: 'Limited data', title: 'Current map is usable; some opening data could not be loaded. Refresh or revisit to try again.' };
   if (presentation === 'check') return { mark: '✓', label: '', title: 'Current view finished updating' };
   if (presentation === 'failed') return { mark: '!', label: 'Unavailable', title: 'Current view could not finish updating' };
   return { mark: '', label: '', title: '' };
@@ -11,6 +13,7 @@ function currentStatus(view: any) {
   if (structural === 'failed') return 'failed';
   if (structural === 'loading') return 'loading';
   if (view?.settling === true) return 'loading';
+  if (structural === 'ready' && (view?.weather?.structural?.unavailable ?? 0) > 0) return 'ready-limited';
   return structural;
 }
 
@@ -58,11 +61,11 @@ export function createViewStatusPresenter({
         updatingTimer = null;
         if (id === transition && structuralStatus === 'loading') present('updating');
       }, updatingDelayMs);
-    } else if (next === 'ready') {
-      present('ready');
+    } else if (next === 'ready' || next === 'ready-limited') {
+      present(next);
       readyTimer = setTimeoutFn(() => {
         readyTimer = null;
-        if (id === transition && structuralStatus === 'ready') present('check');
+        if (id === transition && structuralStatus === next) present(next === 'ready' ? 'check' : 'check-limited');
       }, readyHoldMs);
     } else if (next === 'failed') {
       present('failed');

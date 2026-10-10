@@ -25,7 +25,7 @@ If Lichess rejects a stored access token with HTTP 401 during an active session,
 
 ## Progressive truth
 
-Chessview shows the best trustworthy current view it can establish instead of waiting for every useful refinement to finish.
+Chessview shows the best trustworthy current view it can establish instead of waiting for every useful refinement to finish. Once initial Lichess authorization has succeeded, valid compatible cached observations can support the Constellation and Rail immediately while refresh occurs in the background. [Data stability](components/data-stability.md) governs their meaning; [Position cache](architecture/position-cache.md) governs their reuse and refresh.
 
 A spatial Constellation is accepted for a specific **Nodus plus Root/Line mode**. Refresh, newly learned facts, and material presentation-capacity changes may improve that same projection; while its replacement is being derived, the previously accepted coherent projection remains visible and navigable. Changing the Nodus or changing Root/Line mode asks for a different spatial projection, so Chessview establishes that projection instead of relabeling the old map as though it represented the new inputs.
 

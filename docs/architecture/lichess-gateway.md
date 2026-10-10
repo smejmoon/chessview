@@ -52,7 +52,7 @@ Queued requests that become obsolete before dispatch also terminate as `Obsolete
 
 ## Domain clients
 
-Explorer, Masters, cloud-evaluation, and authentication clients own endpoint-specific behavior. They remain responsible for request parameters, response parsing and source validation, persistence fields and cache policy, authentication semantics, and deciding whether source data is fit to expose to the rest of Chessview.
+Explorer, Masters, cloud-evaluation, and authentication clients own endpoint-specific behavior. They remain responsible for request parameters, response parsing and source validation, source-specific cache inputs, authentication semantics, and deciding whether source data is fit to expose to the rest of Chessview. Generic caching is owned by [Position cache](position-cache.md).
 
 They do not thereby own every downstream semantic interpretation of that data. In particular, [`LichessEval`](lichess-eval.md) owns whether cloud-eval data is usable, while [Evidence](../components/evidence.md) owns derived chess meaning such as move loss and move quality.
 

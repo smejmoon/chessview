@@ -86,4 +86,4 @@ A database client owns the endpoint-specific request and response contract neede
 - it may retain only source fields needed by Chessview rather than treating the complete wire response as the domain model;
 - it does not decide graph admission, Constellation visibility, or semantic evidence meaning merely because those consumers use its data.
 
-Transport serialization and cooldown remain owned by [`LichessGateway`](../architecture/lichess-gateway.md). Shared position-record/facet lifetime remains owned by [`PositionRepository`](../architecture/position-repository.md). Source-specific cache and failure requirements remain in [Lichess access](lichess-access.md).
+Transport serialization and cooldown remain owned by [`LichessGateway`](../architecture/lichess-gateway.md). Shared position-record/facet lifetime remains owned by [`PositionRepository`](../architecture/position-repository.md). [Data stability](data-stability.md) defines how the populations' observations change; [Position cache](../architecture/position-cache.md) owns generic cache behavior. [Lichess access](lichess-access.md) retains endpoint-specific HTTP, authorization, and failure requirements.

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Own authentication, endpoint access, shared request policy, endpoint caches, and transport/failure semantics for Chessview's Lichess-backed data.
+Own authentication, endpoint access, shared request policy, and transport/failure semantics for Chessview's Lichess-backed data. [Data stability](data-stability.md) owns the stability of source observations; [Position cache](../architecture/position-cache.md) owns the generic cache lifecycle.
 
 The architectural dependency boundary is defined separately in [`docs/architecture/lichess-gateway.md`](../architecture/lichess-gateway.md). Canonical position record and shared facet lifetime are defined in [`docs/architecture/position-repository.md`](../architecture/position-repository.md). Cloud-evaluation source usability is defined in [`docs/architecture/lichess-eval.md`](../architecture/lichess-eval.md). Opening Explorer source populations and their source-data peculiarities are cataloged in [Opening Explorer databases](opening-explorer-databases.md). This component owns the observable request-policy requirements those boundaries must enforce.
 
@@ -62,24 +62,18 @@ Foreground/background is generic application work urgency, not browser Fetch pri
 
 Position-backed endpoint clients may coalesce equivalent work for one canonical position and endpoint facet. One caller becoming obsolete must stop only that caller's participation without cancelling equivalent work still needed by another live caller. The shared producer's effective urgency is the highest urgency among its live subscribers, so joining or leaving shared work may promote or demote a still-queued request without creating another producer. When every caller to shared queued work becomes obsolete, the shared producer must be cancelled so the queued request does not reach Lichess.
 
-Endpoint clients retain responsibility for request parameters, parsing, source validation, persistence, cache policy, and deciding whether source data is fit to expose. Facets retain independent freshness; a position record is not globally fresh or stale. Downstream semantic meaning belongs to the component that owns that evidence or product decision rather than to transport by default.
+Endpoint clients retain responsibility for request parameters, parsing, source validation, and deciding whether source data is fit to expose. They supply the cache-relevant source policy; generic caching is executed by `PositionRepository` under [Position cache](../architecture/position-cache.md). Facets retain independent freshness; a position record is not globally fresh or stale. Downstream semantic meaning belongs to the component that owns that evidence or product decision rather than to transport by default.
 
-## Cache and failure semantics
+## Source failures and endpoint-specific cache conditions
 
-- Rated Explorer cache TTL: 24 hours.
-- A persisted rated Explorer value is a fresh cache hit only when it was produced by the current Explorer request profile. Request-shape changes therefore trigger normal provider acquisition instead of asking Root or other consumers to infer compatibility from response contents.
-- Lichess may legitimately return fewer top/recent games than requested; representative-game count is not a cache-completeness signal.
-- Masters cache TTL: 7 days.
-- Cloud-evaluation cache TTL: 7 days.
-- A supported cloud-eval `404` is successful absence and may be cached as such.
-- A transport or HTTP failure is not successful absence.
-- A non-null stale source value may be used when its endpoint client still judges it usable and a refresh fails.
-- Explorer structural refinement classifies source failure only after the Explorer provider has exhausted its own fresh/live/stale fallback path. It never manufactures an empty or negative Reading from failure.
-- An Explorer HTTP 429 is retryable for the active refinement run only when `LichessGateway` exposes an active semantic retry gate. Current View does not reconstruct cooldown timing from the HTTP status or a raw gateway clock value.
-- If no future retry gate exists, or another Explorer source failure remains after fallback, that source attempt is unavailable-for-this-run. A replacement refinement run may try again under normal freshness/source policy.
-- Explorer source classification stops at the source-load boundary. Failure after a usable Reading has been obtained—such as graph reconciliation/persistence failure—is not source unavailability and remains retryable/visible through Knowledge Acquisition.
-- Cloud-eval retrieval details are not exposed as evaluation values. `LichessEval` returns usable evaluation or absence and exposes request/failure activity separately through its operational status channel.
-- `LichessSession` owns invalidating a visitor access token rejected with HTTP 401; endpoint/domain code still owns source-specific fallback, diagnostics, and user-facing interpretation of that response.
+[Data stability](data-stability.md) owns how long observations remain useful, and [Position cache](../architecture/position-cache.md) owns generic cache freshness, background refresh, persistence, and diagnostics. Concrete refresh intervals remain in `src/config.ts`.
+
+- Rated Explorer must match the requested population and required fields, including representative games used by Root discovery; a legacy Reading lacking them is not a compatible answer. A smaller returned top/recent-game list is not proof the response is incomplete.
+- A cloud-eval HTTP 404 is successful *temporary* source absence, whereas a network/HTTP failure is not an absence observation.
+- Explorer structural refinement never manufactures an empty or negative Reading when acquisition fails.
+- An Explorer HTTP 429 may be retried within an active refinement run only when `LichessGateway` exposes an active semantic retry gate; Current View does not recreate cooldown timing. Without future retry eligibility or usable information, this source attempt is unavailable for the run.
+- Failure after a usable Explorer Reading is obtained (for example graph reconciliation or persistence failure) is not source unavailability; Knowledge Acquisition owns that distinction.
+- `LichessSession` invalidates the current visitor token rejected by HTTP 401; authorization recovery cannot erase retained chess knowledge.
 
 ## External constraint
 

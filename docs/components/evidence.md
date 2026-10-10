@@ -8,7 +8,7 @@ Evidence owns the meaning, calculation, and epistemic state of those signals. It
 
 Consumers such as [Constellation selection](constellation-selection.md), [Rail](rail.md), and [Interface](interface.md) request the Evidence they need for a position or Graph Edge. Those consumers own how the returned signals affect eligibility, navigation, composition, or presentation.
 
-Source clients own whether source data is fit to expose. In particular, [`LichessEval`](../architecture/lichess-eval.md), rated Explorer, and Masters own source acquisition, validation, cache/freshness policy, fallback, and operational status. Evidence consumes only currently usable observations or absence.
+Source clients own acquisition, validation, and whether source data is fit to expose; [Position cache](../architecture/position-cache.md) owns generic freshness and fallback mechanics. [`LichessEval`](../architecture/lichess-eval.md) owns evaluation quality. Evidence consumes only usable observations or absence.
 
 ## Read boundary
 

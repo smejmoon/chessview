@@ -14,17 +14,16 @@ Callers ask whether usable engine data is already available or ask the provider 
 - cloud-eval endpoint parameters and response parsing;
 - source-payload validation;
 - the minimum depth required before a cloud evaluation is exposed to the rest of Chessview;
-- persistence fields and cache freshness policy;
-- deciding whether an existing repository-held value is usable;
-- deciding when a Lichess refresh is required;
-- stale usable fallback when refresh fails or returns insufficient data;
+- source-specific persistence fields and response-quality rules;
+- supplying cloud-eval cache identity and stability-driven refresh inputs to [Position cache](position-cache.md);
+- deciding whether a cached or newly acquired cloud evaluation meets source-quality requirements;
 - successful cloud-eval absence such as HTTP `404`;
 - transport, HTTP, rate-limit, malformed-response, insufficient-source-data, and local-cache issues;
 - participation in shared per-position request lifetime through `PositionRepository`;
 - routing every application-issued Lichess request through `LichessGateway`;
 - aggregate operational status for Interface diagnostics and user-visible source activity.
 
-`PositionRepository`, not `LichessEval`, owns the generic live `(position, cloud-eval)` facet value and equivalent shared producer lifetime. `LichessEval` decides what value may be admitted there and whether a retained value is acceptable under cloud-eval policy.
+`PositionRepository`, not `LichessEval`, owns the generic live `(position, cloud-eval)` facet value and equivalent shared producer lifetime. `LichessEval` supplies validation and quality conditions for admitted values; `PositionRepository` applies generic caching under [Position cache](position-cache.md).
 
 The current minimum usable cloud-eval depth is `18`. A value below that threshold may be retained according to provider cache policy, but it is not exposed as a usable evaluation.
 
@@ -60,7 +59,7 @@ Missing provider output remains unknown to Evidence. A provider issue must never
 
 `LichessGateway` owns application-wide HTTP scheduling and cooldown policy. `LichessEval` owns cloud-eval-specific request construction and interpretation of the source response.
 
-`PositionRepository` owns canonical position records, repository-current live cloud-eval facet state, shared per-facet producer lifetime, participant lifetime, and effective acquisition urgency. `LichessEval` owns the meaning of `cloudEval` / `cloudEvalFetchedAt`, validation, freshness, stale fallback, successful absence, and whether a live or persisted value is usable.
+`PositionRepository` owns canonical position records, repository-current live cloud-eval facet state, shared per-facet producer lifetime, participant lifetime, and effective acquisition urgency. `LichessEval` owns source validation, evaluation quality, and interpretation of successful absence, supplying refresh assumptions to the repository. [Position cache](position-cache.md) owns generic freshness and fallback for `cloudEval` / `cloudEvalFetchedAt`.
 
 Repository write failure is reported back to `LichessEval`; it does not revoke an already admitted usable live value. `LichessEval` decides how that local-cache issue appears on its operational channel.
 

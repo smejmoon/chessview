@@ -2,7 +2,7 @@
 
 `PositionRepository` is Chessview's application-level owner of canonical position records and generic lifetime/state for position-associated source facets.
 
-The repository owns **state without source meaning**. Source providers own **meaning and policy without duplicating repository lifetime state**.
+The repository owns **shared state and generic caching without source meaning**. Source clients supply the input needed to use [Position cache](position-cache.md); [Data stability](../components/data-stability.md) guides refresh assumptions.
 
 ## Identity
 
@@ -28,13 +28,13 @@ A validated source observation may become usable before or independently of succ
 
 A live facet entry contains the admitted value plus generic metadata supplied by the source provider, such as the observation timestamp and whether that exact admitted value has been persisted. This state exists so a usable source observation does not disappear merely because IndexedDB persistence failed.
 
-The repository does not decide whether an observation deserves admission. The source provider parses and validates source data first, then admits the usable value. Likewise, the repository does not decide whether a retained value is fresh, stale-but-usable, authoritative absence, or should be refreshed. Those remain source-specific decisions.
+The source provider parses and validates observations and supplies source-specific admission and refresh conditions. The repository applies [Position cache](position-cache.md) to select retained values, decide when refresh is due, and coordinate background acquisition. It does not derive chess meaning from those observations.
 
 Live facet state is not a second durable cache. It is page-lifetime application state. Facet invalidation may remove selected live values without changing unrelated facets or Graph Edge topology.
 
 ## Facet hydration and shared producer lifetime
 
-Explorer, cloud evaluation, Masters, and future position-backed data are independently hydrated facets. There is no whole-node freshness flag: each endpoint client keeps its own TTL, request parameters, parsing, validation, fallback, absence, and failure semantics.
+Explorer, cloud evaluation, Masters, and future position-backed data remain independently hydrated facets, with no whole-node freshness flag. Source clients supply requests, validation, and meaningful absence; [Position cache](position-cache.md) owns the generic refresh, fallback, and persistence behavior.
 
 Equivalent concurrent loads for one facet and canonical key share one producer. Each caller participates with generic work demand: its own lifetime signal and urgency. One caller becoming obsolete detaches only that caller. The shared producer exposes the highest effective urgency among its live callers, so queued transport can promote or demote as callers join or leave without creating another producer. When the last caller detaches before the producer settles, the repository aborts the producer so cancellable downstream work can stop.
 
@@ -55,19 +55,11 @@ It does **not** give the repository source policy.
 
 ## Source-provider boundary
 
-Lichess-backed endpoint clients own endpoint meaning and source policy. They decide:
+Lichess-backed endpoint clients own endpoint meaning and acquisition: request parameters, response parsing, source validity and quality, and interpretation of endpoint-specific absence and failure. They supply cache identity and stability-driven refresh inputs rather than duplicating generic caching.
 
-- request parameters and endpoint-specific parsing;
-- whether returned data is valid and usable;
-- freshness/TTL;
-- stale fallback;
-- successful absence versus failure;
-- source-specific retry/recovery;
-- which generic facet metadata to attach when admitting a value.
+`PositionRepository` executes the [Position cache](position-cache.md) contract: matching and returning retained observations, age-based refresh, live and persistent values, shared producer coordination, and diagnostics for cache faults. This does not make it a Lichess client or interpreter of chess evidence.
 
-Once a provider has established a usable observation, it uses `PositionRepository` to retain that live facet value, coordinate equivalent acquisition, and persist position fields. Providers must not maintain a parallel `latest`/current-value map for the same position facet.
-
-`LichessGateway` owns application-wide serialization, cooldown, pre-send cancellation, and generic queued transport precedence. It does not own canonical-position identity, source-facet state, facet freshness, shared parsed-result semantics, or the domain reason a caller is foreground or background.
+`LichessGateway` owns HTTP serialization, cooldown, and transport request precedence. It does not own cache freshness, canonical-position identity, or current-view structural demand.
 
 ## Graph boundary
 

@@ -152,3 +152,22 @@
     transform: none;
   }
 }
+
+/* Preserve the limited-data explanation after the Ready acknowledgement fades. */
+.view-status.is-ready-limited,
+.view-status.is-check-limited {
+  color: #c6ad88;
+}
+.view-status.is-check-limited .view-status-mark {
+  opacity: .7;
+}
+.view-status.is-check-limited .view-status-label {
+  opacity: .85;
+}
+@media (max-width: 760px) {
+  .view-status.is-ready-limited .view-status-label,
+  .view-status.is-check-limited .view-status-label {
+    max-width: 0;
+    opacity: 0;
+  }
+}

@@ -83,7 +83,7 @@ test('supplementary Explorer warming uses background urgency without reconciling
   assert.equal(await acquisition.warmExplorerReading(center, { signal: controller.signal }), sourceReading);
   assert.equal(reconciliations, 0);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0][1].priority, 'background');
+  assert.equal(calls[0][1].urgency, 'background');
   assert.equal(calls[0][1].signal, warmLifetime.signal);
   assert.notEqual(calls[0][1].signal, controller.signal);
 });
@@ -117,15 +117,15 @@ test('started lookahead warm survives view cancellation so foreground demand can
   const warmLifetime = new AbortController();
   let producerCalls = 0;
   let producerSignal = null;
-  let producerPriority = null;
+  let producerUrgency = null;
 
   const loadExplorer = (key, options = {}) => repository.load(
     key,
     'explorer',
-    ({ signal, priority }) => {
+    ({ signal, urgency }) => {
       producerCalls += 1;
       producerSignal = signal;
-      producerPriority = priority;
+      producerUrgency = urgency;
       return completion.promise;
     },
     options,
@@ -139,16 +139,16 @@ test('started lookahead warm survives view cancellation so foreground demand can
   const warm = acquisition.warmExplorerReading(center, { signal: view.signal });
   await flush();
   assert.equal(producerCalls, 1);
-  assert.equal(producerPriority(), 'background');
+  assert.equal(producerUrgency(), 'background');
 
   view.abort();
   await flush();
   assert.equal(producerSignal.aborted, false);
 
-  const foreground = loadExplorer(center, { priority: 'foreground' });
+  const foreground = loadExplorer(center, { urgency: 'foreground' });
   await flush();
   assert.equal(producerCalls, 1);
-  assert.equal(producerPriority(), 'foreground');
+  assert.equal(producerUrgency(), 'foreground');
 
   completion.resolve(sourceReading);
   assert.equal(await warm, sourceReading);

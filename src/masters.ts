@@ -2,7 +2,7 @@ import { MASTERS_TTL_MS } from './config.ts';
 import { canonicalPosition, toPlayableFen, totalGames } from './graph.ts';
 import { debugLog } from './debug.ts';
 import { lichessSession } from './lichess-session.ts';
-import type { LichessRequestPriority } from './lichess-gateway.ts';
+import type { WorkDemand, ProducerWork } from './work-demand.ts';
 import { positionRepository } from './position-repository.ts';
 
 export { MASTERS_TTL_MS } from './config.ts';
@@ -51,7 +51,7 @@ function cachedMastersReading(record: any) {
 
 export function createMastersProvider({
   repository = positionRepository,
-  request = (url: URL, options: any) => lichessSession.authorizedRequest(url, options),
+  request = (url: URL, init: RequestInit, work: ProducerWork) => lichessSession.authorizedRequest(url, init, work),
   now = () => Date.now(),
   log = debugLog,
 } = {}) {
@@ -73,7 +73,7 @@ export function createMastersProvider({
 
   function load(
     positionKey: string,
-    { signal, priority = 'foreground' }: { signal?: AbortSignal; priority?: LichessRequestPriority } = {},
+    { signal, urgency = 'foreground' }: WorkDemand = {},
   ) {
     const key = canonicalPosition(positionKey);
     return repository.observe(key, 'masters', {
@@ -81,17 +81,13 @@ export function createMastersProvider({
       refreshAfterMs: MASTERS_TTL_MS,
       now,
       fallbackOnError: 'null',
-      acquire: async ({ signal: requestSignal, priority: requestPriority }: any) => {
+      acquire: async (work: ProducerWork) => {
         const url = new URL(MASTERS_ENDPOINT);
         url.searchParams.set('fen', toPlayableFen(key));
         url.searchParams.set('moves', '30');
         url.searchParams.set('topGames', '0');
 
-        const response = await request(url, {
-          signal: requestSignal,
-          priority: requestPriority,
-          headers: { Accept: 'application/json' },
-        });
+        const response = await request(url, { headers: { Accept: 'application/json' } }, work);
         if (!response.ok) throw new Error(`Lichess masters explorer returned ${response.status}`);
         return { value: parseMastersReading(await response.json()) };
       },
@@ -113,7 +109,7 @@ export function createMastersProvider({
           error: error instanceof Error ? error.message : String(error),
         }, 'error');
       },
-    }, { signal, priority });
+    }, { signal, urgency });
   }
 
   return Object.freeze({ load, current, readCached, available });

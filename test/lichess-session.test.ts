@@ -209,3 +209,21 @@ test('denied callback never redirects until explicitly retried', async () => {
   assert.equal(await session.establishAuthorization(), null);
   assert.equal(redirects.length, 1);
 });
+
+test('authorized requests forward HTTP options and work separately without OAuth navigation', async () => {
+  const calls = [];
+  const session = createLichessSession({
+    gateway: {
+      async request(input, init, work) {
+        calls.push({ input, init, work });
+        return { status: 200, ok: true };
+      },
+    },
+    localStorage: new MemoryStorage(),
+    location: { href: 'https://example.test/chessview/', search: '' },
+    log: () => {},
+  });
+  // The session must not create authorization from source demand.
+  await assert.rejects(session.authorizedRequest('https://explorer.lichess.org/lichess'), /Reconnect Lichess/);
+  assert.equal(calls.length, 0);
+});

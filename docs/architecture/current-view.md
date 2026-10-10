@@ -268,7 +268,7 @@ Deterministic/browser contract tests should cover:
   as coordination diagnostics without falsely implying automatic progress;
 - provider/task identity being unable to manufacture structural criticality;
 - a trustworthy accepted projection remaining interactive while structural
-  refinement is active or retry-waiting;
+  refinement is active or unavailable;
 - a completed structural result remaining unsettled exactly while its settlement
   recomposition is pending, then ceasing to block solely because its old success
   remains recorded;
@@ -276,9 +276,9 @@ Deterministic/browser contract tests should cover:
   structural obligation without manufacturing Evidence or durable knowledge;
 - replacement runs being free to try a previously unavailable Reading again;
 - supplementary work/failure remaining outside structural settlement;
-- obsolete completion, retry gates, and unavailable outcomes being unable to
+- obsolete completion, unavailable outcomes being unable to
   mutate a replacement view/run;
-- aggregate Weather diagnostics distinguishing working, retry-waiting, satisfied,
+- aggregate Weather diagnostics distinguishing working, unavailable, satisfied,
   incorporation-pending, unavailable, failed, unplanned, detached, and
   supplementary participation without exposing task/position identity;
 - Lens-owned orientation/presentation state and RouteLedger-owned browser state

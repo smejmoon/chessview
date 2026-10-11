@@ -69,8 +69,8 @@ test('foreground work passes queued background work after the in-flight request'
 
   const inFlight = gateway.request('in-flight');
   await firstStartedPromise;
-  const background = gateway.request('background', { priority: 'background' });
-  const foreground = gateway.request('foreground', { priority: 'foreground' });
+  const background = gateway.request('background', {}, { urgency: 'background' });
+  const foreground = gateway.request('foreground', {}, { urgency: 'foreground' });
   releaseFirst();
   await Promise.all([inFlight, background, foreground]);
 
@@ -98,8 +98,8 @@ test('queued work observes live priority changes without reinsertion', async () 
 
   const inFlight = gateway.request('in-flight');
   await firstStartedPromise;
-  const live = gateway.request('live', { priority: () => promoted ? 'foreground' : 'background' });
-  const background = gateway.request('background', { priority: 'background' });
+  const live = gateway.request('live', {}, { urgency: () => promoted ? 'foreground' : 'background' });
+  const background = gateway.request('background', {}, { urgency: 'background' });
   promoted = true;
   releaseFirst();
   await Promise.all([inFlight, live, background]);
@@ -134,9 +134,9 @@ test('foreground arriving during cooldown receives the next dispatch slot', asyn
   });
 
   assert.equal((await gateway.request('rate-limited')).status, 429);
-  const background = gateway.request('background', { priority: 'background' });
+  const background = gateway.request('background', {}, { urgency: 'background' });
   await waiting;
-  const foreground = gateway.request('foreground', { priority: 'foreground' });
+  const foreground = gateway.request('foreground', {}, { urgency: 'foreground' });
   releaseCooldown();
   await Promise.all([background, foreground]);
 
@@ -175,9 +175,9 @@ test('foreground arriving during request spacing receives the next dispatch slot
   });
 
   await gateway.request('first');
-  const background = gateway.request('background', { priority: 'background' });
+  const background = gateway.request('background', {}, { urgency: 'background' });
   await waiting;
-  const foreground = gateway.request('foreground', { priority: 'foreground' });
+  const foreground = gateway.request('foreground', {}, { urgency: 'foreground' });
   releaseSpacing();
   await Promise.all([background, foreground]);
 
@@ -206,7 +206,7 @@ test('queued obsolete work detaches immediately and is never sent', async () => 
 
   const inFlight = gateway.request('in-flight');
   await firstStartedPromise;
-  const abandoned = gateway.request('abandoned', { signal: obsolete.signal, priority: 'foreground' });
+  const abandoned = gateway.request('abandoned', {}, { signal: obsolete.signal, urgency: 'foreground' });
   obsolete.abort();
 
   await assert.rejects(abandoned, (error) => isObsoleteWork(error));
@@ -247,5 +247,24 @@ test('matching request-signal cancellation translates a transport abort into Obs
   await assert.rejects(
     gateway.request('cancelled', { signal: controller.signal }),
     (error) => isObsoleteWork(error) && error !== rawAbort && error.cause === rawAbort,
+  );
+});
+
+test('Fetch priority remains an HTTP option, independent of work urgency', async () => {
+  const received = [];
+  const gateway = createLichessGateway({
+    minIntervalMs: 0,
+    fetchImpl: async (_input, init) => {
+      received.push(init);
+      return { status: 200, ok: true };
+    },
+  });
+  const controller = new AbortController();
+  await gateway.request('x', { priority: 'high' }, { urgency: 'background', signal: controller.signal });
+  assert.equal(received[0].priority, 'high');
+  assert.equal(received[0].signal, controller.signal);
+  assert.throws(
+    () => gateway.request('x', { signal: new AbortController().signal }, { signal: controller.signal }),
+    /Conflicting HTTP and work cancellation signals/,
   );
 });

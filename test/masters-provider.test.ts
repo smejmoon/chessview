@@ -74,7 +74,7 @@ test('obsolete background Masters refresh leaves an immediately returned cached 
   const controller = new AbortController();
   const provider = createMastersProvider({
     repository: repositoryWith({ mastersExplorer: stale, mastersFetchedAt: 1_000 }),
-    request: async (_url, { signal }) => new Promise((_resolve, reject) => {
+    request: async (_url, _init, { signal }) => new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(obsolete), { once: true });
     }),
     now: () => 1_000 + MASTERS_TTL_MS + 1,

@@ -71,7 +71,7 @@ Endpoint clients retain responsibility for request parameters, parsing, source v
 - Rated Explorer must match the requested population and required fields, including representative games used by Root discovery; a legacy Reading lacking them is not a compatible answer. A smaller returned top/recent-game list is not proof the response is incomplete.
 - A cloud-eval HTTP 404 is successful *temporary* source absence, whereas a network/HTTP failure is not an absence observation.
 - Explorer structural refinement never manufactures an empty or negative Reading when acquisition fails.
-- An Explorer HTTP 429 may be retried within an active refinement run only when `LichessGateway` exposes an active semantic retry gate; Current View does not recreate cooldown timing. Without future retry eligibility or usable information, this source attempt is unavailable for the run.
+- An Explorer HTTP 429 ends that source attempt as unavailable-for-this-run after compatible cached fallback. The gateway still enforces the shared full-minute cooldown for future requests, but Current View never waits or retries 429 automatically during the same refinement run. The missing Reading remains unknown and can be retried on a replacement refinement run.
 - Failure after a usable Explorer Reading is obtained (for example graph reconciliation or persistence failure) is not source unavailability; Knowledge Acquisition owns that distinction.
 - `LichessSession` invalidates the current visitor token rejected by HTTP 401; authorization recovery cannot erase retained chess knowledge.
 
@@ -95,8 +95,7 @@ Deterministic tests should cover:
 - queued foreground work receiving the next available transport slot ahead of queued background work without preempting an in-flight request;
 - live shared-producer demand promoting and demoting the effective urgency seen by queued transport;
 - a 429 from one client delaying later traffic from another client;
-- Explorer refinement exposing that future cooldown as a retry gate instead of immediately replaying the request;
-- a 429 without a future cooldown gate not creating a busy retry loop;
+- an Explorer 429 terminating only the current attempt without sleeping or replaying it, while preserving the gateway cooldown for subsequent traffic;
 - exhausted Explorer source failure becoming unavailable-for-this-run only after stale fallback has failed;
 - Explorer source failure remaining unknown rather than producing synthetic chess Evidence;
 - graph reconciliation failure after a usable Explorer Reading not being reclassified as source unavailability;

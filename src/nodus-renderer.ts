@@ -40,7 +40,7 @@ type RendererStructure = Readonly<{
 type RailLine = Readonly<{ edge?: DisplayEdge; frequency?: Readonly<{ share?: number; games?: number }> | null }>;
 type RailValue = Readonly<{ lines?: readonly RailLine[] }>;
 type Lifecycle<T> = Readonly<{ status?: string; value?: T | null; error?: string | null }>;
-type RootDiscoveryPhase = 'idle' | 'working' | 'retry-waiting' | 'satisfied' | 'unavailable' | 'failed';
+type RootDiscoveryPhase = 'idle' | 'working' | 'satisfied' | 'unavailable' | 'failed';
 
 type CenterBoardState = Readonly<{
   api: BoardApi;
@@ -114,7 +114,6 @@ function rootContextButton(
   let label = 'Roots + siblings';
   if (rootContext) {
     if (discovery === 'working') label = 'Roots + siblings · Finding roots…';
-    else if (discovery === 'retry-waiting') label = 'Roots + siblings · Waiting to retry…';
     else if (discovery === 'failed') label = 'Roots + siblings · Root search failed';
     else if (discovery === 'unavailable') label = 'Roots + siblings · Root search unavailable';
     else if (coverage) {

@@ -1,3 +1,4 @@
+import type { WorkDemand } from './work-demand.ts';
 import {
   GRAPH_EDGE_ADMISSION_SAMPLE_FLOOR,
   SUPPLEMENTARY_EXPLORER_WARM_TIMEOUT_MS,
@@ -23,9 +24,6 @@ import { positionGraph } from './position-graph.ts';
 import { positionRepository } from './position-repository.ts';
 import type { GraphEdge, GraphEdgeInput, PositionGraph } from './position-graph.ts';
 
-export type AcquisitionPriority = 'foreground' | 'background';
-export type AcquisitionPriorityInput = AcquisitionPriority | (() => AcquisitionPriority);
-
 export type ExplorerMove = Readonly<{
   uci: string;
   white: number;
@@ -42,10 +40,7 @@ export type ExplorerReading = Readonly<{
   [key: string]: unknown;
 }>;
 
-export type ExplorerLoadOptions = Readonly<{
-  signal?: AbortSignal;
-  priority?: AcquisitionPriorityInput;
-}>;
+export type ExplorerLoadOptions = WorkDemand;
 
 export type ExplorerRefinementRunOutcome =
   | ExplorerRefinementOutcome
@@ -266,7 +261,7 @@ export function createKnowledgeAcquisition({
     if (signal?.aborted) throw abortError();
     const canonical = canonicalPosition(key);
     const warmSignal = createTimeoutSignal(warmTimeoutMs);
-    const explorer = await loadExplorer(canonical, { signal: warmSignal, priority: 'background' });
+    const explorer = await loadExplorer(canonical, { signal: warmSignal, urgency: 'background' });
     if (!explorer) return null;
     log('Explorer Reading warmed', {
       position: canonical,

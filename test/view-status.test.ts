@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createViewStatusPresenter } from '../src/view-status.ts';
+import { createViewStatusPresenter, viewStatusSpec } from '../src/view-status.ts';
 
 function fakeTimers() {
   let nextId = 1;
@@ -132,4 +132,20 @@ test('a later loading transition clears the previous check before delayed Updati
   assert.equal(presenter.presentation, 'hidden');
   timers.run(180);
   assert.equal(presenter.presentation, 'updating');
+});
+
+test('terminal source unavailability shows limited data only after structural settlement', () => {
+  const timers = fakeTimers();
+  const presenter = createViewStatusPresenter({ ...timers });
+  const limited = { ...view('ready'), weather: { structural: { unavailable: 1 } } };
+  presenter.update(limited);
+  assert.equal(presenter.presentation, 'ready-limited');
+  timers.run(1_200);
+  assert.equal(presenter.presentation, 'check-limited');
+  assert.match(viewStatusSpec(presenter.presentation).title, /some opening data/);
+  presenter.update({ ...limited, settling: true });
+  timers.run(180);
+  assert.equal(presenter.presentation, 'updating');
+  presenter.update(view('ready'));
+  assert.equal(presenter.presentation, 'ready');
 });

@@ -26,10 +26,6 @@ function weatherMeasures(view) {
       explanation: 'Structural refinement participants currently executing.',
     }),
     Object.freeze({
-      label: `retry ${finiteCount(structural.retryWaiting)}`,
-      explanation: 'Structural participants waiting on a legitimate retry gate.',
-    }),
-    Object.freeze({
       label: `satisfied ${finiteCount(structural.satisfied)}`,
       explanation: 'Structural participants that completed successfully in this refinement run.',
     }),

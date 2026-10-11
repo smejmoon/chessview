@@ -13,30 +13,9 @@ function deferred() {
   return { promise, resolve };
 }
 
-test('Explorer 429 classification exposes the lower-owned cooldown as a retry gate', () => {
-  const gate = deferred();
-  let slept = null;
-  const classify = createExplorerRefinementFailureClassifier({
-    cooldownUntil: () => 61_000,
-    now: () => 1_000,
-    sleep: (ms) => {
-      slept = ms;
-      return gate.promise;
-    },
-  });
-
-  const outcome = classify(Object.assign(new Error('rate limited'), { status: 429 }));
-  assert.equal(outcome.refinement, 'retryable');
-  assert.equal(slept, 60_000);
-  assert.equal(outcome.retry, gate.promise);
-});
-
-test('post-fallback Explorer source failure is unavailable for this run while ObsoleteWork remains control flow', () => {
-  const classify = createExplorerRefinementFailureClassifier({
-    cooldownUntil: () => 0,
-    now: () => 0,
-  });
-
+test('Explorer 429 ends this attempt without a retry gate', () => {
+  const classify = createExplorerRefinementFailureClassifier();
+  assert.deepEqual(classify(Object.assign(new Error('rate limited'), { status: 429 })), { refinement: 'unavailable' });
   assert.deepEqual(classify(new Error('network failed')), { refinement: 'unavailable' });
   assert.equal(classify(obsoleteWork('old view')), null);
 });
@@ -62,19 +41,6 @@ test('Knowledge Acquisition turns only Explorer load failure into a semantic una
 
   assert.deepEqual(await acquisition.refineExplorerReading(center), { refinement: 'unavailable' });
   assert.equal(reconciliations, 0);
-});
-
-test('Knowledge Acquisition preserves a semantic retry gate from Explorer source policy', async () => {
-  const retry = deferred();
-  const acquisition = createKnowledgeAcquisition({
-    loadExplorer: async () => { throw new Error('rate limited'); },
-    classifyExplorerFailure: () => ({ refinement: 'retryable', retry: retry.promise }),
-    repository: { merge: async () => {} },
-  });
-
-  const outcome = await acquisition.refineExplorerReading(center);
-  assert.equal(outcome.refinement, 'retryable');
-  assert.equal(outcome.retry, retry.promise);
 });
 
 test('graph reconciliation failure after a usable Reading is not reclassified as source unavailability', async () => {

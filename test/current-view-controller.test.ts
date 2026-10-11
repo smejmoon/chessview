@@ -3,10 +3,6 @@ import test from 'node:test';
 import { CurrentViewController } from '../src/current-view-controller.ts';
 
 const refinementUnavailable = Object.freeze({ refinement: 'unavailable' as const });
-function refinementRetryable(retry: PromiseLike<unknown>) {
-  return Object.freeze({ refinement: 'retryable' as const, retry });
-}
-
 function deferred() {
   let resolve;
   let reject;
@@ -335,33 +331,24 @@ test('semantic structural unavailability discharges only the active refinement-r
   assert.equal(controller.snapshot.settling, false);
 });
 
-test('retryable structural work remains Settling and retries only after its lower-owned gate opens', async () => {
-  const retry = deferred();
+test('terminal unavailable structural work settles without retry until refresh', async () => {
   let attempts = 0;
   const { controller } = fixture({
     structure: async ({ center, mode }) => structure(center, mode, { readingFrontier: ['B'] }),
     refine: () => [{
       key: 'explorer:B',
       structuralReading: 'B',
-      run: async () => {
-        attempts += 1;
-        return attempts === 1 ? refinementRetryable(retry.promise) : refinementUnavailable;
-      },
+      run: async () => { attempts++; return refinementUnavailable; },
     }],
   });
-
   await controller.start();
   await flush(24);
   assert.equal(attempts, 1);
-  assert.equal(controller.snapshot.settling, true);
-
-  await flush(24);
-  assert.equal(attempts, 1);
-
-  retry.resolve();
-  await flush(40);
-  assert.equal(attempts, 2);
   assert.equal(controller.snapshot.settling, false);
+  assert.equal(controller.snapshot.weather.structural.unavailable, 1);
+  await controller.refresh();
+  await flush(24);
+  assert.equal(attempts, 2);
 });
 
 test('supplementary unavailability does not pre-discharge a Reading admitted structurally later in the same run', async () => {

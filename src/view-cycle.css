@@ -25,7 +25,7 @@
 }
 
 .view-status-label {
-  max-width: 64px;
+  max-width: 128px;
   overflow: hidden;
   opacity: 1;
   transition: max-width 260ms ease, opacity 180ms ease;
@@ -127,28 +127,22 @@
   .view-status-measures { display: none; }
 }
 
-@media (max-width: 760px) {
-  .view-status {
-    min-width: 14px;
-    margin-left: 0;
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  .view-status.is-check { min-width: 14px; }
-
-  .view-status.is-updating .view-status-label,
-  .view-status.is-ready .view-status-label,
-  .view-status.is-failed .view-status-label {
-    max-width: 0;
-    opacity: 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .view-status.is-updating .view-status-mark {
     animation: none;
     opacity: .8;
     transform: none;
   }
+}
+
+/* Preserve the limited-data explanation after the Ready acknowledgement fades. */
+.view-status.is-ready-limited,
+.view-status.is-check-limited {
+  color: #c6ad88;
+}
+.view-status.is-check-limited .view-status-mark {
+  opacity: .7;
+}
+.view-status.is-check-limited .view-status-label {
+  opacity: .85;
 }

@@ -1,3 +1,4 @@
+import type { WorkDemand } from './work-demand.ts';
 import { Chess } from 'chess.js';
 import { canonicalPosition, START_FEN } from './graph.ts';
 import { lichessSession } from './lichess-session.ts';
@@ -24,16 +25,9 @@ type ExportResponse = Readonly<{
   text(): Promise<string>;
 }>;
 
-type ExportRequest = (
-  input: string,
-  init: Readonly<Record<string, unknown>>,
-) => Promise<ExportResponse>;
+type ExportRequest = (input: string, init: RequestInit, work: WorkDemand) => Promise<ExportResponse>;
 
-export type SampledPredecessorOptions = Readonly<{
-  signal?: AbortSignal;
-  priority?: 'foreground' | 'background' | (() => 'foreground' | 'background');
-  request?: ExportRequest;
-}>;
+export type SampledPredecessorOptions = WorkDemand & Readonly<{ request?: ExportRequest }>;
 
 function playExportedMove(chess: Chess, token: string) {
   try {
@@ -92,8 +86,8 @@ export async function discoverSampledPredecessors(
   gameIds: readonly string[],
   {
     signal,
-    priority = 'foreground',
-    request = (input, init) => lichessSession.authorizedRequest(input, init) as Promise<ExportResponse>,
+    urgency = 'foreground',
+    request = (input, init, work) => lichessSession.authorizedRequest(input, init, work) as Promise<ExportResponse>,
   }: SampledPredecessorOptions = {},
 ): Promise<readonly PredecessorNomination[]> {
   const canonical = canonicalPosition(target);
@@ -109,14 +103,12 @@ export async function discoverSampledPredecessors(
 
   const response = await request(url.toString(), {
     method: 'POST',
-    signal,
-    priority,
     headers: {
       Accept: 'application/x-ndjson',
       'Content-Type': 'text/plain',
     },
     body: ids.join(','),
-  });
+  }, { signal, urgency });
   if (!response.ok) throw Object.assign(new Error(`Lichess game export returned ${response.status}`), { status: response.status });
 
   const nominations = new Map<string, PredecessorNomination>();

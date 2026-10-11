@@ -4,7 +4,7 @@ import {
 } from './config.ts';
 import { canonicalPosition, toPlayableFen } from './graph.ts';
 import { lichessGateway } from './lichess-gateway.ts';
-import type { LichessRequestPriority } from './lichess-gateway.ts';
+import type { WorkDemand, ProducerWork } from './work-demand.ts';
 import { positionRepository } from './position-repository.ts';
 
 export {
@@ -118,7 +118,7 @@ export function createLichessEval({
 
   function get(
     position: string,
-    { signal, priority = 'foreground' }: { signal?: AbortSignal; priority?: LichessRequestPriority } = {},
+    { signal, urgency = 'foreground' }: WorkDemand = {},
   ) {
     const key = canonicalPosition(position);
     return repository.observe(key, 'cloud-eval', {
@@ -126,18 +126,14 @@ export function createLichessEval({
       refreshAfterMs: LICHESS_EVAL_TTL_MS,
       now,
       fallbackOnError: 'null',
-      acquire: async ({ signal: requestSignal, priority: requestPriority, cached }: any) => {
+      acquire: async ({ cached, ...work }: ProducerWork & { cached: any }) => {
         const url = new URL(ENDPOINT);
         url.searchParams.set('fen', toPlayableFen(key));
         url.searchParams.set('variant', 'standard');
         url.searchParams.set('multiPv', '5');
         beginRequest();
 
-        const response = await gateway.request(url, {
-          signal: requestSignal,
-          priority: requestPriority,
-          headers: { Accept: 'application/json' },
-        });
+        const response = await gateway.request(url, { headers: { Accept: 'application/json' } }, work);
         const checkedAt = now();
         if (response.status === 404) {
           // Source absence is newer information, not a retraction of an old
@@ -217,7 +213,7 @@ export function createLichessEval({
           ? evalIssue('storage', key, { message: 'Could not persist Lichess cloud evaluation' })
           : result.issue);
       },
-    }, { signal, priority });
+    }, { signal, urgency });
   }
 
   function subscribe(listener: (status: LichessEvalStatus) => void) {

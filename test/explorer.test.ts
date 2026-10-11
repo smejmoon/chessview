@@ -27,6 +27,7 @@ globalThis.history = { state: null, replaceState() {} };
 
 const { clearGraph, getOutgoing, putEdges, putNode } = await import('../src/db.ts');
 const { loadExplorerReading } = await import('../src/explorer.ts');
+const { isSourceUnavailable } = await import('../src/source-unavailable.ts');
 const { acquireExplorerReading: loadExplorer } = await import('../src/knowledge-acquisition.ts');
 const { composeNodusStructure } = await import('../src/nodus-structure.ts');
 
@@ -102,7 +103,9 @@ test('401 clears the stored Lichess access token', async () => {
   await clearGraph();
   localStorage.setItem('chessview.lichess.accessToken', 'expired-token');
   globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => 'unauthorized' });
-  await assert.rejects(loadExplorerReading(center), (error) => error?.status === 401);
+  await assert.rejects(loadExplorerReading(center), (error) => (
+    isSourceUnavailable(error) && error.cause?.status === 401
+  ));
   assert.equal(localStorage.getItem('chessview.lichess.accessToken'), null);
 });
 

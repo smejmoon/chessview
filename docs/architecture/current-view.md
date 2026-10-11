@@ -154,7 +154,7 @@ Evidence, alter ChartedGraph, persist into PositionRepository, or become a durab
 source conclusion. A replacement refinement run begins without the old run's
 discharge and may try again under normal source policy.
 
-A 429 from Explorer is terminal unavailability for the current refinement run after provider fallback. Current View does not infer the failure's meaning from HTTP status or initiate automatic same-run retries. A new run may try again through ordinary source acquisition.
+Current View receives only semantic source unavailability from lower source boundaries. It does not know whether the underlying cause was HTTP 429, another transport failure, invalid source data, or some other exhausted acquisition condition, and it never initiates automatic same-run source retries. A new run may try again through ordinary source acquisition.
 
 `failed` and `unplanned` are terminal coordination diagnostics for the current
 automatic settlement cycle, not source unavailability and not progress witnesses.

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Chess } from 'chess.js';
 import { canonicalPosition } from '../src/graph.ts';
+import { isSourceUnavailable } from '../src/source-unavailable.ts';
 import {
   discoverSampledPredecessors,
   sampleGameIds,
@@ -78,4 +79,44 @@ test('sampled-game replay honors an exported initial FEN', async () => {
   assert.equal(nominations.length, 1);
   assert.equal(nominations[0].source, canonicalPosition(initial));
   assert.equal(nominations[0].uci, 'e1f1');
+});
+
+
+test('sampled-game export translates HTTP failure into source unavailability', async () => {
+  const target = positionAfter(['e4']);
+  await assert.rejects(
+    discoverSampledPredecessors(target, ['abcdefgh'], {
+      request: async () => ({
+        ok: false,
+        status: 429,
+        text: async () => 'slow down',
+      }),
+    }),
+    (error) => isSourceUnavailable(error) && error.cause?.status === 429,
+  );
+});
+
+test('malformed successful sampled-game NDJSON is unavailable rather than partial discovery', async () => {
+  const target = positionAfter(['e4']);
+  const body = [
+    JSON.stringify({ id: 'abcdefgh', moves: 'e4' }),
+    '{"id":"ijklmnop","moves":',
+  ].join('\n');
+
+  await assert.rejects(
+    discoverSampledPredecessors(target, ['abcdefgh', 'ijklmnop'], {
+      request: async () => ({ ok: true, status: 200, text: async () => body }),
+    }),
+    (error) => isSourceUnavailable(error) && error.cause instanceof SyntaxError,
+  );
+});
+
+test('invalid successful sampled-game JSON shape is source unavailable', async () => {
+  const target = positionAfter(['e4']);
+  await assert.rejects(
+    discoverSampledPredecessors(target, ['abcdefgh'], {
+      request: async () => ({ ok: true, status: 200, text: async () => 'null' }),
+    }),
+    (error) => isSourceUnavailable(error),
+  );
 });

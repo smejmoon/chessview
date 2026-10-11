@@ -22,7 +22,7 @@ Product/current-view callers own relevance. Constellation exposes positions whos
 
 Provider acquisition and graph reconciliation are separate operations. A source provider may produce a usable Explorer Reading without growing the graph. Knowledge Acquisition may then reconcile that Reading deliberately. This permits Rail and Evidence to consume a fresh provider-current observation immediately while graph growth remains owned here.
 
-For Current View refinement, Knowledge Acquisition preserves that separation in the outcome boundary. `refineExplorerReading` classifies only failure of the Explorer **load** phase after provider-owned cache/stale fallback policy has run. An exhausted source attempt, including HTTP 429 after compatible cached fallback, is returned as unavailable-for-this-run without a same-run retry gate. Once a usable Reading exists, graph reconciliation runs normally and any reconciliation/persistence exception propagates as an ordinary failure rather than being converted into source unavailability.
+For Current View refinement, Knowledge Acquisition preserves that separation in the outcome boundary. The Explorer provider applies cache/stale fallback and translates exhausted acquisition into semantic source unavailability. `refineExplorerReading` maps only that semantic condition to unavailable-for-this-run; it does not inspect HTTP status or transport errors. Once a usable Reading exists, graph reconciliation runs normally and any reconciliation/persistence exception propagates as an ordinary failure rather than being converted into source unavailability.
 
 When reconciliation completes, [Current view](../architecture/current-view.md) may recompute the accepted view from facts now available. If that reconciliation was admitted as a structural obligation, completion alone is not enough for settlement: the result must be incorporated or made irrelevant by recomposition. Knowledge Acquisition does not push graph changes to Rail/Constellation and does not maintain a source-to-consumer event graph.
 
@@ -60,8 +60,8 @@ The sampled-game path is deliberately bounded and opportunistic. Failure to obta
 - Fresh source usability does not depend on graph persistence succeeding. Conversely, successful source acquisition does not imply graph reconciliation succeeded.
 - Reconciliation is retryable rather than one transaction spanning every edge/target in a Reading. If persistence fails after some valid updates land, those durable updates remain and a later reconciliation may safely resume.
 - Repeated reconciliation converges against actual graph state. Already-established relationships need no rewrite; admissible missing relationships remain retryable.
-- A failed Explorer load may become unavailable-for-this-run only after source-provider fallback/recovery policy is exhausted. Knowledge Acquisition does not infer that classification from transport strings or presentation state.
-- An Explorer HTTP 429 never creates a same-run retry; the Lichess gateway independently retains its cooldown for subsequent traffic.
+- A failed Explorer load may become unavailable-for-this-run only after the Explorer provider has exhausted fallback/recovery policy and exposed semantic source unavailability. Knowledge Acquisition does not infer that classification from HTTP status, transport strings, or presentation state.
+- Knowledge Acquisition never handles HTTP 429 directly; `LichessGateway` owns cooldown and the Explorer provider owns source-level failure translation.
 - A usable Explorer Reading followed by graph reconciliation failure is never silently discharged as source unavailable; that failure remains visible/retryable at the graph-knowledge boundary.
 - Acquisition and visibility remain separate. Knowledge Acquisition does not inspect current presentation-space capacity to decide which relationships a requested Reading may admit or retain.
 - Missing optional engine evidence does not create a Knowledge Acquisition or structural-settlement obligation merely because it could alter selection if it existed.
@@ -102,7 +102,7 @@ Deterministic tests should cover:
 - Constellation Reading-frontier needs being fulfilled by externally coordinated acquisition rather than a Knowledge-Acquisition-owned composition loop;
 - a completed structural reconciliation remaining unsettled until Current View recomposition incorporates its result;
 - exhausted Explorer source acquisition producing semantic unavailable-for-this-run without manufacturing a Reading;
-- an Explorer 429 producing unavailable-for-this-run without a retry gate;
+- provider-classified Explorer source unavailability producing unavailable-for-this-run without a retry gate;
 - graph reconciliation failure after a usable Reading propagating instead of becoming source unavailability;
 - explicitly materialized moves remaining durable independently of automatic Constellation eligibility;
 - optional engine evidence remaining unnecessary for structural settlement;

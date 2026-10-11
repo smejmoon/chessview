@@ -19,6 +19,7 @@ globalThis.history = { state: null, replaceState() {} };
 const { clearGraph, getNode, putNode } = await import('../src/db.ts');
 const { EXPLORER_TTL_MS, START_FEN, canonicalPosition, resolveMove } = await import('../src/graph.ts');
 const { loadExplorerReading } = await import('../src/explorer.ts');
+const { isSourceUnavailable } = await import('../src/source-unavailable.ts');
 const { createKnowledgeAcquisition } = await import('../src/knowledge-acquisition.ts');
 
 const center = canonicalPosition(START_FEN);
@@ -45,7 +46,7 @@ test('Explorer does not cache or expose a malformed Reading', async () => {
 
   await assert.rejects(
     loadExplorerReading(center, { force: true }),
-    (error) => error?.kind === 'invalid-data',
+    (error) => isSourceUnavailable(error) && error.cause?.kind === 'invalid-data',
   );
   assert.equal((await getNode(center))?.explorer, undefined);
 });

@@ -21,6 +21,7 @@ globalThis.history = { state: null, replaceState() {} };
 const { clearGraph } = await import('../src/db.ts');
 const { clearDebugLog, getDebugEntries } = await import('../src/debug.ts');
 const { loadExplorerReading, createExplorerProvider } = await import('../src/explorer.ts');
+const { isSourceUnavailable } = await import('../src/source-unavailable.ts');
 const { createPositionRepository } = await import('../src/position-repository.ts');
 
 const center = canonicalPosition(START_FEN);
@@ -120,9 +121,35 @@ test('failed Explorer refresh without usable stale data reports once and rejects
     log: (message, detail, level) => logs.push({ message, detail, level }),
   });
 
-  await assert.rejects(provider.ensure(center), /offline without cache/);
+  await assert.rejects(provider.ensure(center), (error) => (
+    isSourceUnavailable(error) && error.cause?.message === 'offline without cache'
+  ));
   const failures = logs.filter(({ message }) => message === 'explorer refresh failed');
   assert.equal(failures.length, 1);
   assert.equal(failures[0].level, 'error');
   assert.equal(failures[0].detail.error, 'offline without cache');
+});
+
+
+test('Explorer provider translates exhausted HTTP 429 into source unavailability after fallback', async () => {
+  const repository = createPositionRepository({
+    read: async () => null,
+    write: async () => {},
+    version: () => 0,
+    log: () => {},
+  });
+  const provider = createExplorerProvider({
+    repository,
+    request: async () => ({
+      ok: false,
+      status: 429,
+      text: async () => 'slow down',
+      json: async () => ({}),
+    }),
+    log: () => {},
+  });
+
+  await assert.rejects(provider.ensure(center), (error) => (
+    isSourceUnavailable(error) && error.cause?.status === 429
+  ));
 });

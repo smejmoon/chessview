@@ -71,7 +71,9 @@ Endpoint clients retain responsibility for request parameters, parsing, source v
 - Rated Explorer must match the requested population and required fields, including representative games used by Root discovery; a legacy Reading lacking them is not a compatible answer. A smaller returned top/recent-game list is not proof the response is incomplete.
 - A cloud-eval HTTP 404 is successful *temporary* source absence, whereas a network/HTTP failure is not an absence observation.
 - Explorer structural refinement never manufactures an empty or negative Reading when acquisition fails.
-- An Explorer HTTP 429 ends that source attempt as unavailable-for-this-run after compatible cached fallback. The gateway still enforces the shared full-minute cooldown for future requests, but Current View never waits or retries 429 automatically during the same refinement run. The missing Reading remains unknown and can be retried on a replacement refinement run.
+- Any HTTP 429 establishes the shared gateway cooldown regardless of which Lichess client received it. A Lichess-backed client then owns the application meaning of its exhausted request.
+- Rated Explorer translates exhausted acquisition after compatible cached fallback into semantic source unavailability; structural refinement maps that condition to unavailable-for-this-run without inspecting HTTP status. The missing Reading remains unknown and can be retried on a replacement refinement run.
+- Sampled-game export likewise translates inability to obtain its required source response into semantic source unavailability for Root discovery. Masters, cloud evaluation, and OAuth keep their own existing source/authentication semantics rather than inheriting a generic refinement rule.
 - Failure after a usable Explorer Reading is obtained (for example graph reconciliation or persistence failure) is not source unavailability; Knowledge Acquisition owns that distinction.
 - `LichessSession` invalidates the current visitor token rejected by HTTP 401; authorization recovery cannot erase retained chess knowledge.
 
@@ -95,7 +97,9 @@ Deterministic tests should cover:
 - queued foreground work receiving the next available transport slot ahead of queued background work without preempting an in-flight request;
 - live shared-producer demand promoting and demoting the effective urgency seen by queued transport;
 - a 429 from one client delaying later traffic from another client;
-- an Explorer 429 terminating only the current attempt without sleeping or replaying it, while preserving the gateway cooldown for subsequent traffic;
+- a 429 from any client establishing shared gateway cooldown without requiring higher layers to inspect that status;
+- exhausted Explorer acquisition producing semantic source unavailability after fallback, with no same-run retry;
+- sampled-game export failure producing semantic source unavailability for Root discovery;
 - exhausted Explorer source failure becoming unavailable-for-this-run only after stale fallback has failed;
 - Explorer source failure remaining unknown rather than producing synthetic chess Evidence;
 - graph reconciliation failure after a usable Explorer Reading not being reclassified as source unavailability;

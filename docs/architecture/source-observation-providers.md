@@ -62,11 +62,24 @@ The provider still owns source-facing request, validation, freshness, fallback, 
 
 ## Failure boundary
 
-Source-specific failures remain local when the provider owns the policy needed to recover, fall back, reject source data, update authentication state, report an operational issue, or decide the provider outcome.
+**Source clients terminate HTTP/network interpretation before returning to domain coordination.** The gateway passes completed HTTP responses or genuine transport failures to the requesting client. The client owns status/body interpretation, source validation, stale fallback, source-defined successful absence, authentication policy, and diagnosis of exhausted retrieval. It must not pass raw HTTP status or fetch-error taxonomy upward merely so a consumer can rediscover a decision already owned here.
 
-Failures cross the provider boundary only according to [Failure boundaries](failure-boundaries.md): the receiving layer must own a meaningful decision the provider cannot make itself. This keeps transport, storage, and provider-specific error taxonomies from leaking into consumers.
+After the provider has applied its recovery policy, its immediate caller may receive:
 
-`ObsoleteWork`, `PersistenceFailure`, and `RejectedObservation` are semantic concepts, not required public exception types for every provider operation. A provider may handle them locally. For example, malformed source data may use stale fallback, and persistence failure may still allow a fresh validated observation to remain repository-current and usable.
+- a usable observation, potentially retained from compatible cache while a refresh fails;
+- an explicit successful absence only where the source contract permits it (for example cloud-eval HTTP 404), not an invented empty Reading from a failed request;
+- a provider-specific local result/operational issue (for example supplementary Masters or cloud-eval unavailability) without forcing a generic exception;
+- semantic `SourceUnavailable` when that client cannot provide a required source result and the caller must decide whether a **particular attempt** may stop waiting;
+- `ObsoleteWork` unchanged when the owning caller/producer lifetime was cancelled;
+- another genuine failure only when the consumer must act on it, rather than when it is incidental to successful fallback.
+
+In current clients, **rated Explorer** returns a usable Reading after compatible fallback or exposes `SourceUnavailable` when acquisition is exhausted. **Sampled-game export** is a Root-discovery endpoint client rather than a position-facet provider, but follows the same failure boundary: a failed required export becomes `SourceUnavailable` and must not masquerade as a successful empty sample. Knowledge Acquisition and Root discovery convert that semantic condition to run-local `unavailable`; neither inspects 429 or other transport status. **Masters** handles source failures with its own cached-value/`null` policy. **Cloud eval** separately owns usable evaluation quality, temporary 404 absence, operational rate-limit/failure status, and fallback. **LichessSession/OAuth** owns token invalidation and authorization failures; an OAuth 429 is not `SourceUnavailable` chess evidence.
+
+`PositionRepository` owns generic facet/cache and shared-work mechanics, not HTTP meaning. A producer's raw error can pass through repository machinery to the provider, which owns any source-specific translation at its public boundary. An unsuccessful cache write may also remain a local operational diagnostic while a valid in-memory observation is returned.
+
+Semantic `ObsoleteWork` must pass unchanged; clients do not infer it from raw `AbortError` names. A `SourceUnavailable` exception may preserve an HTTP/network/storage error as `cause` for diagnostics, but **callers branch on the semantic exception, never on `error.cause`**. Graph-reconciliation or required persistence failures *after* a usable observation are not retroactively source unavailability.
+
+[Failure boundaries](failure-boundaries.md#architectural-failure-contracts) is the authoritative vocabulary and cross-boundary decision rule; this section owns its application to source clients. The shared pattern does not require identical exception types or statuses for all providers.
 
 ## Source-specific ownership
 

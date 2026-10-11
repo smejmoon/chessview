@@ -28,15 +28,18 @@ The gateway exposes `request(input, requestInit, work)`: `requestInit` is ordina
 
 `LichessSession.authorizedRequest` follows the same separation: authentication modifies HTTP headers and delegates the request plus work metadata; it does not reinterpret urgency or lifetime.
 
-## Cooldown and source availability
+## HTTP and failure boundary
 
-The gateway owns the shared 429 cooldown clock, keeps subsequent requests waiting for at least one minute, and does not publish that timestamp to source clients. Explorer treats HTTP 429 as unavailable for the current refinement attempt after retained-source fallback. No automatic same-run retry gate or extra scheduler is needed; a later refresh or visit can request that still-unknown Reading again. The current accepted Constellation remains usable.
+`LichessGateway` handles transport mechanics, **not source success or absence**:
 
-## Transport response contract
+- A completed HTTP transaction returns its platform `Response`, including 401, 404, 429, and other non-2xx responses. A status code alone does not make the gateway throw `SourceUnavailable` or decide whether any chess data exists.
+- Any 429 establishes the shared cooldown: subsequent requests do not start for at least a full minute. The failed request's response still reaches its client. The gateway owns the clock/queue and does not expose a retry gate to refinement or automatically replay that request.
+- A queued request cancelled before dispatch, or an abort-shaped fetch rejection whose **exact request signal** is aborted, becomes `ObsoleteWork`. Otherwise fetch/network rejection remains a genuine transport failure for the requesting client to interpret. A raw `AbortError` is not sufficient cancellation evidence.
+- The gateway does not parse endpoint payloads, infer valid source absence, choose cached fallback, invalidate chess evidence, classify graph failures, or issue source-level retries.
 
-The gateway remains an HTTP boundary and may return the platform `Response`. Endpoint clients legitimately need status, headers/body parsing, and endpoint-specific interpretation, so wrapping every response in a second generic transport DTO would add indirection without removing policy.
+The immediate caller is the Lichess endpoint client (or `LichessSession` for authorized requests and token exchange). That client owns response interpretation and source/authentication policy, described by [Source observation providers](source-observation-providers.md#failure-boundary) and [Failure boundaries](failure-boundaries.md#architectural-failure-contracts). The client may eventually expose `SourceUnavailable`, but that condition is **not** emitted by the gateway.
 
-Injection contracts should nevertheless depend on the smallest consumed capability. A session that only calls `gateway.request` accepts a request-capable gateway rather than the full concrete singleton shape; endpoint-provider test doubles likewise need only the response operations that provider consumes.
+The gateway deliberately returns platform `Response` rather than a second generic transport DTO. Dependency injection should use the smallest consumed request capability: a session that only calls `gateway.request` accepts a request-capable gateway, and client test doubles need only the response operations they consume.
 
 ## Cancellation translation
 

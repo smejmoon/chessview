@@ -37,6 +37,30 @@ Examples include:
 
 Cross-boundary failures should therefore be few and semantic. They should not mirror every HTTP status, DOM exception, storage event, or provider-specific failure mode.
 
+## Architectural failure contracts
+
+Each layer that performs I/O owns the policy it can decide there. Its caller should see a usable result, a meaningful absence, or only the failure conditions on which that caller must act. The concrete boundaries for Lichess access are:
+
+| Boundary | Handles here | Exposes to its immediate caller |
+| --- | --- | --- |
+| [`LichessGateway`](lichess-gateway.md) | HTTP dispatch, request ordering/spacing, global 429 cooldown, queued cancellation, request-signal-based abort translation | Completed HTTP `Response` (including non-2xx), semantic `ObsoleteWork` on proven cancellation, or an unconverted genuine transport failure |
+| [Lichess source client](source-observation-providers.md) | HTTP status and body interpretation, validation, source freshness/absence, cache fallback and exhausted-source policy | Usable observation, source-defined successful absence or local operational outcome; `SourceUnavailable` where acquisition cannot satisfy a consumer that needs that distinction; `ObsoleteWork` unchanged |
+| `PositionRepository` | Position-facet cache/persistence mechanics, equivalent producer and subscriber lifetimes | Retained values or generic persistence/work outcomes; it may forward a producer failure to its provider, but never assigns HTTP meaning |
+| Knowledge Acquisition / Root discovery | Graph reconciliation, source nomination, and conversion of semantic source unavailability into run-local outcomes | `satisfied` or `unavailable` refinement outcome; meaningful graph/reconciliation failure remains a failure, not source unavailability |
+| Current View | Relevance, participation, settlement, and Weather | Accepted projection and readiness/presentation state; no HTTP statuses, retry clocks, or source transport details |
+
+A completed HTTP exchange is not automatically a usable source observation. `LichessGateway` returns the response even when its status is an HTTP error; the endpoint client decides whether it means successful absence, failed acquisition, authentication loss, or another client-owned condition. The gateway's global 429 cooldown is independent of those decisions.
+
+### Exceptional conditions that cross
+
+- **`ObsoleteWork`** means the owning lifetime has established that the work is no longer required. The gateway can establish it from its exact request signal, and `PositionRepository` from a detached subscriber/producer. Higher layers propagate or stop it by its semantic type; an abort-shaped error alone is insufficient.
+- **`SourceUnavailable`** means a source-owning client cannot supply the required source result after its applicable fallback/recovery policy. It does **not** mean the source has no chess data or that a cached observation should be erased. Rated Explorer and sampled-game export use this condition; other clients may legitimately expose different source/authentication outcomes. Knowledge Acquisition and Root discovery convert it into `unavailable` only for the relevant refinement attempt.
+- **Other failures** stay failures when the receiving layer still owns a decision—for example graph reconciliation or required durable mutation. They must not be relabeled as `SourceUnavailable` merely because they happened after a source call.
+
+An exception's `cause` may preserve raw HTTP status, network error, or storage provenance for diagnostics. **`error.cause` is not the receiving layer's branching contract.** Callers use the semantic result/exception and must not reconstruct HTTP, cancellation, or provider fallback decisions from its diagnostic details.
+
+This describes permitted cross-boundary outcomes, not a requirement that every provider export the same exception type or every failed request throw. Each provider's own API establishes which outcomes it uses; [Source observation providers](source-observation-providers.md#failure-boundary) owns the source-client application of this rule.
+
 ## Translation at boundaries
 
 Platform and infrastructure errors are not application semantics by themselves. A boundary may translate them when it has enough context to establish meaning.

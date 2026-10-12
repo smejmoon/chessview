@@ -65,12 +65,27 @@
   right: 0;
   content: 'Clear all persisted and in-memory Explorer readings, then reload. Structural graph data is kept.';
 }
-.rail-debug { grid-template-rows: auto auto minmax(0, 1fr); }
-.debug-log { min-height: 0; margin: 0; padding: 9px 10px 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #aaa7a2; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select: text; }
+.rail-debug { grid-template-rows: auto auto minmax(0, 3fr) minmax(0, 2fr); overflow: hidden; }
+.debug-measures { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 10px; border-bottom: 1px solid rgba(255,255,255,.07); color: #d5d0c7; }
+.debug-measure-group + .debug-measure-group { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.08); }
+.debug-measure-group h3 { margin: 0; color: var(--accent); font: 700 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.debug-measure-explanation { margin: 4px 0 8px; color: #a5a098; font-size: 10px; line-height: 1.4; }
+.debug-measure-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 6px; margin: 0; }
+.debug-measure { min-width: 0; padding: 5px 7px; border-radius: 5px; background: rgba(255,255,255,.035); }
+.debug-measure dt { color: #b6b1a7; font-size: 10px; overflow-wrap: anywhere; }
+.debug-measure dd { margin: 3px 0 0; color: #e2ddd2; font: 600 13px/1.15 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.debug-measures:focus-visible,
+.debug-log:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.debug-log { min-height: 0; margin: 0; padding: 9px 10px 12px; overflow: auto; overscroll-behavior: contain; border-top: 1px solid rgba(255,255,255,.07); white-space: pre-wrap; overflow-wrap: anywhere; color: #aaa7a2; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select: text; }
 .debug-log:empty::after { content: 'No debug events yet.'; color: #696662; }
 
 @media (max-width: 760px) {
   .toolbar-button { padding: 0 8px; min-width: 32px; }
   .debug-drawer { right: 8px; bottom: 8px; width: calc(100vw - 16px); max-height: 34vh; }
   .debug-maintenance .debug-action::after { width: 210px; }
+  /* On narrow screens Debug occupies the lower Rail; the map and Weather remain visible. */
+  .workspace:has(.rail-debug) { grid-template-rows: minmax(0, 1fr) minmax(290px, 48vh); }
+  .analysis-rail:has(.rail-debug) { grid-template-rows: auto minmax(0, 1fr); }
+  .analysis-rail:has(.rail-debug) .rail-explorer { display: none; }
+  .analysis-rail .rail-debug { display: grid; grid-column: 1 / -1; grid-row: 2; min-height: 0; max-height: none; }
 }

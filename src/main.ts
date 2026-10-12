@@ -27,7 +27,6 @@ import { composeNodusRail } from './rail-source.ts';
 import { rootTranspositionEnricher } from './root-enrichment.ts';
 import { createRouteLedger } from './route-ledger.ts';
 import { preferenceStore } from './preference-store.ts';
-import { decorateWeatherDiagnostics } from './weather-diagnostics.ts';
 
 const RESIZE_UPDATE_DEBOUNCE_MS = 120;
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
@@ -61,7 +60,6 @@ const lichessEvalStatusPresenter = createLichessEvalStatusPresenter({
 const stopLichessEvalStatus = lichessEval.subscribe(lichessEvalStatusPresenter.update);
 const presenter = createNodusPresenter({
   renderer,
-  decorateWeather: (view) => { decorateWeatherDiagnostics(app, view, { debug: lens.debugEnabled() }); },
   log: (message, detail) => { debugLog(message, detail, 'error'); },
 });
 

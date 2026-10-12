@@ -22,6 +22,9 @@ class FakeElement {
     this.title = '';
     this.disabled = false;
     this._innerHTML = '';
+    this.scrollTop = 0;
+    this.scrollHeight = 1000;
+    this.clientHeight = 120;
     this.classList = { add() {}, remove() {}, toggle() {}, [Symbol.iterator]: function* iterator() {} };
   }
 
@@ -47,6 +50,12 @@ class FakeElement {
       this.guide = new FakeElement(this.ownerDocument, { id: 'guide-toggle' });
       this.debug = new FakeElement(this.ownerDocument, { id: 'debug-toggle' });
       this.rootToggle = new FakeElement(this.ownerDocument, { id: 'root-context-toggle' });
+    }
+    if (this.className === 'analysis-rail') {
+      this.debugMeasures = value.includes('id="debug-measures"')
+        ? new FakeElement(this.ownerDocument, { id: 'debug-measures' }) : null;
+      this.debugLog = value.includes('id="debug-log"')
+        ? new FakeElement(this.ownerDocument, { id: 'debug-log' }) : null;
     }
     if (this.id === 'satellites' && value === '') this.children = [];
   }
@@ -77,6 +86,8 @@ class FakeApp extends FakeElement {
       '#guide-toggle': this.guide,
       '#debug-toggle': this.debug,
       '#root-context-toggle': this.rootToggle,
+      '#debug-measures': this.rail?.debugMeasures,
+      '#debug-log': this.rail?.debugLog,
     };
     return values[selector] ?? null;
   }
@@ -184,4 +195,82 @@ test('canonical Nodus presentation does not claim a route-dependent opening iden
   assert.match(app.rail.innerHTML, /current position/);
   assert.match(app.rail.innerHTML, /Explore from here/);
   assert.doesNotMatch(app.rail.innerHTML, /Panov|B14/);
+}));
+
+test('Rail Debug groups follow the published view without changing Weather or the center board', async () => withRenderer(async (createNodusRenderer) => {
+  const document = new FakeDocument();
+  const app = new FakeApp(document, { id: 'app' });
+  let debugEnabled = false;
+  const { createLens } = await import('../src/lens.ts');
+  const lens = createLens({
+    app,
+    debug: { enabled: () => debugEnabled, setEnabled(value) { debugEnabled = value; } },
+  });
+  const renderer = createNodusRenderer({ app, lens });
+  const center = canonicalPosition(START_FEN);
+  const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() {} };
+  const view = {
+    ...viewFor(center),
+    settling: true,
+    weather: {
+      structure: 'ready', frontier: 3,
+      structural: { working: 1, satisfied: 2, incorporationPending: 1, unavailable: 1, failed: 0, unplanned: 0, detached: 0 },
+      supplementary: { active: 2, total: 5 },
+    },
+  };
+
+  renderer.render(view, actions, 'updating');
+  assert.doesNotMatch(app.rail.innerHTML, /ConstellationState|FrontierWork/);
+  lens.setDebug(true);
+  renderer.render(view, actions, 'updating');
+  assert.match(app.rail.innerHTML, /ConstellationState/);
+  assert.match(app.rail.innerHTML, /FrontierWork/);
+  assert.match(app.rail.innerHTML, /EnrichmentFlow/);
+  assert.match(app.rail.innerHTML, /Incorporation pending<\/dt><dd>1<\/dd>/);
+  assert.match(app.rail.innerHTML, /id="debug-measures" role="region" tabindex="0"/);
+  assert.match(app.rail.innerHTML, /id="debug-log" tabindex="0"/);
+  assert.doesNotMatch(app.rail.innerHTML, /aria-live|role="status"/);
+  assert.equal(app.viewStatus.className, 'view-status is-updating');
+  assert.equal(app.viewStatus.children.length, 0);
+
+  lens.setDebug(false);
+  renderer.render(view, actions, 'updating');
+  assert.doesNotMatch(app.rail.innerHTML, /ConstellationState|FrontierWork/);
+  assert.equal(app.viewStatus.className, 'view-status is-updating');
+  assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
+}));
+
+test('Debug event log auto-follow never hides measurement groups and both scroll positions survive redraws', async () => withRenderer(async (createNodusRenderer) => {
+  const document = new FakeDocument();
+  const app = new FakeApp(document, { id: 'app' });
+  let debugEnabled = false;
+  const { createLens } = await import('../src/lens.ts');
+  const lens = createLens({
+    app,
+    debug: { enabled: () => debugEnabled, setEnabled(value) { debugEnabled = value; } },
+  });
+  const renderer = createNodusRenderer({ app, lens });
+  const center = canonicalPosition(START_FEN);
+  const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() {} };
+  const view = viewFor(center);
+
+  renderer.render(view, actions, 'ready');
+  lens.setDebug(true);
+  renderer.render(view, actions, 'ready');
+  const measures = app.rail.debugMeasures;
+  const log = app.rail.debugLog;
+  assert.ok(measures);
+  assert.ok(log);
+  assert.equal(measures.scrollTop, 0);
+  assert.equal(log.scrollTop, 1000, 'the event log alone follows the latest event');
+
+  measures.scrollTop = 95;
+  measures.listeners.get('scroll')();
+  log.scrollTop = 12;
+  log.listeners.get('scroll')();
+  renderer.render(view, actions, 'updating');
+  assert.equal(app.rail.debugMeasures.scrollTop, 95, 'ongoing refinement keeps the inspected measurements in view');
+  assert.equal(app.rail.debugLog.scrollTop, 12, 'inspecting older log events disables follow-latest');
+  assert.equal(app.viewStatus.className, 'view-status is-updating');
+  assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
 }));

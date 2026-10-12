@@ -1,62 +1,35 @@
 # Do:
 
-Finish Weather as the compact presentation of structural readiness now that Current View owns the lifecycle rule.
+Browser-verify the independently scrollable Debug measurements and event log on the `10-11-weather` branch preview, especially narrow screens, keyboard navigation, auto-follow during live log activity, and screen-reader inspection. Confirm that `ConstellationState`, `FrontierWork`, and `EnrichmentFlow` show the published Current View aggregate measures, remain understandable without hovering, and do not enter Weather's live announcement region.
 
-Keep the normal surface limited to the established Updating / Ready / settled-check / unavailable presentation, downstream of Current View's supplied structural state. Keep Debug useful during development by exposing the independent aggregate measures that explain that state, including incorporation-pending separately from the participant's satisfied execution phase.
+Inspect Debug toggle-on/off while Weather is Updating and Ready/check, confirm the accepted Nodus board and Constellation remain interactive, and exercise fast structural settlement, terminal-unavailable Limited data, stale/late supplementary outcomes, and degraded presentation where feasible. Correct any observed UI or integration defects without introducing structural settlement logic into Debug or Weather. Close the outcome once its browser contract and exact-tip verification are established.
 
-Verify the presentation timing against the settled lifecycle: same-projection refinement may leave a trustworthy Constellation interactive while Updating, a new spatial projection may be establishing while Nodus-scoped Rail remains usable, supplementary activity must not reopen Weather, and successful structural work must stop blocking after its settlement recomposition has been drained.
+# Blocked:
+
+Browser and assistive-technology verification on the deployed branch has not been established in this connected-GitHub session. This prevents claiming the narrow-viewport, keyboard/screen-reader, and transition-inspection completion checks, and therefore prevents Backlog Close. The current source-level regression tests, TypeScript checks, build, and branch publication have passed; deployed browser behavior and assistive-technology usability remain unverified.
 
 # Because:
 
-[Current View](../docs/architecture/current-view.md) now owns the durable lifecycle distinctions. A spatial projection is accepted for one Nodus plus Root/Line mode; refresh and same-projection recomposition can preserve it, while Nodus or mode changes establish different spatial structure. Structural readiness follows live work, retry gates, and successful work still awaiting incorporation rather than Reading-frontier membership alone.
+[Current View](../docs/architecture/current-view.md) owns accepted projection validity, admitted structural settlement, incorporation order, and run-local participation. [Weather](../docs/components/weather.md) owns the compact readiness meaning. [Lens](../docs/components/lens.md#debug-observability) owns Debug presentation, with its renderer responsible for DOM, status acknowledgement timing, and presentation failure handling.
 
-The primary Weather surface is intentionally compact. Debug diagnostics preserve development visibility without turning task counts into product meaning: accepted structure lifecycle, Settling, frontier size, structural execution phases, incorporation-pending, detached participation, and supplementary participation can be inspected independently.
-
-The existing presentation delay/acknowledgement behavior remains useful UX machinery, but it must sit downstream of correct structural truth.
+Debug must expose existing aggregate observations independently of the Weather status and its live announcements; viewport width must not conceal the readout. The current Debug layout keeps those measurements in a separate, keyboard-scrollable Rail region with visible group explanations and labelled values. Event history follows the newest log entry only within its own scrollable region. Measurement inspection position survives Current View redraws.
 
 # Edges:
 
-Current-view publication and Weather are separate. A trustworthy current projection may publish while Weather says Updating, and supplementary values may publish after Weather is settled.
+Keep Weather's Updating / Ready / settled-check / Limited data / unavailable contract. Failed or unplanned structural participation is not an automatic-progress witness; satisfied counts do not substitute for incorporation-pending. Same-projection accepted structure remains interactive while structurally Settling; new Nodus or mode establishes a different spatial projection.
 
-`LichessEval.subscribe()` remains an operational source-status channel and must not drive primary Weather directly. Provider activity says nothing by itself about structural readiness.
-
-Presentation failure remains distinct from structural settlement failure. If the renderer cannot present a trustworthy view, Weather may degrade for presentation reasons without redefining Current View settlement.
-
-A material presentation-constraint change may recompose the same projection and therefore make Weather Updating again if that derivation admits structural obligations. Pure redraw does not.
-
-Normal Weather must not expose provider names, task keys, canonical-position identities, controller revision tokens, source payloads, or transport state. Debug may show aggregate current-view counts and execution phases because they are measurements, not product meaning or source policy.
-
-`failed` and `unplanned` structural participation remain owned by the refinement-participation/planning outcome. Weather diagnostics expose them, but this outcome does not decide their coordination semantics.
+Keep Debug read-only and aggregate. Do not expose task keys, canonical-position identities, provider names, source payloads, retries, or run tokens. LichessEval source-status subscriptions do not drive Weather. No changes to Current View planning, failure policy, acquisition, or Constellation selection are part of this outcome.
 
 # Unsettled:
 
-Choose the smallest primary Weather input/state interface now that the lifecycle contract is durable. It should distinguish usable-but-settling, settled, and unavailable/degraded without requiring the Debug measures to become product states.
-
-Keep or adjust the current delay/Ready/check timing only after browser verification. Anti-fidgeting may debounce presentation, but it must never display Settled while the supplied structural state is unsettled.
-
-Decide after the lifecycle work stabilizes which Debug measures remain useful enough to keep long-term; normal Weather should stay compact regardless.
+Use browser evidence to judge whether the mobile Rail Debug takeover is sufficiently legible and whether the existing Updating/Ready/check delays avoid distracting flashes without creating a false Settled interval. Do not alter the delays on guesswork.
 
 # Complete:
 
-Deterministic/browser tests prove that:
+The three Debug groups display the exact published Current View measures, including incorporation-pending distinct from satisfied and supplementary active/total. Primary Weather shows no Debug counters and stays independent of Debug visibility. Measurements are navigable/readable on narrow screens with keyboard and assistive technology, without log auto-follow scrolling them out of view; independently inspected measurement and history scroll positions survive Current View redraws.
 
-- a trustworthy accepted Constellation remains usable while primary Weather presents Updating for same-projection structural progress;
-- Settled reaches Ready/check without waiting for supplementary work;
-- late supplementary Evidence/Rail/engine/Masters/lookahead activity does not reopen primary Weather;
-- a structural obligation admitted after same-projection constraint change can make Weather Updating again;
-- a successful structural result blocks while incorporation is pending but not merely because its satisfied phase remains after the settlement drain;
-- new Nodus/mode spatial establishment cannot present the old Constellation as current structure;
-- failure to establish trustworthy current structure presents unavailable/degraded;
-- obsolete-run completion cannot change Weather for the replacement view;
-- presentation debounce/acknowledgement never creates a false Settled interval;
-- Debug exposes the agreed aggregate Weather measures without task, position, provider, revision, payload, or transport identity;
-- disabling Debug removes the diagnostic readout without changing the primary Weather state.
-
-Weather contains presentation policy and diagnostics only; structural admission, source failure meaning, and incorporation ordering have no duplicate authority here.
+Same-projection structural refinement preserves interactive accepted boards while Updating; successful incorporation produces Ready/check; terminal structural unavailability permits a nonblocking Limited data indicator when a trustworthy map survives; failure to establish or present trustworthy structure degrades to unavailable. Supplementary and obsolete-run activity do not falsely reopen or settle Weather. Nodus/mode changes do not display obsolete spatial structure as current. Rapid transitions do not produce false Settled intervals. Exact-tip CI passes on the final implementation commit.
 
 # Sync:
 
-After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If
-an outcome's completion condition is satisfied, run Backlog Close for that
-outcome. If Close cannot pass its normal gates, leave the entry open with the
-blocking condition explicit.
+For routine synchronization of this identified open entry, use Backlog Tend. After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around factual work and verification still open; do not accumulate progress history. If the outcome's completion condition is satisfied, run Backlog Close. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.

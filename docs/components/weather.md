@@ -25,24 +25,13 @@ Weather presents the structural readiness derived by [Current View](../architect
 
 `failed` and `unplanned` structural participation remain explicit coordination diagnostics, but neither is an automatic-progress witness. They do not keep primary Weather `Updating…` by themselves and must not be reinterpreted as semantic source unavailability. `unplanned` is evaluated only after synchronous Current View planning has had the opportunity to attach structural participation; the transient interval before planning is not a publishable Ready state. A later refresh, replacement run, or changed plan may create new live work.
 
-## Development diagnostics
+## Weather and Debug boundary
 
-Weather may expose several independent measures at once when Debug is enabled so lifecycle behavior can be inspected without forcing every distinction through the primary Ready/Updating state.
+Weather is the user-facing presentation of the structural-readiness meaning already derived by [Current View](../architecture/current-view.md). The primary status keeps its Updating, Ready/check, Limited data, and unavailable behavior; it does not infer readiness from the number of tasks or from Debug measurements.
 
-Debug diagnostics are intentionally terse but self-explaining: each aggregate measure remains independently hoverable/focusable with a short explanation of what it counts. The strip should remain legible as a development surface without competing with primary Weather state.
+Debug independently explains the published current-view state through three read-only groups: `ConstellationState`, `FrontierWork`, and `EnrichmentFlow`. Their measurements and presentation belong to [Lens's Debug surface](lens.md#debug-observability), not to the primary Weather status or its live announcement region. They do not add product states or another settlement authority.
 
-The current diagnostic surface may include:
-
-- accepted structure lifecycle (`idle`, `loading`, `ready`, or `failed`);
-- the derived Settling boolean and Constellation Reading-frontier size;
-- current frontier participation counts for `working`, `satisfied`, `unavailable`, `failed`, and `unplanned` structural obligations;
-- the subset of successful structural participation whose settlement recomposition is still incorporation-pending;
-- structurally tagged participants whose Reading is no longer present in the accepted frontier;
-- active and total supplementary refinement participation.
-
-These measures are observations, not new authorities. In particular, `satisfied` records execution phase while `incorporationPending` records whether that successful result still has an automatic settlement step left. Showing `failed 1`, `unplanned 1`, or a nonzero frontier does not by itself define source unavailability or chess knowledge.
-
-Debug diagnostics stay aggregate. Do not expose task keys, canonical-position identities, provider names, source payloads, transport state, retry timestamps, or run/revision tokens through Weather. Normal non-Debug Weather remains the compact product status rather than becoming a permanent engineering dashboard.
+Transition delays, acknowledgements, and failure rendering are presenter mechanics downstream of the authoritative structural state. They must not display a settled status while Current View says the accepted projection is structurally Settling.
 
 ## Verification
 
@@ -64,6 +53,5 @@ Deterministic/browser contract tests should cover:
 - coalesced/debounced structural recomposition avoiding unnecessary visual fidgeting without concealing unresolved structural work;
 - no Ready publication occurring between Reading-frontier admission and synchronous refinement-participation reconciliation;
 - failed and unplanned structural coordination remaining visible in Debug while primary Weather is Ready when no working or incorporation-pending witness remains;
-- Debug Weather reporting aggregate frontier/phase/incorporation/supplementary measures supplied by Current View without exposing per-task or per-position identity;
-- disabling Debug removing the diagnostic readout without changing structural readiness;
+- primary Weather not announcing Debug counters and not changing its semantic state when Debug visibility changes;
 - presentation failure replacing stale success feedback with a degraded/unavailable state.

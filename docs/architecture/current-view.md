@@ -213,7 +213,7 @@ because it belongs to the same refinement run.
 - A material Lens capacity change recomposes the same projection and may admit new
   structural obligations. A presentation-only relayout redraws without changing
   composition or refinement demand.
-- Current View may publish aggregate Weather diagnostics derived from the accepted
+- Current View may publish aggregate Debug observations derived from the accepted
   Reading frontier and active-run participation. Those diagnostics expose counts
   and phases only; task keys, Reading identities, source/provider names, and
   revision tokens remain private.
@@ -229,7 +229,7 @@ contain values from several authorities, for example:
 - accepted Constellation and Rail from Current View;
 - structural readiness derived from accepted Constellation plus the active
   refinement run;
-- aggregate Weather diagnostics such as accepted-structure lifecycle, Reading
+- aggregate Debug observations such as accepted-structure lifecycle, Reading
   frontier size, structural participation counts by phase, incorporation-pending
   count, detached structural participation, and supplementary active/total counts;
 - semantic current-view activity summaries when presentation needs to explain a
@@ -238,10 +238,7 @@ contain values from several authorities, for example:
 - orientation from Lens;
 - Back availability from RouteLedger.
 
-The diagnostic aggregate is deliberately lossy. It exists so Weather/Debug can
-show several measures during development without exporting the identity or
-provider details of the refinement run and without becoming another mutable owner
-of settlement.
+The diagnostic aggregate is deliberately lossy. It exists so Debug can explain several measures during development without exporting the identity or provider details of the refinement run or becoming another mutable owner of settlement. Lens owns their display grouping (`ConstellationState`, `FrontierWork`, and `EnrichmentFlow`); these labels do not define new Current View state.
 
 Publishing values together does not make them share identity or lifetime.
 Internal task keys, run/revision tokens, browser-history bookkeeping, source

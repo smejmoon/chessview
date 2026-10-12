@@ -40,7 +40,6 @@ export function createNodusPresenter({
   renderer = null,
   statusPresenter = null,
   prepareEvidence = prepareConstellationEvidence,
-  decorateWeather = (_view, _presentation) => {},
   log = (..._args) => {},
 } = {}) {
   if (typeof renderer?.render !== 'function') throw new TypeError('Nodus presenter requires renderer.render');
@@ -88,15 +87,6 @@ export function createNodusPresenter({
     try {
       await renderer.render(view, actions, status.presentation);
       preparePresentationEvidence(view, actions, revision);
-      try {
-        decorateWeather(view, status.presentation);
-      } catch (error) {
-        log('Weather diagnostics failed', {
-          center: view?.center,
-          mode: view?.mode,
-          error: error?.message ?? String(error),
-        });
-      }
       return true;
     } catch (error) {
       log('Nodus presentation failed', {

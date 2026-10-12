@@ -16,6 +16,7 @@ import { bindRecenterTarget, createBoardMoveRecenterHandler } from './recenter-i
 import { placeConstellation } from './presentation-geometry.ts';
 import type { NodePlacement, PresentationGeometry } from './presentation-geometry.ts';
 import { viewStatusSpec } from './view-status.ts';
+import { debugMeasuresHtml } from './debug-measures.ts';
 
 type ChessgroundConfig = NonNullable<Parameters<typeof Chessground>[1]>;
 type BoardApi = ReturnType<typeof Chessground>;
@@ -102,9 +103,9 @@ function railExplorerHtml(view: RendererView): string {
     return `<button class="explorer-row" type="button" data-nav-key="${escapeHtml(edge.target)}"><span class="explorer-move">${escapeHtml(edge.san ?? edge.uci)}</span><span class="explorer-track"><span style="width:${Math.max(2, Math.round(share * 100))}%"></span></span><span class="explorer-share">${share > 0 ? percent(share) : ''}</span><span class="explorer-games">${games > 0 ? compactGames(games) : ''}</span></button>`;
   }).join('')}</div>`;
 }
-function debugRailHtml(debug: boolean): string {
+function debugRailHtml(view: RendererView, debug: boolean): string {
   if (!debug) return '';
-  return `<section class="rail-debug" aria-label="Chessview debug log"><div class="debug-head"><div class="debug-title">Debug <small>${getDebugEntries().length} events</small></div><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy</button><button class="debug-action" id="debug-clear" type="button">Clear</button></div></div><div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div><pre class="debug-log" id="debug-log">${escapeHtml(debugText())}</pre></section>`;
+  return `<section class="rail-debug" aria-label="Chessview debug log"><div class="debug-head"><div class="debug-title">Debug <small>${getDebugEntries().length} events</small></div><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy</button><button class="debug-action" id="debug-clear" type="button">Clear</button></div></div><div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div>${debugMeasuresHtml(view)}<pre class="debug-log" id="debug-log" tabindex="0" aria-label="Recent debug events">${escapeHtml(debugText())}</pre></section>`;
 }
 function rootContextButton(
   rootContext: boolean,
@@ -124,7 +125,7 @@ function rootContextButton(
 }
 function railHtml(view: RendererView, centerNode: PositionRecord, turn: Orientation, debug: boolean): string {
   const lineCount = view.rail?.value?.lines?.length ?? 0;
-  return `<div class="rail-title">Rail</div><div class="rail-position rail-current-details"><div class="eyebrow">current position</div><h1>Explore from here</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(debug)}`;
+  return `<div class="rail-title">Rail</div><div class="rail-position rail-current-details"><div class="eyebrow">current position</div><h1>Explore from here</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(view, debug)}`;
 }
 
 export function createNodusRenderer({ app: appOption = null, lens: lensOption = null, maintenance = {} }: NodusRendererOptions = {}) {
@@ -139,6 +140,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   let lichessEvalStatus: unknown = null;
   let debugPinnedToLatest = true;
   let debugScrollTop = 0;
+  let debugMeasuresScrollTop = 0;
 
   function disposeSatelliteBoards(): void { for (const api of satelliteBoards) api.destroy?.(); satelliteBoards.clear(); }
   function disposeCenterBoard(): void { centerBoardState?.api.destroy?.(); centerBoardState = null; }
@@ -152,6 +154,16 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   }
 
   function bindDebugScroll(): void {
+    // Current View measurements are independent of the event log's tail-follow behavior.
+    // Preserve their inspection position across Rail redraws during active refinement.
+    const measures = app.querySelector('#debug-measures') as HTMLElement | null;
+    if (measures) {
+      measures.scrollTop = debugMeasuresScrollTop;
+      measures.addEventListener('scroll', () => {
+        debugMeasuresScrollTop = measures.scrollTop;
+      });
+    }
+
     const log = app.querySelector('#debug-log') as HTMLElement | null;
     if (!log) return;
     const scrollHeight = Number(log.scrollHeight ?? 0);
@@ -173,6 +185,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       if (opening) {
         debugPinnedToLatest = true;
         debugScrollTop = 0;
+        debugMeasuresScrollTop = 0;
       }
       lens.toggleDebug();
       void actions.redraw();

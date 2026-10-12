@@ -36,6 +36,18 @@ Lens combines presentation preferences with the current presentation environment
 - Lens and its renderer delegates may retain resource handles needed to update or dispose rendered objects, but they must not keep a second mutable copy of current-view truth.
 - Normal presentation failure fails closed to a degraded/unavailable surface rather than rewriting valid structural domain data or leaving stale success feedback visible.
 
+## Debug observability
+
+Debug explains aggregate Current View facts rather than defining another lifecycle or controlling Weather. Present its measurements in the existing Rail Debug surface, separate from Weather's user-facing status and live announcements, in three named groups:
+
+- **`ConstellationState`** — accepted Constellation structure lifecycle (`idle`, `loading`, `ready`, `failed`), Current View's derived `settling` flag, and admitted Reading-frontier size. These answer what map is accepted and whether its structural obligations remain live.
+- **`FrontierWork`** — structural participation counts: `working`, `satisfied`, `incorporationPending`, `unavailable`, `failed`, `unplanned`, and `detached`. These explain the active run's structural coordination. A satisfied participant may remain recorded after incorporation is drained; failed/unplanned participants are diagnostics, not evidence of source unavailability or automatic progress.
+- **`EnrichmentFlow`** — supplementary refinement participation, active and total. These counts explain non-structural work, not structural settlement; independently scheduled lookahead is not implied to be counted.
+
+The existing published snapshot supplies the measures; grouping is a Debug presentation choice, not a renamed or duplicated Current View data model. Each group and measurement must be readable and understandable without requiring hover-only explanations or keyboard focus on each individual value. Keep the readout available when Debug is enabled at narrow widths (for example by wrapping or scrolling within the Debug surface) rather than silently hiding it. Switching Debug off removes the readout without changing Weather or domain state.
+
+Debug remains aggregate: do not display task keys, canonical-position identities, provider names, source payloads, transport details, retry timestamps, or run/revision tokens in these groups. Weather's [product-facing status contract](weather.md) remains independent.
+
 ## Verification
 
 Deterministic/browser contract tests should cover:
@@ -43,6 +55,9 @@ Deterministic/browser contract tests should cover:
 - Lens initializing and persisting orientation, Guide, and Debug presentation preferences;
 - presentation geometry and composition constraints being derived from the actual rendered map rectangle, with Root/Line mode affecting Root-context capacity;
 - orientation, Guide, and Debug changes redrawing without replacing the current Nodus or starting acquisition;
+- `ConstellationState`, `FrontierWork`, and `EnrichmentFlow` displaying the Current View aggregate measures in Rail Debug without duplicating structural-readiness logic;
+- narrow viewport and keyboard/screen-reader inspection of Debug measurements without embedding them in Weather's live status;
+- turning Debug off removing the readout without changing Weather status or current-view settlement;
 - different effective presentation capacities causing same-Nodus Constellation recomposition;
 - presentation-only geometry changes redrawing accepted state without structural recomposition;
 - one geometry owner and one placement path deciding Nodus and surrounding-board placement for both structural directions, without a parallel Root layout;

@@ -41,17 +41,20 @@ test('Debug readout has visible explanations and accessible group/value semantic
   assert.match(html, /id="debug-measures" role="region" tabindex="0"/);
   assert.match(html, /aria-labelledby="debug-measure-group-0"/);
   assert.doesNotMatch(html, /ConstellationState|Reading frontier/);
-  assert.match(html, /<h3 id="debug-measure-group-1">FrontierWork<\/h3>/);
+  assert.match(html, /<h3 id="debug-measure-group-0">FrontierWork<\/h3>/);
+  assert.match(html, /<h3 id="debug-measure-group-1">EnrichmentFlow<\/h3>/);
   assert.match(html, /Incorporation pending<\/dt><dd>1<\/dd>/);
   assert.match(html, /not that chess evidence is absent/);
   assert.doesNotMatch(html, /aria-live|role="status"|id="view-status"/);
 });
 
 test('Debug escapes unexpected lifecycle values and keeps missing counters neutral', () => {
-  const html = debugMeasuresHtml({ weather: { structure: '<img src=x>' } });
-  assert.match(html, /&lt;img src=x&gt;/);
-  assert.doesNotMatch(html, /<img/);
-  assert.match(html, /Reading frontier<\/dt><dd>0<\/dd>/);
+  const topbar = constellationStateValuesHtml({ weather: { structure: '<img src=x>' } });
+  const detail = debugMeasuresHtml({ weather: { structure: '<img src=x>' } });
+  assert.match(topbar, /&lt;img src=x&gt;/);
+  assert.doesNotMatch(topbar, /<img/);
+  assert.match(topbar, /Reading frontier<\/span><strong>0<\/strong>/);
+  assert.match(detail, /Working<\/dt><dd>0<\/dd>/);
 });
 
 test('topbar ConstellationState shows published values without Weather announcements', () => {

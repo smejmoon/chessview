@@ -43,8 +43,8 @@ class FakeElement {
       this.mapMessage = new FakeElement(this.ownerDocument, { id: 'map-message' });
       this.rail = new FakeElement(this.ownerDocument, { className: 'analysis-rail' });
       this.networkStatus = new FakeElement(this.ownerDocument, { className: 'network-status' });
-      this.constellationState = new FakeElement(this.ownerDocument, { id: 'topbar-constellation-state' });
-      this.constellationState.hidden = value.includes('id="topbar-constellation-state" role="group" aria-label="Map state, settling and Explorer Reading frontier" tabindex="0" hidden');
+      this.debugBar = new FakeElement(this.ownerDocument, { id: 'topbar-debug-observations' });
+      this.debugBar.hidden = value.includes('id="topbar-debug-observations" role="group" aria-label="Current View Debug measurements" tabindex="0" hidden');
       this.viewStatus = new FakeElement(this.ownerDocument, { id: 'view-status' });
       this.viewStatusMark = new FakeElement(this.ownerDocument, { className: 'view-status-mark' });
       this.viewStatusLabel = new FakeElement(this.ownerDocument, { className: 'view-status-label' });
@@ -55,6 +55,15 @@ class FakeElement {
       this.debug = new FakeElement(this.ownerDocument, { id: 'debug-toggle' });
       this.rootToggle = new FakeElement(this.ownerDocument, { id: 'root-context-toggle' });
     }
+    if (this.id === 'topbar-debug-observations') {
+      if (this.contains(this.ownerDocument.activeElement)) this.ownerDocument.activeElement = null;
+      this.metrics = [...value.matchAll(/data-debug-metric="([^"]+)"/g)].map((match) => {
+        const element = new FakeElement(this.ownerDocument);
+        element.dataset.debugMetric = match[1];
+        element.metricOwner = this;
+        return element;
+      });
+    }
     if (this.className === 'analysis-rail') {
       if (this.contains(this.ownerDocument.activeElement)) this.ownerDocument.activeElement = null;
       const railChild = (id = '', dataset = {}) => {
@@ -64,7 +73,6 @@ class FakeElement {
         return child;
       };
       this.debugPanelToggle = value.includes('id="debug-panel-toggle"') ? railChild('debug-panel-toggle') : null;
-      this.debugMeasures = value.includes('id="debug-measures"') ? railChild('debug-measures') : null;
       this.debugLog = value.includes('id="debug-log"') ? railChild('debug-log') : null;
       this.debugClear = value.includes('id="debug-clear"') ? railChild('debug-clear') : null;
       this.debugRefetch = value.includes('id="debug-refetch-view"') ? railChild('debug-refetch-view') : null;
@@ -79,12 +87,11 @@ class FakeElement {
   appendChild(child) { this.children.push(child); return child; }
   setAttribute() {}
   focus(options = {}) { this.ownerDocument.activeElement = this; this.lastFocusOptions = options; }
-  contains(node) { return Boolean(node && node.railOwner === this); }
+  contains(node) { return Boolean(node && (node.railOwner === this || node.metricOwner === this)); }
   querySelector(selector) {
     if (this.className === 'analysis-rail') {
       return {
         '#debug-panel-toggle': this.debugPanelToggle,
-        '#debug-measures': this.debugMeasures,
         '#debug-log': this.debugLog,
         '#debug-clear': this.debugClear,
         '#debug-refetch-view': this.debugRefetch,
@@ -93,6 +100,7 @@ class FakeElement {
     return null;
   }
   querySelectorAll(selector) {
+    if (this.id === 'topbar-debug-observations' && selector === '[data-debug-metric]') return this.metrics ?? [];
     return this.className === 'analysis-rail' && selector === '[data-nav-key]' ? this.navButtons : [];
   }
 }
@@ -109,7 +117,7 @@ class FakeApp extends FakeElement {
       '#map-message': this.mapMessage,
       '.analysis-rail': this.rail,
       '.network-status': this.networkStatus,
-      '#topbar-constellation-state': this.constellationState,
+      '#topbar-debug-observations': this.debugBar,
       '#view-status': this.viewStatus,
       '#back': this.back,
       '#flip': this.flip,
@@ -117,7 +125,6 @@ class FakeApp extends FakeElement {
       '#debug-toggle': this.debug,
       '#root-context-toggle': this.rootToggle,
       '#debug-panel-toggle': this.rail?.debugPanelToggle,
-      '#debug-measures': this.rail?.debugMeasures,
       '#debug-log': this.rail?.debugLog,
       '#debug-clear': this.rail?.debugClear,
       '#debug-refetch-view': this.rail?.debugRefetch,
@@ -258,7 +265,7 @@ test('Rail Debug groups follow the published view without changing Weather or th
   lens.setDebug(true);
   renderer.render(view, actions, 'updating');
   assert.doesNotMatch(app.rail.innerHTML, /ConstellationState/);
-  assert.match(app.innerHTML, /id="topbar-constellation-state"/);
+  assert.match(app.innerHTML, /id="topbar-debug-observations"/);
   assert.equal(app.constellationState.hidden, false);
   assert.doesNotMatch(app.constellationState.innerHTML, /ConstellationState/);
   assert.match(app.constellationState.innerHTML, /Map<\/span>/);
@@ -422,7 +429,7 @@ test('topbar ConstellationState follows in-place publications without shifting W
   const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() {} };
   const view = { ...viewFor(center), settling: true, weather: { structure: 'ready', frontier: 8 } };
   renderer.render(view, actions, 'updating');
-  assert.match(app.innerHTML, /id="topbar-constellation-state" role="group"/);
+  assert.match(app.innerHTML, /id="topbar-debug-observations" role="group"/);
   assert.match(app.innerHTML, /Frontier<\/span><strong>8<\/strong>/);
   const group = app.constellationState;
   group.focus();

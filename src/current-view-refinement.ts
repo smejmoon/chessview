@@ -1,4 +1,7 @@
+import { START_FEN, canonicalPosition } from './graph.ts';
 import type { ViewMode } from './route-ledger.ts';
+
+const START = canonicalPosition(START_FEN);
 
 type StructureLike = Readonly<{
   readingFrontier?: readonly string[];
@@ -29,6 +32,7 @@ export type CurrentViewExplorerDemand = CurrentViewRefinementTarget & Readonly<{
 }>;
 
 export type CurrentViewRefinementDemand = Readonly<{
+  rootDiscovery: boolean;
   rootTransposition: string | null;
   explorer: readonly CurrentViewExplorerDemand[];
   cloudEval: readonly CurrentViewRefinementTarget[];
@@ -145,6 +149,7 @@ export function deriveCurrentViewRefinementDemand({
   addTarget(mastersDemand, center);
 
   return Object.freeze({
+    rootDiscovery: mode === 'roots' && center !== START,
     rootTransposition: hasAuthoritativeRoot(center, mode, structure) ? center : null,
     explorer: freezeExplorerTargets(explorerDemand, center),
     cloudEval: freezeTargets(evalDemand, center),

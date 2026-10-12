@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { START_FEN, canonicalPosition, resolveMove } from '../src/graph.ts';
 import {
   currentViewRefinementPriority,
   deriveCurrentViewRefinementDemand,
@@ -25,6 +26,7 @@ test('Current View derives refinement demand from its one accepted Constellation
     },
   });
 
+  assert.equal(demand.rootDiscovery, true);
   assert.equal(demand.rootTransposition, 'A');
 
   const center = target(demand.explorer, 'A');
@@ -109,4 +111,22 @@ test('Current View demand priority follows active mode while Nodus-wide demand s
   assert.equal(currentViewRefinementPriority(center, 'lines'), 'foreground');
   assert.equal(currentViewRefinementPriority(roots, 'roots'), 'foreground');
   assert.equal(currentViewRefinementPriority(roots, 'lines'), 'background');
+});
+
+test('sampled Root discovery is not planned for the canonical starting position', () => {
+  const start = canonicalPosition(START_FEN);
+  const firstMove = resolveMove(start, { uci: 'e2e4' }).target;
+  const demand = (center, mode) => deriveCurrentViewRefinementDemand({ center, mode, structure: null });
+
+  assert.equal(demand(start, 'roots').rootDiscovery, false);
+  assert.equal(demand(start, 'lines').rootDiscovery, false);
+  assert.equal(demand(firstMove, 'roots').rootDiscovery, true);
+  assert.equal(demand(firstMove, 'lines').rootDiscovery, false);
+  // Half-move and move counters do not change the Nodus's canonical identity.
+  const clockVariant = START_FEN.split(' ').slice(0, 4).join(' ') + ' 26 31';
+  assert.equal(demand(canonicalPosition(clockVariant), 'roots').rootDiscovery, false);
+  // Skipping the bootstrap must not drop ordinary Explorer/engine/Masters work.
+  assert.ok(demand(start, 'roots').explorer.some((target) => target.position === start));
+  assert.ok(demand(start, 'roots').cloudEval.some((target) => target.position === start));
+  assert.ok(demand(start, 'roots').masters.some((target) => target.position === start));
 });

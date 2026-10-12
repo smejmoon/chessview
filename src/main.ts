@@ -80,7 +80,7 @@ function tasksForCurrentView({ center, mode, structure }): readonly RefinementTa
   }
 
   const rootTransposition = demand.rootTransposition;
-  if (mode === 'roots') {
+  if (demand.rootDiscovery) {
     add({
       key: `root-discovery:${center}`,
       purpose: 'root-discovery',

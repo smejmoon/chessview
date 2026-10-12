@@ -74,8 +74,12 @@ class FakeElement {
       };
       this.debugPanelToggle = value.includes('id="debug-panel-toggle"') ? railChild('debug-panel-toggle') : null;
       this.debugLog = value.includes('id="debug-log"') ? railChild('debug-log') : null;
+      this.debugCopy = value.includes('id="debug-copy"') ? railChild('debug-copy') : null;
+      this.debugOptionsToggle = value.includes('id="debug-options-toggle"') ? railChild('debug-options-toggle') : null;
       this.debugClear = value.includes('id="debug-clear"') ? railChild('debug-clear') : null;
+      this.debugMaintenanceToggle = value.includes('id="debug-maintenance-toggle"') ? railChild('debug-maintenance-toggle') : null;
       this.debugRefetch = value.includes('id="debug-refetch-view"') ? railChild('debug-refetch-view') : null;
+      this.debugClearExplorer = value.includes('id="debug-clear-explorer"') ? railChild('debug-clear-explorer') : null;
       this.navButtons = [...value.matchAll(/data-nav-key="([^"]+)"/g)]
         .map((match) => railChild('', { navKey: match[1] }));
     }
@@ -93,8 +97,12 @@ class FakeElement {
       return {
         '#debug-panel-toggle': this.debugPanelToggle,
         '#debug-log': this.debugLog,
+        '#debug-copy': this.debugCopy,
+        '#debug-options-toggle': this.debugOptionsToggle,
         '#debug-clear': this.debugClear,
+        '#debug-maintenance-toggle': this.debugMaintenanceToggle,
         '#debug-refetch-view': this.debugRefetch,
+        '#debug-clear-explorer': this.debugClearExplorer,
       }[selector] ?? null;
     }
     return null;
@@ -126,8 +134,12 @@ class FakeApp extends FakeElement {
       '#root-context-toggle': this.rootToggle,
       '#debug-panel-toggle': this.rail?.debugPanelToggle,
       '#debug-log': this.rail?.debugLog,
+      '#debug-copy': this.rail?.debugCopy,
+      '#debug-options-toggle': this.rail?.debugOptionsToggle,
       '#debug-clear': this.rail?.debugClear,
+      '#debug-maintenance-toggle': this.rail?.debugMaintenanceToggle,
       '#debug-refetch-view': this.rail?.debugRefetch,
+      '#debug-clear-explorer': this.rail?.debugClearExplorer,
     };
     return values[selector] ?? null;
   }
@@ -260,12 +272,12 @@ test('Debug-only topbar holds Current View measurements, leaving Rail to Explore
   assert.match(app.debugBar.innerHTML, /Structural — Incorporation pending: 1/);
   assert.match(app.debugBar.innerHTML, /Supplementary — Total: 98/);
   assert.doesNotMatch(app.rail.innerHTML, /debug-measures|Structural|Supplementary|FrontierWork|EnrichmentFlow/);
-  assert.match(app.rail.innerHTML, /Events &amp; tools/);
+  assert.match(app.rail.innerHTML, /Events <small>/);
   assert.equal(app.viewStatus.className, 'view-status is-updating');
   lens.setDebug(false);
   renderer.render(view, actions, 'updating');
   assert.equal(app.debugBar.hidden, true);
-  assert.doesNotMatch(app.rail.innerHTML, /Events &amp; tools/);
+  assert.doesNotMatch(app.rail.innerHTML, /id="debug-panel-toggle"/);
   assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
 }));
 
@@ -291,8 +303,12 @@ test('in-place Rail updates retain focus for Debug regions, maintenance and matc
   renderer.render(view, actions, 'updating');
   app.rail.debugPanelToggle.listeners.get('click')();
   assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
+  app.rail.debugOptionsToggle.listeners.get('click')();
+  assert.match(app.rail.innerHTML, /id="debug-options-toggle"[^>]*aria-expanded="true"/);
+  app.rail.debugMaintenanceToggle.listeners.get('click')();
+  assert.match(app.rail.innerHTML, /id="debug-maintenance-toggle"[^>]*aria-expanded="true"/);
 
-  for (const name of ['debugLog', 'debugRefetch', 'debugClear']) {
+  for (const name of ['debugLog', 'debugCopy', 'debugOptionsToggle', 'debugClear', 'debugMaintenanceToggle', 'debugRefetch', 'debugClearExplorer']) {
     const oldFocused = app.rail[name];
     assert.ok(oldFocused, name);
     oldFocused.focus();
@@ -316,13 +332,17 @@ test('in-place Rail updates retain focus for Debug regions, maintenance and matc
   assert.equal(document.activeElement, null, 'missing navigation targets do not steal focus');
 }));
 
-test('Rail keeps Opening Explorer primary and only Events and tools expands', async () => withRenderer(async (createNodusRenderer) => {
+test('Events prioritizes the log; overflow and Advanced maintenance disclose separately', async () => withRenderer(async (createNodusRenderer) => {
   const document = new FakeDocument();
   const app = new FakeApp(document, { id: 'app' });
   let enabled = false;
+  const calls = [];
   const { createLens } = await import('../src/lens.ts');
   const lens = createLens({ app, debug: { enabled: () => enabled, setEnabled(v) { enabled = v; } } });
-  const renderer = createNodusRenderer({ app, lens });
+  const renderer = createNodusRenderer({ app, lens, maintenance: {
+    refetchView(positions) { calls.push(['refetch', positions]); },
+    clearExplorerCache() { calls.push(['clear-cache']); },
+  } });
   const center = canonicalPosition(START_FEN);
   const view = viewFor(center);
   const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() { renderer.render(view, actions, 'updating'); } };
@@ -330,18 +350,48 @@ test('Rail keeps Opening Explorer primary and only Events and tools expands', as
   lens.setDebug(true);
   renderer.render(view, actions, 'updating');
   assert.match(app.rail.innerHTML, /Opening Explorer/);
-  assert.match(app.rail.innerHTML, /class="rail-debug"/);
-  assert.doesNotMatch(app.rail.innerHTML, /debug-measures|Structural|Supplementary/);
   assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="false"/);
   assert.match(app.rail.innerHTML, /id="debug-content" hidden/);
+  assert.doesNotMatch(app.rail.innerHTML, /id="debug-copy"/);
+
   app.rail.debugPanelToggle.focus();
   app.rail.debugPanelToggle.listeners.get('click')();
   assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
-  assert.match(app.rail.innerHTML, /Copy log|Clear log|Clear Explorer cache/);
+  assert.match(app.rail.innerHTML, /id="debug-copy" type="button" title="Copy log" aria-label="Copy log"/);
+  assert.match(app.rail.innerHTML, /id="debug-options-toggle"[^>]*aria-expanded="false"/);
+  assert.match(app.rail.innerHTML, /id="debug-options" hidden/);
+  assert.match(app.rail.innerHTML, /id="debug-maintenance-toggle"[^>]*aria-expanded="false"/);
+  assert.match(app.rail.innerHTML, /id="debug-maintenance" hidden/);
+  assert.ok(app.rail.innerHTML.indexOf('id="debug-log"') < app.rail.innerHTML.indexOf('Advanced maintenance'));
   assert.equal(document.activeElement, app.rail.debugPanelToggle);
+
+  app.rail.debugOptionsToggle.focus();
+  app.rail.debugOptionsToggle.listeners.get('click')();
+  assert.match(app.rail.innerHTML, /id="debug-options-toggle"[^>]*aria-expanded="true"/);
+  assert.doesNotMatch(app.rail.innerHTML, /id="debug-options" hidden/);
+  assert.equal(document.activeElement, app.rail.debugOptionsToggle);
+
+  app.rail.debugClear.focus();
+  app.rail.debugClear.listeners.get('click')();
+  assert.match(app.rail.innerHTML, /id="debug-options-toggle"[^>]*aria-expanded="false"/);
+  assert.equal(document.activeElement, app.rail.debugOptionsToggle, 'clear returns focus to log options');
+  assert.deepEqual(calls, [], 'clearing log does not invalidate acquisition');
+
+  app.rail.debugMaintenanceToggle.focus();
+  app.rail.debugMaintenanceToggle.listeners.get('click')();
+  assert.match(app.rail.innerHTML, /id="debug-maintenance-toggle"[^>]*aria-expanded="true"/);
+  assert.doesNotMatch(app.rail.innerHTML, /id="debug-maintenance" hidden/);
+  assert.equal(document.activeElement, app.rail.debugMaintenanceToggle);
+  assert.deepEqual(calls, [], 'opening maintenance is non-destructive');
+  await app.rail.debugRefetch.listeners.get('click')();
+  await app.rail.debugClearExplorer.listeners.get('click')();
+  assert.deepEqual(calls, [['refetch', [center]], ['clear-cache']]);
+
+  app.rail.debugPanelToggle.focus();
   app.rail.debugPanelToggle.listeners.get('click')();
   assert.match(app.rail.innerHTML, /id="debug-content" hidden/);
   assert.equal(document.activeElement, app.rail.debugPanelToggle);
+  assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
 }));
 
 test('topbar icon focus and values survive in-place current-view updates', async () => withRenderer(async (createNodusRenderer) => {

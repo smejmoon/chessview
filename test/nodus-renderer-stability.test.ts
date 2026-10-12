@@ -344,7 +344,7 @@ test('Rail keeps Opening Explorer primary and only Events and tools expands', as
   assert.equal(document.activeElement, app.rail.debugPanelToggle);
 }));
 
-test('topbar ConstellationState follows in-place publications without shifting Weather or keyboard focus', async () => withRenderer(async (createNodusRenderer) => {
+test('topbar icon focus and values survive in-place current-view updates', async () => withRenderer(async (createNodusRenderer) => {
   const document = new FakeDocument();
   const app = new FakeApp(document, { id: 'app' });
   let enabled = true;
@@ -353,21 +353,29 @@ test('topbar ConstellationState follows in-place publications without shifting W
   const renderer = createNodusRenderer({ app, lens });
   const center = canonicalPosition(START_FEN);
   const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() {} };
-  const view = { ...viewFor(center), settling: true, weather: { structure: 'ready', frontier: 8 } };
+  const view = { ...viewFor(center), settling: true, weather: {
+    structure: 'ready', frontier: 3, structural: { working: 1 },
+    supplementary: { active: 2, total: 98 },
+  } };
   renderer.render(view, actions, 'updating');
-  assert.match(app.innerHTML, /id="topbar-debug-observations" role="group"/);
-  assert.match(app.innerHTML, /Frontier<\/span><strong>8<\/strong>/);
-  const group = app.constellationState;
-  group.focus();
-  renderer.render({ ...view, settling: false, weather: { structure: 'ready', frontier: 0 } }, actions, 'ready');
-  assert.equal(app.constellationState, group);
-  assert.equal(document.activeElement, group);
-  assert.match(group.innerHTML, /Settling<\/span><strong>no<\/strong>/);
-  assert.match(group.innerHTML, /Frontier<\/span><strong>0<\/strong>/);
+  assert.match(app.innerHTML, /id="topbar-debug-observations"/);
+  const bar = app.debugBar;
+  renderer.render(view, actions, 'updating');
+  const original = bar.metrics.find((metric) => metric.dataset.debugMetric === 'Structural:Working');
+  assert.ok(original);
+  original.focus();
+  renderer.render({ ...view, settling: false, weather: {
+    structure: 'ready', frontier: 0, structural: { working: 0 },
+    supplementary: { active: 0, total: 98 },
+  } }, actions, 'ready');
+  assert.equal(app.debugBar, bar);
+  assert.notEqual(document.activeElement, original);
+  assert.equal(document.activeElement.dataset.debugMetric, 'Structural:Working');
+  assert.equal(document.activeElement.lastFocusOptions.preventScroll, true);
+  assert.match(bar.innerHTML, /Structural — Working: 0/);
   assert.equal(app.viewStatus.className, 'view-status is-ready');
   enabled = false;
   renderer.render(view, actions, 'updating');
-  assert.equal(group.hidden, true);
-  assert.equal(app.viewStatus.className, 'view-status is-updating');
+  assert.equal(bar.hidden, true);
   assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
 }));

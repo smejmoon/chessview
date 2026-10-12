@@ -325,12 +325,17 @@ test('in-place Rail updates retain focus for Debug regions, maintenance and matc
   });
   const renderer = createNodusRenderer({ app, lens });
   const center = canonicalPosition(START_FEN);
-  const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() {} };
+  const actions = {
+    recenter() {}, setMode() {}, back() {}, flip() {},
+    redraw() { renderer.render(view, actions, 'updating'); },
+  };
   const line = { edge: { san: 'e4', uci: 'e2e4', target: 'reachable-key' }, frequency: { share: 0.4, games: 120 } };
   const view = viewFor(center, [line]);
   renderer.render(view, actions, 'ready');
   lens.setDebug(true);
   renderer.render(view, actions, 'updating');
+  app.rail.debugPanelToggle.listeners.get('click')();
+  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
 
   for (const name of ['debugMeasures', 'debugLog', 'debugRefetch', 'debugClear']) {
     const oldFocused = app.rail[name];

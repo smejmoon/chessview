@@ -103,9 +103,9 @@ function railExplorerHtml(view: RendererView): string {
     return `<button class="explorer-row" type="button" data-nav-key="${escapeHtml(edge.target)}"><span class="explorer-move">${escapeHtml(edge.san ?? edge.uci)}</span><span class="explorer-track"><span style="width:${Math.max(2, Math.round(share * 100))}%"></span></span><span class="explorer-share">${share > 0 ? percent(share) : ''}</span><span class="explorer-games">${games > 0 ? compactGames(games) : ''}</span></button>`;
   }).join('')}</div>`;
 }
-function debugRailHtml(view: RendererView, debug: boolean, selected: 'explorer' | 'debug'): string {
+function debugRailHtml(view: RendererView, debug: boolean, expanded: boolean): string {
   if (!debug) return '';
-  return `<section class="rail-debug" id="rail-debug-panel" aria-label="Chessview Debug" ${selected === 'explorer' ? 'hidden' : ''}><div class="debug-head"><div class="debug-title">Debug <small>${getDebugEntries().length} events</small></div><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy</button><button class="debug-action" id="debug-clear" type="button">Clear</button></div></div><div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div>${debugMeasuresHtml(view)}<pre class="debug-log" id="debug-log" tabindex="0" aria-label="Recent debug events">${escapeHtml(debugText())}</pre></section>`;
+  return `<section class="rail-debug ${expanded ? 'is-expanded' : 'is-collapsed'}" aria-label="Chessview Debug"><div class="debug-head"><button class="debug-panel-toggle ${expanded ? 'is-active' : ''}" id="debug-panel-toggle" type="button" aria-expanded="${expanded}" aria-controls="debug-content">Debug <small>${getDebugEntries().length} events</small> <span aria-hidden="true">${expanded ? '▾' : '▸'}</span></button><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy</button><button class="debug-action" id="debug-clear" type="button">Clear</button></div></div><div class="debug-content" id="debug-content" ${expanded ? '' : 'hidden'}>${debugMeasuresHtml(view)}<div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div><pre class="debug-log" id="debug-log" tabindex="0" aria-label="Recent debug events">${escapeHtml(debugText())}</pre></div></section>`;
 }
 function rootContextButton(
   rootContext: boolean,
@@ -123,10 +123,9 @@ function rootContextButton(
   }
   return `<button id="root-context-toggle" class="root-context-toggle ${rootContext ? 'is-active' : ''}" type="button" aria-pressed="${rootContext}">${label}</button>`;
 }
-function railHtml(view: RendererView, centerNode: PositionRecord, turn: Orientation, debug: boolean, selected: 'explorer' | 'debug'): string {
+function railHtml(view: RendererView, centerNode: PositionRecord, turn: Orientation, debug: boolean, expanded: boolean): string {
   const lineCount = view.rail?.value?.lines?.length ?? 0;
-  const active = debug ? selected : 'explorer';
-  return `<div class="rail-title">Rail</div><div class="rail-position rail-current-details"><div class="eyebrow">current position</div><h1>Explore from here</h1><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><div class="rail-switch" role="group" aria-label="Rail view"><button id="rail-explorer-toggle" class="rail-switch-button ${active === 'explorer' ? 'is-active' : ''}" type="button" aria-pressed="${active === 'explorer'}" aria-controls="rail-explorer-panel">Opening Explorer</button>${debug ? `<button id="rail-debug-toggle" class="rail-switch-button ${active === 'debug' ? 'is-active' : ''}" type="button" aria-pressed="${active === 'debug'}" aria-controls="rail-debug-panel">Debug <small>${getDebugEntries().length}</small></button>` : ''}</div><section class="rail-explorer" id="rail-explorer-panel" aria-label="Opening Explorer" ${active === 'debug' ? 'hidden' : ''}><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(view, debug, active)}`;
+  return `<div class="rail-position rail-current-details" aria-label="Current position"><strong class="rail-context-title">Rail</strong><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(view, debug, expanded)}`;
 }
 
 export function createNodusRenderer({ app: appOption = null, lens: lensOption = null, maintenance = {} }: NodusRendererOptions = {}) {
@@ -142,8 +141,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   let debugPinnedToLatest = true;
   let debugScrollTop = 0;
   let debugMeasuresScrollTop = 0;
-  let explorerScrollTop = 0;
-  let railPanel: 'explorer' | 'debug' = 'explorer';
+  let debugExpanded = true;
 
   function disposeSatelliteBoards(): void { for (const api of satelliteBoards) api.destroy?.(); satelliteBoards.clear(); }
   function disposeCenterBoard(): void { centerBoardState?.api.destroy?.(); centerBoardState = null; }
@@ -154,13 +152,6 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       view.center,
       ...((view.structure.value?.positions ?? []).map((position) => position.key)),
     ])]);
-  }
-
-  function bindExplorerScroll(): void {
-    const list = app.querySelector('.explorer-list') as HTMLElement | null;
-    if (!list) return;
-    list.scrollTop = explorerScrollTop;
-    list.addEventListener('scroll', () => { explorerScrollTop = list.scrollTop; });
   }
 
   function bindDebugScroll(): void {
@@ -196,9 +187,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
         debugPinnedToLatest = true;
         debugScrollTop = 0;
         debugMeasuresScrollTop = 0;
-        railPanel = 'debug';
-      } else {
-        railPanel = 'explorer';
+        debugExpanded = true;
       }
       lens.toggleDebug();
       void actions.redraw();
@@ -206,11 +195,9 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   }
 
   function bindDynamicControls(actions: CurrentViewActions, rootContext: boolean, view: RendererView): void {
-    app.querySelector('#rail-explorer-toggle')?.addEventListener('click', () => {
-      if (railPanel !== 'explorer') { railPanel = 'explorer'; void actions.redraw(); }
-    });
-    app.querySelector('#rail-debug-toggle')?.addEventListener('click', () => {
-      if (railPanel !== 'debug') { railPanel = 'debug'; void actions.redraw(); }
+    app.querySelector('#debug-panel-toggle')?.addEventListener('click', () => {
+      debugExpanded = !debugExpanded;
+      void actions.redraw();
     });
     app.querySelector('#root-context-toggle')?.addEventListener('click', () => actions.setMode(rootContext ? 'lines' : 'roots'));
     app.querySelectorAll('[data-nav-key]').forEach((button) => bindRecenterTarget(button, actions, () => (button as HTMLElement).dataset.navKey));
@@ -233,7 +220,6 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       try { await maintenance.clearExplorerCache?.(); }
       catch (error) { debugLog('clear Explorer cache failed', error, 'error'); void actions.redraw(); }
     });
-    bindExplorerScroll();
     bindDebugScroll();
   }
 
@@ -336,7 +322,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       const hadFocus = focused !== null && rail.contains(focused);
       const focusedId = hadFocus ? focused.id : '';
       const focusedKey = hadFocus ? focused.dataset.navKey : undefined;
-      rail.innerHTML = railHtml(view, centerNode, turn, debug, railPanel);
+      rail.innerHTML = railHtml(view, centerNode, turn, debug, debugExpanded);
       const replacement = focusedId
         ? rail.querySelector<HTMLElement>(`#${focusedId}`)
         : focusedKey
@@ -377,7 +363,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       updateDynamicMarkup(view, centerNode, turn, rootContext, structuralError, debug);
     } else {
       disposeBoards();
-      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button" aria-pressed="${guide}">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${debug}">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage, view.activities?.rootDiscovery ?? 'idle')}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug, railPanel)}</aside></div></main>`;
+      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button" aria-pressed="${guide}">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${debug}">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage, view.activities?.rootDiscovery ?? 'idle')}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug, debugExpanded)}</aside></div></main>`;
       renderLichessEvalStatus(lichessEvalStatus);
       createCenterBoard(view, actions, turn);
       bindStaticControls(actions);

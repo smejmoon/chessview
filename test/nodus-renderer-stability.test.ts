@@ -61,9 +61,7 @@ class FakeElement {
         child.dataset = dataset;
         return child;
       };
-      this.explorerToggle = value.includes('id="rail-explorer-toggle"') ? railChild('rail-explorer-toggle') : null;
-      this.debugToggle = value.includes('id="rail-debug-toggle"') ? railChild('rail-debug-toggle') : null;
-      this.explorerList = value.includes('class="explorer-list"') ? railChild('', {}) : null;
+      this.debugPanelToggle = value.includes('id="debug-panel-toggle"') ? railChild('debug-panel-toggle') : null;
       this.debugMeasures = value.includes('id="debug-measures"') ? railChild('debug-measures') : null;
       this.debugLog = value.includes('id="debug-log"') ? railChild('debug-log') : null;
       this.debugClear = value.includes('id="debug-clear"') ? railChild('debug-clear') : null;
@@ -83,8 +81,7 @@ class FakeElement {
   querySelector(selector) {
     if (this.className === 'analysis-rail') {
       return {
-        '#rail-explorer-toggle': this.explorerToggle,
-        '#rail-debug-toggle': this.debugToggle,
+        '#debug-panel-toggle': this.debugPanelToggle,
         '#debug-measures': this.debugMeasures,
         '#debug-log': this.debugLog,
         '#debug-clear': this.debugClear,
@@ -116,9 +113,7 @@ class FakeApp extends FakeElement {
       '#guide-toggle': this.guide,
       '#debug-toggle': this.debug,
       '#root-context-toggle': this.rootToggle,
-      '#rail-explorer-toggle': this.rail?.explorerToggle,
-      '#rail-debug-toggle': this.rail?.debugToggle,
-      '.explorer-list': this.rail?.explorerList,
+      '#debug-panel-toggle': this.rail?.debugPanelToggle,
       '#debug-measures': this.rail?.debugMeasures,
       '#debug-log': this.rail?.debugLog,
       '#debug-clear': this.rail?.debugClear,
@@ -353,48 +348,41 @@ test('in-place Rail updates retain focus for Debug regions, maintenance and matc
   assert.equal(document.activeElement, null, 'missing navigation targets do not steal focus');
 }));
 
-test('Rail switches prioritize Opening Explorer while keeping Debug accessible and visibly selected', async () => withRenderer(async (createNodusRenderer) => {
+test('compact Rail leaves Explorer primary and keeps ConstellationState first in collapsible Debug', async () => withRenderer(async (createNodusRenderer) => {
   const document = new FakeDocument();
   const app = new FakeApp(document, { id: 'app' });
   let debugEnabled = false;
   const { createLens } = await import('../src/lens.ts');
-  const lens = createLens({ app, debug: { enabled: () => debugEnabled, setEnabled(next) { debugEnabled = next; } } });
+  const lens = createLens({ app, debug: { enabled: () => debugEnabled, setEnabled(v) { debugEnabled = v; } } });
   const renderer = createNodusRenderer({ app, lens });
   const center = canonicalPosition(START_FEN);
   const view = viewFor(center, [{ edge: { san: 'e4', uci: 'e2e4', target: 'target' } }]);
-  let redraws = 0;
   const actions = {
     recenter() {}, setMode() {}, back() {}, flip() {},
-    redraw() { redraws++; renderer.render(view, actions, 'updating'); },
+    redraw() { renderer.render(view, actions, 'updating'); },
   };
   renderer.render(view, actions, 'ready');
-  assert.match(app.rail.innerHTML, /id="rail-explorer-toggle" class="rail-switch-button is-active" type="button" aria-pressed="true"/);
-  assert.doesNotMatch(app.rail.innerHTML, /id="rail-debug-toggle"/);
-  assert.doesNotMatch(app.rail.innerHTML, /id="rail-explorer-panel"[^>]*hidden/);
-
   lens.setDebug(true);
-  renderer.render(view, actions, 'ready');
-  assert.match(app.rail.innerHTML, /id="rail-explorer-toggle" class="rail-switch-button is-active" type="button" aria-pressed="true"/);
-  assert.match(app.rail.innerHTML, /id="rail-debug-toggle" class="rail-switch-button " type="button" aria-pressed="false"/);
-  assert.match(app.rail.innerHTML, /id="rail-debug-panel"[^>]*hidden/);
-  const list = app.rail.explorerList;
-  list.scrollTop = 66;
-  list.listeners.get('scroll')();
+  renderer.render(view, actions, 'updating');
 
-  app.rail.debugToggle.focus();
-  app.rail.debugToggle.listeners.get('click')();
-  assert.equal(redraws, 1);
-  assert.match(app.rail.innerHTML, /id="rail-explorer-toggle" class="rail-switch-button " type="button" aria-pressed="false"/);
-  assert.match(app.rail.innerHTML, /id="rail-debug-toggle" class="rail-switch-button is-active" type="button" aria-pressed="true"/);
-  assert.match(app.rail.innerHTML, /id="rail-explorer-panel"[^>]*hidden/);
-  assert.doesNotMatch(app.rail.innerHTML, /id="rail-debug-panel"[^>]*hidden/);
-  assert.equal(document.activeElement, app.rail.debugToggle, 'focused selector survives redraw');
+  assert.match(app.rail.innerHTML, /class="rail-explorer"/);
+  assert.match(app.rail.innerHTML, /class="rail-debug is-expanded"/);
+  assert.doesNotMatch(app.rail.innerHTML, /Explore from here|rail-switch|rail-title/);
+  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
+  assert.ok(app.rail.innerHTML.indexOf('Opening Explorer') < app.rail.innerHTML.indexOf('class="rail-debug'));
+  assert.ok(app.rail.innerHTML.indexOf('ConstellationState') < app.rail.innerHTML.indexOf('debug-maintenance'));
+  assert.ok(app.rail.innerHTML.indexOf('debug-maintenance') < app.rail.innerHTML.indexOf('id="debug-log"'));
 
-  app.rail.explorerToggle.listeners.get('click')();
-  assert.equal(redraws, 2);
-  assert.equal(app.rail.explorerList.scrollTop, 66, 'Explorer scroll survives switching');
-  assert.equal(document.activeElement, app.rail.explorerToggle);
-  assert.match(app.rail.innerHTML, /id="rail-explorer-toggle" class="rail-switch-button is-active" type="button" aria-pressed="true"/);
-  assert.match(app.rail.innerHTML, /id="rail-debug-panel"[^>]*hidden/);
+  app.rail.debugPanelToggle.focus();
+  app.rail.debugPanelToggle.listeners.get('click')();
+  assert.match(app.rail.innerHTML, /class="rail-debug is-collapsed"/);
+  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="false"/);
+  assert.match(app.rail.innerHTML, /id="debug-content" hidden/);
+  assert.equal(document.activeElement, app.rail.debugPanelToggle);
+
+  app.rail.debugPanelToggle.listeners.get('click')();
+  assert.match(app.rail.innerHTML, /class="rail-debug is-expanded"/);
+  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
+  assert.equal(document.activeElement, app.rail.debugPanelToggle);
   assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
 }));

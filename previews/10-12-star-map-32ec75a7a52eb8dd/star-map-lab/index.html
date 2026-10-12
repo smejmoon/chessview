@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ChessView • Spatial constellation lab</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage" aria-label="Interactive experiment: chess positions in spatial graph"></div>
+  <header class="topbar">
+    <div class="brand"><span class="brand-icon">✦</span><span>CHESSVIEW <small>/ SPATIAL LAB</small></span></div>
+    <div class="modes" role="group" aria-label="Compare camera modes">
+      <button id="twohalf" class="active" type="button">2.5D <span>Layered</span></button>
+      <button id="three" type="button">3D <span>Orbit</span></button>
+    </div>
+    <button id="reset" class="secondary" type="button">Reset view</button>
+  </header>
+  <div class="left-rail">
+    <p class="eyebrow" id="mode-label">FIXED CAMERA / DEPTH PARALLAX</p>
+    <h1>Every star<br>is a <em>position.</em></h1>
+    <p class="intro">The same chess graph, viewed with different freedom of movement. Glowing paths are legal moves; converging paths reach the same canonical position.</p>
+    <div class="metrics">
+      <span><b id="count-positions">—</b> positions</span>
+      <span><b id="count-moves">—</b> moves</span>
+      <span><b id="count-merges">—</b> convergences</span>
+    </div>
+    <div class="identity"><span class="eyebrow">CURRENT NODUS</span><strong id="current-name">Starting position</strong><span id="current-detail">Select any star to recenter</span></div>
+    <button id="home" class="subtle" type="button">↶ Return to start</button>
+  </div>
+  <div class="bottom-tip"><span class="dot"></span><span id="instructions">Drag to pan · Scroll to zoom · Hover to inspect · Click a star to recenter</span></div>
+  <div id="telescope" class="telescope" hidden><span class="eyebrow">TELESCOPE / READ ONLY</span><div id="preview-board"></div><div class="preview-label" id="preview-label"></div></div>
+  <div id="error" hidden></div>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

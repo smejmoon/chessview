@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { constellationStateTopbarHtml, constellationStateValuesHtml, debugMeasureGroups, debugMeasuresHtml } from '../src/debug-measures.ts';
+import { debugTopbarHtml, debugTopbarValuesHtml, debugMeasureGroups } from '../src/debug-measures.ts';
 
 function view() {
   return {
@@ -34,38 +34,30 @@ test('Debug presents the published Current View measures in three independent gr
   assert.notEqual(groups[1].measures[1].value, groups[1].measures[2].value);
 });
 
-test('Debug readout has visible explanations and accessible group/value semantics, not Weather announcements', () => {
-  const html = debugMeasuresHtml(view());
-  assert.equal((html.match(/class="debug-measure-group"/g) ?? []).length, 2);
-  assert.equal((html.match(/class="debug-measure"/g) ?? []).length, 9);
-  assert.match(html, /id="debug-measures" role="region" tabindex="0"/);
-  assert.match(html, /aria-labelledby="debug-measure-group-0"/);
-  assert.doesNotMatch(html, /ConstellationState|Reading frontier|FrontierWork|EnrichmentFlow/);
-  assert.match(html, /<h3 id="debug-measure-group-0">Structural<\/h3>/);
-  assert.match(html, /<h3 id="debug-measure-group-1">Supplementary<\/h3>/);
-  assert.match(html, /Incorporation pending<\/dt><dd>1<\/dd>/);
-  assert.match(html, /not that chess evidence is absent/);
-  assert.doesNotMatch(html, /aria-live|role="status"|id="view-status"/);
-});
-
-test('Debug escapes unexpected lifecycle values and keeps missing counters neutral', () => {
-  const topbar = constellationStateValuesHtml({ weather: { structure: '<img src=x>' } });
-  const detail = debugMeasuresHtml({ weather: { structure: '<img src=x>' } });
-  assert.match(topbar, /&lt;img src=x&gt;/);
-  assert.doesNotMatch(topbar, /<img/);
-  assert.match(topbar, /Frontier<\/span><strong>0<\/strong>/);
-  assert.match(detail, /Working<\/dt><dd>0<\/dd>/);
-});
-
-test('topbar ConstellationState shows published values without Weather announcements', () => {
-  const html = constellationStateTopbarHtml(view(), true);
-  assert.match(html, /id="topbar-constellation-state"/);
-  assert.match(html, /role="group" aria-label="Map state, settling and Explorer Reading frontier" tabindex="0"/);
-  assert.doesNotMatch(html, /ConstellationState|topbar-constellation-label/);
+test('topbar Debug displays 9 icon/count pairs with detailed titles', () => {
+  const html = debugTopbarHtml(view(), true);
+  assert.match(html, /id="topbar-debug-observations"/);
   assert.match(html, /Map<\/span><strong>ready<\/strong>/);
   assert.match(html, /Settling<\/span><strong>yes<\/strong>/);
   assert.match(html, /Frontier<\/span><strong>3<\/strong>/);
-  assert.doesNotMatch(html, /aria-live|role="status"/);
-  assert.match(constellationStateTopbarHtml(view(), false), /tabindex="0" hidden>/);
-  assert.match(constellationStateValuesHtml({ weather: { structure: '<unsafe>' } }), /&lt;unsafe&gt;/);
+  assert.equal((html.match(/class="topbar-debug-metric"/g) ?? []).length, 9);
+  assert.equal((html.match(/class="topbar-debug-group"/g) ?? []).length, 2);
+  assert.match(html, /aria-label="Structural work"/);
+  assert.match(html, /aria-label="Supplementary work"/);
+  assert.match(html, /data-debug-metric="Structural:Incorporation pending"/);
+  assert.match(html, /title="Structural — Incorporation pending: 1\./);
+  assert.match(html, /title="Structural — Unavailable: 1\. Source acquisition could not complete/);
+  assert.match(html, /title="Supplementary — Total: 5\./);
+  assert.match(html, /tabindex="0" title="Structural/);
+  assert.doesNotMatch(html, /ConstellationState|FrontierWork|EnrichmentFlow|aria-live|role="status"/);
+  assert.match(debugTopbarHtml(view(), false), /tabindex="0" hidden>/);
+});
+
+test('topbar counts escape unexpected lifecycle values and default absent values to zero', () => {
+  const html = debugTopbarValuesHtml({ weather: { structure: '<img src=x>' } });
+  assert.match(html, /&lt;img src=x&gt;/);
+  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /Frontier<\/span><strong>0<\/strong>/);
+  assert.equal((html.match(/class="topbar-debug-metric"/g) ?? []).length, 9);
+  assert.match(html, /aria-label="Supplementary — Active: 0\./);
 });

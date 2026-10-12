@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { debugMeasureGroups, debugMeasuresHtml } from '../src/debug-measures.ts';
+import { constellationStateTopbarHtml, constellationStateValuesHtml, debugMeasureGroups, debugMeasuresHtml } from '../src/debug-measures.ts';
 
 function view() {
   return {
@@ -36,10 +36,11 @@ test('Debug presents the published Current View measures in three independent gr
 
 test('Debug readout has visible explanations and accessible group/value semantics, not Weather announcements', () => {
   const html = debugMeasuresHtml(view());
-  assert.equal((html.match(/class="debug-measure-group"/g) ?? []).length, 3);
-  assert.equal((html.match(/class="debug-measure"/g) ?? []).length, 12);
+  assert.equal((html.match(/class="debug-measure-group"/g) ?? []).length, 2);
+  assert.equal((html.match(/class="debug-measure"/g) ?? []).length, 9);
   assert.match(html, /id="debug-measures" role="region" tabindex="0"/);
   assert.match(html, /aria-labelledby="debug-measure-group-0"/);
+  assert.doesNotMatch(html, /ConstellationState|Reading frontier/);
   assert.match(html, /<h3 id="debug-measure-group-1">FrontierWork<\/h3>/);
   assert.match(html, /Incorporation pending<\/dt><dd>1<\/dd>/);
   assert.match(html, /not that chess evidence is absent/);
@@ -51,4 +52,17 @@ test('Debug escapes unexpected lifecycle values and keeps missing counters neutr
   assert.match(html, /&lt;img src=x&gt;/);
   assert.doesNotMatch(html, /<img/);
   assert.match(html, /Reading frontier<\/dt><dd>0<\/dd>/);
+});
+
+test('topbar ConstellationState shows published values without Weather announcements', () => {
+  const html = constellationStateTopbarHtml(view(), true);
+  assert.match(html, /id="topbar-constellation-state"/);
+  assert.match(html, /role="group" aria-label="ConstellationState measurements" tabindex="0"/);
+  assert.match(html, /ConstellationState/);
+  assert.match(html, /Map<\/span><strong>ready<\/strong>/);
+  assert.match(html, /Settling<\/span><strong>yes<\/strong>/);
+  assert.match(html, /Reading frontier<\/span><strong>3<\/strong>/);
+  assert.doesNotMatch(html, /aria-live|role="status"/);
+  assert.match(constellationStateTopbarHtml(view(), false), /tabindex="0" hidden>/);
+  assert.match(constellationStateValuesHtml({ weather: { structure: '<unsafe>' } }), /&lt;unsafe&gt;/);
 });

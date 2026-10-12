@@ -16,7 +16,7 @@ import { bindRecenterTarget, createBoardMoveRecenterHandler } from './recenter-i
 import { placeConstellation } from './presentation-geometry.ts';
 import type { NodePlacement, PresentationGeometry } from './presentation-geometry.ts';
 import { viewStatusSpec } from './view-status.ts';
-import { debugMeasuresHtml } from './debug-measures.ts';
+import { constellationStateTopbarHtml, constellationStateValuesHtml, debugMeasuresHtml } from './debug-measures.ts';
 
 type ChessgroundConfig = NonNullable<Parameters<typeof Chessground>[1]>;
 type BoardApi = ReturnType<typeof Chessground>;
@@ -285,6 +285,11 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   }
 
   function updateChrome(view: RendererView, presentation: string, guide: boolean, debug: boolean): void {
+    const constellationState = app.querySelector('#topbar-constellation-state') as HTMLElement | null;
+    if (constellationState) {
+      constellationState.hidden = !debug;
+      constellationState.innerHTML = constellationStateValuesHtml(view);
+    }
     const back = app.querySelector('#back') as HTMLButtonElement | null;
     if (back) back.disabled = !view.navigation.canGoBack;
     app.querySelector('#guide-toggle')?.classList.toggle('is-active', guide);
@@ -363,7 +368,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       updateDynamicMarkup(view, centerNode, turn, rootContext, structuralError, debug);
     } else {
       disposeBoards();
-      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a><div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button" aria-pressed="${guide}">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${debug}">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage, view.activities?.rootDiscovery ?? 'idle')}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug, debugExpanded)}</aside></div></main>`;
+      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a>${constellationStateTopbarHtml(view, debug)}<div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button" aria-pressed="${guide}">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${debug}">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage, view.activities?.rootDiscovery ?? 'idle')}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug, debugExpanded)}</aside></div></main>`;
       renderLichessEvalStatus(lichessEvalStatus);
       createCenterBoard(view, actions, turn);
       bindStaticControls(actions);

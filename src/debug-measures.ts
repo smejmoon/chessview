@@ -68,9 +68,26 @@ export function debugMeasureGroups(view: DebugMeasureView): readonly Group[] {
   ];
 }
 
+// Development-only observations in the app shell, not Weather's live region.
+export function constellationStateValuesHtml(view: DebugMeasureView): string {
+  const group = debugMeasureGroups(view)[0];
+  return '<strong class="topbar-constellation-label">' + escapeHtml(group.name) + '</strong>'
+    + group.measures.map((measure) => (
+      '<span class="topbar-constellation-measure"><span>' + escapeHtml(measure.name)
+      + '</span><strong>' + escapeHtml(measure.value) + '</strong></span>'
+    )).join('');
+}
+
+export function constellationStateTopbarHtml(view: DebugMeasureView, enabled: boolean): string {
+  return '<div class="topbar-constellation-state" id="topbar-constellation-state"'
+    + ' role="group" aria-label="ConstellationState measurements" tabindex="0"'
+    + (enabled ? '' : ' hidden') + '>'
+    + constellationStateValuesHtml(view) + '</div>';
+}
+
 export function debugMeasuresHtml(view: DebugMeasureView): string {
   return '<div class="debug-measures" id="debug-measures" role="region" tabindex="0" aria-label="Current View measurements">'
-    + debugMeasureGroups(view).map((group, index) => {
+    + debugMeasureGroups(view).slice(1).map((group, index) => {
       const headingId = 'debug-measure-group-' + index;
       return '<section class="debug-measure-group" aria-labelledby="' + headingId + '">'
         + '<h3 id="' + headingId + '">' + escapeHtml(group.name) + '</h3>'

@@ -43,6 +43,8 @@ class FakeElement {
       this.mapMessage = new FakeElement(this.ownerDocument, { id: 'map-message' });
       this.rail = new FakeElement(this.ownerDocument, { className: 'analysis-rail' });
       this.networkStatus = new FakeElement(this.ownerDocument, { className: 'network-status' });
+      this.constellationState = new FakeElement(this.ownerDocument, { id: 'topbar-constellation-state' });
+      this.constellationState.hidden = value.includes('id="topbar-constellation-state" role="group" aria-label="ConstellationState measurements" tabindex="0" hidden');
       this.viewStatus = new FakeElement(this.ownerDocument, { id: 'view-status' });
       this.viewStatusMark = new FakeElement(this.ownerDocument, { className: 'view-status-mark' });
       this.viewStatusLabel = new FakeElement(this.ownerDocument, { className: 'view-status-label' });
@@ -107,6 +109,7 @@ class FakeApp extends FakeElement {
       '#map-message': this.mapMessage,
       '.analysis-rail': this.rail,
       '.network-status': this.networkStatus,
+      '#topbar-constellation-state': this.constellationState,
       '#view-status': this.viewStatus,
       '#back': this.back,
       '#flip': this.flip,
@@ -254,7 +257,10 @@ test('Rail Debug groups follow the published view without changing Weather or th
   assert.doesNotMatch(app.rail.innerHTML, /ConstellationState|FrontierWork/);
   lens.setDebug(true);
   renderer.render(view, actions, 'updating');
-  assert.match(app.rail.innerHTML, /ConstellationState/);
+  assert.doesNotMatch(app.rail.innerHTML, /ConstellationState/);
+  assert.match(app.innerHTML, /id="topbar-constellation-state"/);
+  assert.equal(app.constellationState.hidden, false);
+  assert.match(app.constellationState.innerHTML, /ConstellationState/);
   assert.match(app.rail.innerHTML, /FrontierWork/);
   assert.match(app.rail.innerHTML, /EnrichmentFlow/);
   assert.match(app.rail.innerHTML, /Incorporation pending<\/dt><dd>1<\/dd>/);
@@ -266,6 +272,7 @@ test('Rail Debug groups follow the published view without changing Weather or th
 
   lens.setDebug(false);
   renderer.render(view, actions, 'updating');
+  assert.equal(app.constellationState.hidden, true);
   assert.doesNotMatch(app.rail.innerHTML, /ConstellationState|FrontierWork/);
   assert.equal(app.viewStatus.className, 'view-status is-updating');
   assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
@@ -348,7 +355,7 @@ test('in-place Rail updates retain focus for Debug regions, maintenance and matc
   assert.equal(document.activeElement, null, 'missing navigation targets do not steal focus');
 }));
 
-test('compact Rail leaves Explorer primary and keeps ConstellationState first in collapsible Debug', async () => withRenderer(async (createNodusRenderer) => {
+test('compact Rail leaves Explorer primary and keeps FrontierWork first in collapsible Debug', async () => withRenderer(async (createNodusRenderer) => {
   const document = new FakeDocument();
   const app = new FakeApp(document, { id: 'app' });
   let debugEnabled = false;
@@ -370,7 +377,9 @@ test('compact Rail leaves Explorer primary and keeps ConstellationState first in
   assert.doesNotMatch(app.rail.innerHTML, /Explore from here|rail-switch|rail-title/);
   assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
   assert.ok(app.rail.innerHTML.indexOf('Opening Explorer') < app.rail.innerHTML.indexOf('class="rail-debug'));
-  assert.ok(app.rail.innerHTML.indexOf('ConstellationState') < app.rail.innerHTML.indexOf('debug-maintenance'));
+  assert.ok(app.rail.innerHTML.indexOf('FrontierWork') < app.rail.innerHTML.indexOf('debug-maintenance'));
+  assert.doesNotMatch(app.rail.innerHTML, /ConstellationState/);
+  assert.match(app.constellationState.innerHTML, /ConstellationState/);
   assert.ok(app.rail.innerHTML.indexOf('debug-maintenance') < app.rail.innerHTML.indexOf('id="debug-log"'));
 
   app.rail.debugPanelToggle.focus();
@@ -384,5 +393,33 @@ test('compact Rail leaves Explorer primary and keeps ConstellationState first in
   assert.match(app.rail.innerHTML, /class="rail-debug is-expanded"/);
   assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
   assert.equal(document.activeElement, app.rail.debugPanelToggle);
+  assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
+}));
+
+test('topbar ConstellationState follows in-place publications without shifting Weather or keyboard focus', async () => withRenderer(async (createNodusRenderer) => {
+  const document = new FakeDocument();
+  const app = new FakeApp(document, { id: 'app' });
+  let enabled = true;
+  const { createLens } = await import('../src/lens.ts');
+  const lens = createLens({ app, debug: { enabled: () => enabled, setEnabled(v) { enabled = v; } } });
+  const renderer = createNodusRenderer({ app, lens });
+  const center = canonicalPosition(START_FEN);
+  const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() {} };
+  const view = { ...viewFor(center), settling: true, weather: { structure: 'ready', frontier: 8 } };
+  renderer.render(view, actions, 'updating');
+  assert.match(app.innerHTML, /id="topbar-constellation-state" role="group"/);
+  assert.match(app.innerHTML, /Reading frontier<\/span><strong>8<\/strong>/);
+  const group = app.constellationState;
+  group.focus();
+  renderer.render({ ...view, settling: false, weather: { structure: 'ready', frontier: 0 } }, actions, 'ready');
+  assert.equal(app.constellationState, group);
+  assert.equal(document.activeElement, group);
+  assert.match(group.innerHTML, /Settling<\/span><strong>no<\/strong>/);
+  assert.match(group.innerHTML, /Reading frontier<\/span><strong>0<\/strong>/);
+  assert.equal(app.viewStatus.className, 'view-status is-ready');
+  enabled = false;
+  renderer.render(view, actions, 'updating');
+  assert.equal(group.hidden, true);
+  assert.equal(app.viewStatus.className, 'view-status is-updating');
   assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
 }));

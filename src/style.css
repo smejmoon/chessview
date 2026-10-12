@@ -33,7 +33,24 @@ button { color: inherit; }
 }
 .brand { color: #e5e3df; text-decoration: none; display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -.02em; }
 .brand-mark { color: var(--accent); font-size: 24px; transform: translateY(-1px); }
-.topbar-meta { display: flex; align-items: center; gap: 10px; }
+.topbar-meta { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.topbar-constellation-state { display: flex; align-items: center; justify-content: center; gap: 9px; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; padding: 5px 9px; border: 1px solid rgba(179,210,103,.17); border-radius: 6px; background: rgba(179,210,103,.055); color: #aaa69c; white-space: nowrap; font: 10px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; scrollbar-width: thin; }
+.topbar-constellation-state[hidden] { display: none !important; }
+.topbar-constellation-state:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.topbar-constellation-label { color: var(--accent); font-weight: 700; }
+.topbar-constellation-measure { display: inline-flex; align-items: baseline; gap: 4px; }
+.topbar-constellation-measure strong { color: #e2ddd2; font-weight: 700; }
+@media (max-width: 1100px) {
+  .app-shell:has(.topbar-constellation-state:not([hidden])) { grid-template-rows: 82px minmax(0, 1fr); }
+  .topbar:has(.topbar-constellation-state:not([hidden])) { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 48px 28px; gap: 0 8px; }
+  .topbar:has(.topbar-constellation-state:not([hidden])) .brand { grid-column: 1; grid-row: 1; }
+  .topbar:has(.topbar-constellation-state:not([hidden])) .topbar-meta { grid-column: 2; grid-row: 1; justify-self: end; min-width: 0; gap: 5px; }
+  .topbar:has(.topbar-constellation-state:not([hidden])) .topbar-constellation-state { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; justify-content: start; padding: 3px 8px; }
+}
+@media (max-width: 760px) {
+  .app-shell:has(.topbar-constellation-state:not([hidden])) { grid-template-rows: 76px minmax(0, 1fr); }
+  .topbar:has(.topbar-constellation-state:not([hidden])) { grid-template-rows: 42px 28px; }
+}
 .network-status { font-size: 12px; color: var(--muted); letter-spacing: .02em; }
 .network-status.is-loading::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(179,210,103,.09); }
 .icon-button, .toolbar-button { border: 0; background: rgba(255,255,255,.07); min-width: 34px; height: 34px; padding: 0 10px; border-radius: 8px; cursor: pointer; }

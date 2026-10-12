@@ -44,7 +44,7 @@ class FakeElement {
       this.rail = new FakeElement(this.ownerDocument, { className: 'analysis-rail' });
       this.networkStatus = new FakeElement(this.ownerDocument, { className: 'network-status' });
       this.constellationState = new FakeElement(this.ownerDocument, { id: 'topbar-constellation-state' });
-      this.constellationState.hidden = value.includes('id="topbar-constellation-state" role="group" aria-label="ConstellationState measurements" tabindex="0" hidden');
+      this.constellationState.hidden = value.includes('id="topbar-constellation-state" role="group" aria-label="Map state, settling and Explorer Reading frontier" tabindex="0" hidden');
       this.viewStatus = new FakeElement(this.ownerDocument, { id: 'view-status' });
       this.viewStatusMark = new FakeElement(this.ownerDocument, { className: 'view-status-mark' });
       this.viewStatusLabel = new FakeElement(this.ownerDocument, { className: 'view-status-label' });
@@ -260,9 +260,10 @@ test('Rail Debug groups follow the published view without changing Weather or th
   assert.doesNotMatch(app.rail.innerHTML, /ConstellationState/);
   assert.match(app.innerHTML, /id="topbar-constellation-state"/);
   assert.equal(app.constellationState.hidden, false);
-  assert.match(app.constellationState.innerHTML, /ConstellationState/);
-  assert.match(app.rail.innerHTML, /FrontierWork/);
-  assert.match(app.rail.innerHTML, /EnrichmentFlow/);
+  assert.doesNotMatch(app.constellationState.innerHTML, /ConstellationState/);
+  assert.match(app.constellationState.innerHTML, /Map<\/span>/);
+  assert.match(app.rail.innerHTML, /<h3 id="debug-measure-group-0">Structural<\/h3>/);
+  assert.match(app.rail.innerHTML, /<h3 id="debug-measure-group-1">Supplementary<\/h3>/);
   assert.match(app.rail.innerHTML, /Incorporation pending<\/dt><dd>1<\/dd>/);
   assert.match(app.rail.innerHTML, /id="debug-measures" role="region" tabindex="0"/);
   assert.match(app.rail.innerHTML, /id="debug-log" tabindex="0"/);
@@ -355,12 +356,12 @@ test('in-place Rail updates retain focus for Debug regions, maintenance and matc
   assert.equal(document.activeElement, null, 'missing navigation targets do not steal focus');
 }));
 
-test('compact Rail leaves Explorer primary and keeps FrontierWork first in collapsible Debug', async () => withRenderer(async (createNodusRenderer) => {
+test('Rail keeps monitoring visible while Events and tools alone collapse', async () => withRenderer(async (createNodusRenderer) => {
   const document = new FakeDocument();
   const app = new FakeApp(document, { id: 'app' });
-  let debugEnabled = false;
+  let enabled = false;
   const { createLens } = await import('../src/lens.ts');
-  const lens = createLens({ app, debug: { enabled: () => debugEnabled, setEnabled(v) { debugEnabled = v; } } });
+  const lens = createLens({ app, debug: { enabled: () => enabled, setEnabled(v) { enabled = v; } } });
   const renderer = createNodusRenderer({ app, lens });
   const center = canonicalPosition(START_FEN);
   const view = viewFor(center, [{ edge: { san: 'e4', uci: 'e2e4', target: 'target' } }]);
@@ -373,25 +374,34 @@ test('compact Rail leaves Explorer primary and keeps FrontierWork first in colla
   renderer.render(view, actions, 'updating');
 
   assert.match(app.rail.innerHTML, /class="rail-explorer"/);
-  assert.match(app.rail.innerHTML, /class="rail-debug is-expanded"/);
-  assert.doesNotMatch(app.rail.innerHTML, /Explore from here|rail-switch|rail-title/);
-  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
+  assert.match(app.rail.innerHTML, /class="rail-debug"/);
+  assert.doesNotMatch(app.rail.innerHTML, />Rail<|Explore from here|rail-switch|rail-title/);
+  assert.match(app.rail.innerHTML, /Opening Explorer/);
+  assert.match(app.rail.innerHTML, /<h3 id="debug-measure-group-0">Structural<\/h3>/);
+  assert.match(app.rail.innerHTML, /<h3 id="debug-measure-group-1">Supplementary<\/h3>/);
+  assert.doesNotMatch(app.rail.innerHTML, /ConstellationState|FrontierWork|EnrichmentFlow/);
   assert.ok(app.rail.innerHTML.indexOf('Opening Explorer') < app.rail.innerHTML.indexOf('class="rail-debug'));
-  assert.ok(app.rail.innerHTML.indexOf('FrontierWork') < app.rail.innerHTML.indexOf('debug-maintenance'));
-  assert.doesNotMatch(app.rail.innerHTML, /ConstellationState/);
-  assert.match(app.constellationState.innerHTML, /ConstellationState/);
-  assert.ok(app.rail.innerHTML.indexOf('debug-maintenance') < app.rail.innerHTML.indexOf('id="debug-log"'));
+  assert.ok(app.rail.innerHTML.indexOf('id="debug-measures"') < app.rail.innerHTML.indexOf('id="debug-panel-toggle"'));
+  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="false"[^>]*>Events &amp; tools/);
+  assert.match(app.rail.innerHTML, /id="debug-content" hidden/);
+
+  app.rail.debugMeasures.focus();
+  renderer.render(view, actions, 'updating');
+  assert.equal(document.activeElement, app.rail.debugMeasures);
 
   app.rail.debugPanelToggle.focus();
   app.rail.debugPanelToggle.listeners.get('click')();
-  assert.match(app.rail.innerHTML, /class="rail-debug is-collapsed"/);
-  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="false"/);
-  assert.match(app.rail.innerHTML, /id="debug-content" hidden/);
+  assert.match(app.rail.innerHTML, /class="debug-investigation is-expanded"/);
+  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
+  assert.doesNotMatch(app.rail.innerHTML, /id="debug-content" hidden/);
+  assert.match(app.rail.innerHTML, /Copy log|Clear log|Refetch view/);
   assert.equal(document.activeElement, app.rail.debugPanelToggle);
 
   app.rail.debugPanelToggle.listeners.get('click')();
-  assert.match(app.rail.innerHTML, /class="rail-debug is-expanded"/);
-  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="true"/);
+  assert.match(app.rail.innerHTML, /class="debug-investigation is-collapsed"/);
+  assert.match(app.rail.innerHTML, /id="debug-panel-toggle"[^>]*aria-expanded="false"/);
+  assert.match(app.rail.innerHTML, /id="debug-content" hidden/);
+  assert.match(app.rail.innerHTML, /<h3 id="debug-measure-group-1">Supplementary<\/h3>/);
   assert.equal(document.activeElement, app.rail.debugPanelToggle);
   assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
 }));
@@ -408,14 +418,14 @@ test('topbar ConstellationState follows in-place publications without shifting W
   const view = { ...viewFor(center), settling: true, weather: { structure: 'ready', frontier: 8 } };
   renderer.render(view, actions, 'updating');
   assert.match(app.innerHTML, /id="topbar-constellation-state" role="group"/);
-  assert.match(app.innerHTML, /Reading frontier<\/span><strong>8<\/strong>/);
+  assert.match(app.innerHTML, /Frontier<\/span><strong>8<\/strong>/);
   const group = app.constellationState;
   group.focus();
   renderer.render({ ...view, settling: false, weather: { structure: 'ready', frontier: 0 } }, actions, 'ready');
   assert.equal(app.constellationState, group);
   assert.equal(document.activeElement, group);
   assert.match(group.innerHTML, /Settling<\/span><strong>no<\/strong>/);
-  assert.match(group.innerHTML, /Reading frontier<\/span><strong>0<\/strong>/);
+  assert.match(group.innerHTML, /Frontier<\/span><strong>0<\/strong>/);
   assert.equal(app.viewStatus.className, 'view-status is-ready');
   enabled = false;
   renderer.render(view, actions, 'updating');

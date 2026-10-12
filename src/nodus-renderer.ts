@@ -105,7 +105,8 @@ function railExplorerHtml(view: RendererView): string {
 }
 function debugRailHtml(view: RendererView, debug: boolean, expanded: boolean): string {
   if (!debug) return '';
-  return `<section class="rail-debug ${expanded ? 'is-expanded' : 'is-collapsed'}" aria-label="Chessview Debug"><div class="debug-head"><button class="debug-panel-toggle ${expanded ? 'is-active' : ''}" id="debug-panel-toggle" type="button" aria-expanded="${expanded}" aria-controls="debug-content">Debug <small>${getDebugEntries().length} events</small> <span aria-hidden="true">${expanded ? '▾' : '▸'}</span></button><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy</button><button class="debug-action" id="debug-clear" type="button">Clear</button></div></div><div class="debug-content" id="debug-content" ${expanded ? '' : 'hidden'}>${debugMeasuresHtml(view)}<div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div><pre class="debug-log" id="debug-log" tabindex="0" aria-label="Recent debug events">${escapeHtml(debugText())}</pre></div></section>`;
+  // Monitoring is continuous while Debug is on; investigation is optional.
+  return `<section class="rail-debug" aria-label="Development monitoring and tools">${debugMeasuresHtml(view)}<div class="debug-investigation ${expanded ? 'is-expanded' : 'is-collapsed'}"><div class="debug-head"><button class="debug-panel-toggle ${expanded ? 'is-active' : ''}" id="debug-panel-toggle" type="button" aria-expanded="${expanded}" aria-controls="debug-content">Events &amp; tools <small>${getDebugEntries().length} events</small> <span aria-hidden="true">${expanded ? '▾' : '▸'}</span></button></div><div class="debug-content" id="debug-content" ${expanded ? '' : 'hidden'}><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy log</button><button class="debug-action" id="debug-clear" type="button">Clear log</button></div><div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div><pre class="debug-log" id="debug-log" tabindex="0" aria-label="Recent debug events">${escapeHtml(debugText())}</pre></div></div></section>`;
 }
 function rootContextButton(
   rootContext: boolean,
@@ -125,7 +126,7 @@ function rootContextButton(
 }
 function railHtml(view: RendererView, centerNode: PositionRecord, turn: Orientation, debug: boolean, expanded: boolean): string {
   const lineCount = view.rail?.value?.lines?.length ?? 0;
-  return `<div class="rail-position rail-current-details" aria-label="Current position"><strong class="rail-context-title">Rail</strong><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(view, debug, expanded)}`;
+  return `<div class="rail-position rail-current-details" aria-label="Current position"><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(view, debug, expanded)}`;
 }
 
 export function createNodusRenderer({ app: appOption = null, lens: lensOption = null, maintenance = {} }: NodusRendererOptions = {}) {
@@ -141,7 +142,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   let debugPinnedToLatest = true;
   let debugScrollTop = 0;
   let debugMeasuresScrollTop = 0;
-  let debugExpanded = true;
+  let debugExpanded = false;
 
   function disposeSatelliteBoards(): void { for (const api of satelliteBoards) api.destroy?.(); satelliteBoards.clear(); }
   function disposeCenterBoard(): void { centerBoardState?.api.destroy?.(); centerBoardState = null; }
@@ -187,7 +188,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
         debugPinnedToLatest = true;
         debugScrollTop = 0;
         debugMeasuresScrollTop = 0;
-        debugExpanded = true;
+        debugExpanded = false;
       }
       lens.toggleDebug();
       void actions.redraw();

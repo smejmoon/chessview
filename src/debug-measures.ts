@@ -20,7 +20,7 @@ type DebugMeasureView = Readonly<{
 }>;
 
 type Measure = Readonly<{ name: string; value: string }>;
-type Group = Readonly<{ name: string; explanation: string; measures: readonly Measure[] }>;
+type Group = Readonly<{ name: string; label: string; explanation: string; measures: readonly Measure[] }>;
 
 function finiteCount(value?: number): string {
   return String(typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0);
@@ -37,6 +37,7 @@ export function debugMeasureGroups(view: DebugMeasureView): readonly Group[] {
   return [
     {
       name: 'ConstellationState',
+      label: 'Map state',
       explanation: 'Accepted map lifecycle, structural settlement, and Explorer Reading obligations admitted by the current Constellation.',
       measures: [
         { name: 'Map', value: weather?.structure ?? view?.structure?.status ?? 'idle' },
@@ -46,6 +47,7 @@ export function debugMeasureGroups(view: DebugMeasureView): readonly Group[] {
     },
     {
       name: 'FrontierWork',
+      label: 'Structural',
       explanation: 'Current-run structural coordination. Satisfied can outlive incorporation; unavailable means source acquisition could not complete, not that chess evidence is absent. Failed, unplanned, and detached do not themselves imply ongoing progress.',
       measures: [
         { name: 'Working', value: finiteCount(work?.working) },
@@ -59,6 +61,7 @@ export function debugMeasureGroups(view: DebugMeasureView): readonly Group[] {
     },
     {
       name: 'EnrichmentFlow',
+      label: 'Supplementary',
       explanation: 'Supplementary participants enrich the view; they do not block structural readiness. Lookahead work is not included here.',
       measures: [
         { name: 'Active', value: finiteCount(supplementary?.active) },
@@ -71,16 +74,15 @@ export function debugMeasureGroups(view: DebugMeasureView): readonly Group[] {
 // Development-only observations in the app shell, not Weather's live region.
 export function constellationStateValuesHtml(view: DebugMeasureView): string {
   const group = debugMeasureGroups(view)[0];
-  return '<strong class="topbar-constellation-label">' + escapeHtml(group.name) + '</strong>'
-    + group.measures.map((measure) => (
-      '<span class="topbar-constellation-measure"><span>' + escapeHtml(measure.name)
+  return group.measures.map((measure) => (
+      '<span class="topbar-constellation-measure"><span>' + escapeHtml(measure.name === 'Reading frontier' ? 'Frontier' : measure.name)
       + '</span><strong>' + escapeHtml(measure.value) + '</strong></span>'
     )).join('');
 }
 
 export function constellationStateTopbarHtml(view: DebugMeasureView, enabled: boolean): string {
   return '<div class="topbar-constellation-state" id="topbar-constellation-state"'
-    + ' role="group" aria-label="ConstellationState measurements" tabindex="0"'
+    + ' role="group" aria-label="Map state, settling and Explorer Reading frontier" tabindex="0"'
     + (enabled ? '' : ' hidden') + '>'
     + constellationStateValuesHtml(view) + '</div>';
 }
@@ -90,7 +92,7 @@ export function debugMeasuresHtml(view: DebugMeasureView): string {
     + debugMeasureGroups(view).slice(1).map((group, index) => {
       const headingId = 'debug-measure-group-' + index;
       return '<section class="debug-measure-group" aria-labelledby="' + headingId + '">'
-        + '<h3 id="' + headingId + '">' + escapeHtml(group.name) + '</h3>'
+        + '<h3 id="' + headingId + '">' + escapeHtml(group.label) + '</h3>'
         + '<p class="debug-measure-explanation">' + escapeHtml(group.explanation) + '</p>'
         + '<dl class="debug-measure-list">' + group.measures.map((measure) => (
           '<div class="debug-measure"><dt>' + escapeHtml(measure.name)

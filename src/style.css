@@ -146,6 +146,17 @@ cg-board piece { will-change: transform; }
   .explorer-row { min-height: 34px; grid-template-columns: 46px minmax(54px, 1fr) 36px 42px; gap: 5px; padding: 0 6px; }
 }
 
+
+/* Short landscape viewports cannot accommodate a stacked chess map and Rail.
+   Give the Nodus the available height; each Rail panel owns its own scroll. */
+@media (max-width: 760px) and (max-height: 500px) and (orientation: landscape) {
+  .workspace { grid-template-columns: minmax(0, 1fr) minmax(210px, 38%); grid-template-rows: minmax(0, 1fr); }
+  .map { border-right: 1px solid rgba(255,255,255,.055); border-bottom: 0; }
+  .analysis-rail { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
+  .rail-explorer { grid-column: 1; grid-row: 3; }
+  .explorer-row { grid-template-columns: 44px minmax(0, 1fr) 26px 30px; gap: 3px; }
+}
+
 /* Lichess authorization recovery belongs to the application shell, not the map. */
 .lichess-reconnect {
   position: fixed; z-index: 100; top: 64px; right: 16px;

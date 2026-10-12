@@ -26,6 +26,8 @@ class FakeElement {
     this.scrollHeight = 1000;
     this.clientHeight = 120;
     this.classList = { add() {}, remove() {}, toggle() {}, [Symbol.iterator]: function* iterator() {} };
+    this.railOwner = null;
+    this.lastFocusOptions = null;
   }
 
   set innerHTML(value) {
@@ -52,10 +54,19 @@ class FakeElement {
       this.rootToggle = new FakeElement(this.ownerDocument, { id: 'root-context-toggle' });
     }
     if (this.className === 'analysis-rail') {
-      this.debugMeasures = value.includes('id="debug-measures"')
-        ? new FakeElement(this.ownerDocument, { id: 'debug-measures' }) : null;
-      this.debugLog = value.includes('id="debug-log"')
-        ? new FakeElement(this.ownerDocument, { id: 'debug-log' }) : null;
+      if (this.contains(this.ownerDocument.activeElement)) this.ownerDocument.activeElement = null;
+      const railChild = (id = '', dataset = {}) => {
+        const child = new FakeElement(this.ownerDocument, { id });
+        child.railOwner = this;
+        child.dataset = dataset;
+        return child;
+      };
+      this.debugMeasures = value.includes('id="debug-measures"') ? railChild('debug-measures') : null;
+      this.debugLog = value.includes('id="debug-log"') ? railChild('debug-log') : null;
+      this.debugClear = value.includes('id="debug-clear"') ? railChild('debug-clear') : null;
+      this.debugRefetch = value.includes('id="debug-refetch-view"') ? railChild('debug-refetch-view') : null;
+      this.navButtons = [...value.matchAll(/data-nav-key="([^"]+)"/g)]
+        .map((match) => railChild('', { navKey: match[1] }));
     }
     if (this.id === 'satellites' && value === '') this.children = [];
   }
@@ -64,8 +75,22 @@ class FakeElement {
   addEventListener(type, listener) { this.listeners.set(type, listener); }
   appendChild(child) { this.children.push(child); return child; }
   setAttribute() {}
-  querySelector() { return null; }
-  querySelectorAll() { return []; }
+  focus(options = {}) { this.ownerDocument.activeElement = this; this.lastFocusOptions = options; }
+  contains(node) { return Boolean(node && node.railOwner === this); }
+  querySelector(selector) {
+    if (this.className === 'analysis-rail') {
+      return {
+        '#debug-measures': this.debugMeasures,
+        '#debug-log': this.debugLog,
+        '#debug-clear': this.debugClear,
+        '#debug-refetch-view': this.debugRefetch,
+      }[selector] ?? null;
+    }
+    return null;
+  }
+  querySelectorAll(selector) {
+    return this.className === 'analysis-rail' && selector === '[data-nav-key]' ? this.navButtons : [];
+  }
 }
 
 class FakeApp extends FakeElement {
@@ -88,6 +113,8 @@ class FakeApp extends FakeElement {
       '#root-context-toggle': this.rootToggle,
       '#debug-measures': this.rail?.debugMeasures,
       '#debug-log': this.rail?.debugLog,
+      '#debug-clear': this.rail?.debugClear,
+      '#debug-refetch-view': this.rail?.debugRefetch,
     };
     return values[selector] ?? null;
   }
@@ -97,6 +124,7 @@ class FakeApp extends FakeElement {
 class FakeDocument {
   constructor() {
     this.defaultView = { innerWidth: 1440, innerHeight: 800, navigator: {} };
+    this.activeElement = null;
   }
   createElement() { return new FakeElement(this); }
   addEventListener() {}
@@ -273,4 +301,46 @@ test('Debug event log auto-follow never hides measurement groups and both scroll
   assert.equal(app.rail.debugLog.scrollTop, 12, 'inspecting older log events disables follow-latest');
   assert.equal(app.viewStatus.className, 'view-status is-updating');
   assert.equal(globalThis.__chessviewRendererBoardCalls.filter(({ element }) => element?.id === 'center-board').length, 1);
+}));
+
+test('in-place Rail updates retain focus for Debug regions, maintenance and matching Explorer Lines', async () => withRenderer(async (createNodusRenderer) => {
+  const document = new FakeDocument();
+  const app = new FakeApp(document, { id: 'app' });
+  let debugEnabled = false;
+  const { createLens } = await import('../src/lens.ts');
+  const lens = createLens({
+    app,
+    debug: { enabled: () => debugEnabled, setEnabled(value) { debugEnabled = value; } },
+  });
+  const renderer = createNodusRenderer({ app, lens });
+  const center = canonicalPosition(START_FEN);
+  const actions = { recenter() {}, setMode() {}, back() {}, flip() {}, redraw() {} };
+  const line = { edge: { san: 'e4', uci: 'e2e4', target: 'reachable-key' }, frequency: { share: 0.4, games: 120 } };
+  const view = viewFor(center, [line]);
+  renderer.render(view, actions, 'ready');
+  lens.setDebug(true);
+  renderer.render(view, actions, 'updating');
+
+  for (const name of ['debugMeasures', 'debugLog', 'debugRefetch', 'debugClear']) {
+    const oldFocused = app.rail[name];
+    assert.ok(oldFocused, name);
+    oldFocused.focus();
+    renderer.render(view, actions, 'updating');
+    assert.notEqual(document.activeElement, oldFocused, 'the full Rail HTML was replaced');
+    assert.equal(document.activeElement, app.rail[name], name + ' stays keyboard-active');
+    assert.equal(document.activeElement.lastFocusOptions.preventScroll, true);
+  }
+
+  lens.setDebug(false);
+  renderer.render(view, actions, 'ready');
+  const previousLine = app.rail.navButtons[0];
+  assert.equal(previousLine.dataset.navKey, 'reachable-key');
+  previousLine.focus();
+  renderer.render(view, actions, 'updating');
+  assert.equal(document.activeElement, app.rail.navButtons[0], 'same Line target retains keyboard focus');
+  assert.equal(document.activeElement.lastFocusOptions.preventScroll, true);
+
+  app.rail.navButtons[0].focus();
+  renderer.render(viewFor(center), actions, 'ready');
+  assert.equal(document.activeElement, null, 'missing navigation targets do not steal focus');
 }));

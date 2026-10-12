@@ -307,7 +307,21 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
     const message = app.querySelector('#map-message') as HTMLElement | null;
     if (message) message.innerHTML = structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : '';
     const rail = app.querySelector('.analysis-rail') as HTMLElement | null;
-    if (rail) rail.innerHTML = railHtml(view, centerNode, turn, debug);
+    if (rail) {
+      // Rail is rebuilt on same-Nodus updates. Preserve keyboard inspection
+      // only when the focused control has a corresponding replacement.
+      const focused = document.activeElement as HTMLElement | null;
+      const hadFocus = focused !== null && rail.contains(focused);
+      const focusedId = hadFocus ? focused.id : '';
+      const focusedKey = hadFocus ? focused.dataset.navKey : undefined;
+      rail.innerHTML = railHtml(view, centerNode, turn, debug);
+      const replacement = focusedId
+        ? rail.querySelector<HTMLElement>(`#${focusedId}`)
+        : focusedKey
+          ? [...rail.querySelectorAll<HTMLElement>('[data-nav-key]')].find((node) => node.dataset.navKey === focusedKey)
+          : null;
+      replacement?.focus({ preventScroll: true });
+    }
   }
 
   function createCenterBoard(view: RendererView, actions: CurrentViewActions, turn: Orientation): void {

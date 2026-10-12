@@ -275,7 +275,7 @@ Deterministic/browser contract tests should cover:
 - supplementary work/failure remaining outside structural settlement;
 - obsolete completion and unavailable outcomes being unable to
   mutate a replacement view/run;
-- aggregate Weather diagnostics distinguishing working, satisfied,
+- aggregate Debug observations presented through Lens, distinguishing working, satisfied,
   incorporation-pending, unavailable, failed, unplanned, detached, and
   supplementary participation without exposing task/position identity;
 - Lens-owned orientation/presentation state and RouteLedger-owned browser state

@@ -6,7 +6,7 @@ Use focused browser observation alongside existing deterministic tests to judge 
 
 # Blocked:
 
-The remaining Weather-specific browser judgment is whether acknowledgement timing and unavailable/degraded transitions communicate the supplied structural state without a false Settled interval. The deployed preview and automated tests exist, but those particular live transitions have not all been observed. This is the only outstanding verification decision for this outcome; particular viewport dimensions, manual screen-reader sessions, and repeated keyboard-focus audits are not prerequisites for closing Weather.
+The remaining Weather-specific browser judgment is whether acknowledgement timing and unavailable/degraded transitions communicate the supplied structural state without a false Settled interval. The deployed preview and automated tests exist, but those particular live transitions have not all been observed. This is the sole remaining completion blocker.
 
 # Because:
 

@@ -103,10 +103,40 @@ function railExplorerHtml(view: RendererView): string {
     return `<button class="explorer-row" type="button" data-nav-key="${escapeHtml(edge.target)}"><span class="explorer-move">${escapeHtml(edge.san ?? edge.uci)}</span><span class="explorer-track"><span style="width:${Math.max(2, Math.round(share * 100))}%"></span></span><span class="explorer-share">${share > 0 ? percent(share) : ''}</span><span class="explorer-games">${games > 0 ? compactGames(games) : ''}</span></button>`;
   }).join('')}</div>`;
 }
-function debugRailHtml(view: RendererView, debug: boolean, expanded: boolean): string {
+function debugRailHtml(
+  debug: boolean,
+  expanded: boolean,
+  logOptionsOpen: boolean,
+  maintenanceOpen: boolean,
+): string {
   if (!debug) return '';
-  // Monitoring is continuous while Debug is on; investigation is optional.
-  return `<section class="rail-debug" aria-label="Development monitoring and tools"><div class="debug-investigation ${expanded ? 'is-expanded' : 'is-collapsed'}"><div class="debug-head"><button class="debug-panel-toggle ${expanded ? 'is-active' : ''}" id="debug-panel-toggle" type="button" aria-expanded="${expanded}" aria-controls="debug-content">Events &amp; tools <small>${getDebugEntries().length} events</small> <span aria-hidden="true">${expanded ? '▾' : '▸'}</span></button></div><div class="debug-content" id="debug-content" ${expanded ? '' : 'hidden'}><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy log</button><button class="debug-action" id="debug-clear" type="button">Clear log</button></div><div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div><pre class="debug-log" id="debug-log" tabindex="0" aria-label="Recent debug events">${escapeHtml(debugText())}</pre></div></div></section>`;
+  const eventCount = getDebugEntries().length;
+  return `<section class="rail-debug" aria-label="Debug investigation">
+    <div class="debug-investigation ${expanded ? 'is-expanded' : 'is-collapsed'}">
+      <div class="debug-head">
+        <button class="debug-panel-toggle ${expanded ? 'is-active' : ''}" id="debug-panel-toggle" type="button" aria-expanded="${expanded}" aria-controls="debug-content">Events <small>${eventCount} events</small> <span aria-hidden="true">${expanded ? '▾' : '▸'}</span></button>
+        ${expanded ? `<div class="debug-log-actions">
+          <button class="debug-icon-action" id="debug-copy" type="button" title="Copy log" aria-label="Copy log">⧉</button>
+          <div class="debug-options-wrap">
+            <button class="debug-icon-action" id="debug-options-toggle" type="button" title="Log options" aria-label="Log options" aria-expanded="${logOptionsOpen}" aria-controls="debug-options">⋯</button>
+            <div class="debug-options" id="debug-options" ${logOptionsOpen ? '' : 'hidden'}>
+              <button class="debug-action" id="debug-clear" type="button">Clear log</button>
+            </div>
+          </div>
+        </div>` : ''}
+      </div>
+      <div class="debug-content" id="debug-content" ${expanded ? '' : 'hidden'}>
+        <pre class="debug-log" id="debug-log" tabindex="0" aria-label="Recent debug events">${escapeHtml(debugText())}</pre>
+        <div class="debug-advanced">
+          <button class="debug-advanced-toggle" id="debug-maintenance-toggle" type="button" aria-expanded="${maintenanceOpen}" aria-controls="debug-maintenance">Advanced maintenance <span aria-hidden="true">${maintenanceOpen ? '▾' : '▸'}</span></button>
+          <div class="debug-maintenance" id="debug-maintenance" ${maintenanceOpen ? '' : 'hidden'}>
+            <button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button>
+            <button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>`;
 }
 function rootContextButton(
   rootContext: boolean,
@@ -124,9 +154,9 @@ function rootContextButton(
   }
   return `<button id="root-context-toggle" class="root-context-toggle ${rootContext ? 'is-active' : ''}" type="button" aria-pressed="${rootContext}">${label}</button>`;
 }
-function railHtml(view: RendererView, centerNode: PositionRecord, turn: Orientation, debug: boolean, expanded: boolean): string {
+function railHtml(view: RendererView, centerNode: PositionRecord, turn: Orientation, debug: boolean, expanded: boolean, logOptionsOpen: boolean, maintenanceOpen: boolean): string {
   const lineCount = view.rail?.value?.lines?.length ?? 0;
-  return `<div class="rail-position rail-current-details" aria-label="Current position"><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(view, debug, expanded)}`;
+  return `<div class="rail-position rail-current-details" aria-label="Current position"><div class="position-stats">${centerNode.games ? `<span>${compactGames(centerNode.games)} games</span>` : '<span>no cached games yet</span>'}<span>${turn} to move</span></div></div><section class="rail-explorer"><div class="rail-section-head"><div><strong>Opening Explorer</strong><small>${lineCount} Lines</small></div></div>${railExplorerHtml(view)}</section>${debugRailHtml(debug, expanded, logOptionsOpen, maintenanceOpen)}`;
 }
 
 export function createNodusRenderer({ app: appOption = null, lens: lensOption = null, maintenance = {} }: NodusRendererOptions = {}) {
@@ -142,6 +172,8 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   let debugPinnedToLatest = true;
   let debugScrollTop = 0;
   let debugExpanded = false;
+  let debugLogOptionsOpen = false;
+  let debugMaintenanceOpen = false;
 
   function disposeSatelliteBoards(): void { for (const api of satelliteBoards) api.destroy?.(); satelliteBoards.clear(); }
   function disposeCenterBoard(): void { centerBoardState?.api.destroy?.(); centerBoardState = null; }
@@ -177,6 +209,8 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
         debugPinnedToLatest = true;
         debugScrollTop = 0;
         debugExpanded = false;
+        debugLogOptionsOpen = false;
+        debugMaintenanceOpen = false;
       }
       lens.toggleDebug();
       void actions.redraw();
@@ -186,11 +220,23 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   function bindDynamicControls(actions: CurrentViewActions, rootContext: boolean, view: RendererView): void {
     app.querySelector('#debug-panel-toggle')?.addEventListener('click', () => {
       debugExpanded = !debugExpanded;
+      if (!debugExpanded) { debugLogOptionsOpen = false; debugMaintenanceOpen = false; }
+      void actions.redraw();
+    });
+    app.querySelector('#debug-options-toggle')?.addEventListener('click', () => {
+      debugLogOptionsOpen = !debugLogOptionsOpen;
+      void actions.redraw();
+    });
+    app.querySelector('#debug-maintenance-toggle')?.addEventListener('click', () => {
+      debugMaintenanceOpen = !debugMaintenanceOpen;
       void actions.redraw();
     });
     app.querySelector('#root-context-toggle')?.addEventListener('click', () => actions.setMode(rootContext ? 'lines' : 'roots'));
     app.querySelectorAll('[data-nav-key]').forEach((button) => bindRecenterTarget(button, actions, () => (button as HTMLElement).dataset.navKey));
     app.querySelector('#debug-clear')?.addEventListener('click', () => {
+      debugLogOptionsOpen = false;
+      // The menu item disappears on redraw; keep the options button focused.
+      (app.querySelector('#debug-options-toggle') as HTMLElement | null)?.focus({ preventScroll: true });
       clearDebugLog();
       debugPinnedToLatest = true;
       debugScrollTop = 0;
@@ -323,7 +369,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       const hadFocus = focused !== null && rail.contains(focused);
       const focusedId = hadFocus ? focused.id : '';
       const focusedKey = hadFocus ? focused.dataset.navKey : undefined;
-      rail.innerHTML = railHtml(view, centerNode, turn, debug, debugExpanded);
+      rail.innerHTML = railHtml(view, centerNode, turn, debug, debugExpanded, debugLogOptionsOpen, debugMaintenanceOpen);
       const replacement = focusedId
         ? rail.querySelector<HTMLElement>(`#${focusedId}`)
         : focusedKey
@@ -364,7 +410,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       updateDynamicMarkup(view, centerNode, turn, rootContext, structuralError, debug);
     } else {
       disposeBoards();
-      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a>${debugTopbarHtml(view, debug)}<div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button" aria-pressed="${guide}">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${debug}">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage, view.activities?.rootDiscovery ?? 'idle')}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug, debugExpanded)}</aside></div></main>`;
+      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a>${debugTopbarHtml(view, debug)}<div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button" aria-pressed="${guide}">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${debug}">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage, view.activities?.rootDiscovery ?? 'idle')}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug, debugExpanded, debugLogOptionsOpen, debugMaintenanceOpen)}</aside></div></main>`;
       renderLichessEvalStatus(lichessEvalStatus);
       createCenterBoard(view, actions, turn);
       bindStaticControls(actions);

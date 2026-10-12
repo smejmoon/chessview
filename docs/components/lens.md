@@ -38,7 +38,7 @@ Lens combines presentation preferences with the current presentation environment
 
 ## Visual grouping and topbar
 
-The **topbar** is the global application shell. It groups Chessview identity (brand and start link), source connectivity (Lichess network/engine status), product-facing current-view readiness (Weather), navigation (Back), and global presentation controls (Guide, Debug, orientation flip). In Debug mode only, it also shows read-only Map, Settling and Frontier values (`ConstellationState`), plus icon-and-number Structural (`FrontierWork`) and Supplementary (`EnrichmentFlow`) measures. Every symbol has a hover title and keyboard-accessible explanation, outside Weather's live status. It never computes readiness, selects Constellation positions, or hosts an Explorer inventory. On narrow screens, the measurements can use a compact second topbar row with horizontal keyboard scrolling, without covering the map.
+The **topbar** is the global application shell. It groups Chessview identity, source connectivity, Weather readiness, navigation, and global presentation controls. In Debug mode it also presents Current View's aggregate map, structural, and supplementary observations as compact labelled or icon-and-number values, separate from Weather's live status. It never computes readiness or hosts Explorer inventory. Its presentation adapts to available space without taking over the playable map.
 
 The **Constellation canvas** is the primary spatial navigation surface, centered on the playable Nodus with Roots and siblings upstream to its left, visible Lines downstream to its right, and graph connections/convergence between them. Its **map controls** switch Root context and present Root coverage/discovery, not global readiness. The satellite boards are selected spatial context, not an exhaustive inventory.
 
@@ -54,26 +54,20 @@ Debug explains aggregate Current View facts rather than defining another lifecyc
 - **`FrontierWork`** — structural participation counts: `working`, `satisfied`, `incorporationPending`, `unavailable`, `failed`, `unplanned`, and `detached`. These explain the active run's structural coordination. A satisfied participant may remain recorded after incorporation is drained; failed/unplanned participants are diagnostics, not evidence of source unavailability or automatic progress.
 - **`EnrichmentFlow`** — supplementary refinement participation, active and total. These counts explain non-structural work, not structural settlement; independently scheduled lookahead is not implied to be counted.
 
-The existing published snapshot supplies the measures; grouping is a Debug presentation choice, not a renamed or duplicated Current View data model. Each numeric value remains visible without hover. Each symbol exposes its full name, value and explanation via native title and keyboard-accessible name. Preserve focus on a particular metric through live redraws. Narrow viewports must offer horizontally scrollable, keyboard-inspectable topbar measurements rather than hiding them. Short landscape layouts must reserve a usable map for the playable Nodus and allocate Rail space beside it rather than allowing diagnostic minimum heights to consume the map. The two Debug scroll regions, maintenance controls, and navigable Rail rows retain keyboard focus across same-Nodus redraws while their corresponding targets still exist. Opening Explorer remains the primary Rail surface with the greater share of vertical space. When Debug is enabled, all three monitoring groups stay in the topbar. The Rail retains only a compact Events disclosure, with log actions in the header and a separate Advanced maintenance disclosure beneath its log. Collapsing tools leaves monitoring untouched and returns space to Opening Explorer. All Debug observations are outside Weather's live announcement region. All controls convey their expanded or pressed state without changing Weather, Current View, or source acquisition. Switching Debug off removes the readout without changing Weather or domain state.
+The published Current View snapshot supplies the measures; Lens only formats them. The topbar provides compact counts and hoverable/focusable explanations when Debug is enabled, outside Weather's live announcement region. The Rail keeps Opening Explorer primary, with event history and cache maintenance behind their own disclosures. Hiding Debug or its event history must not change structural readiness or disable the accepted Nodus.
 
 Debug remains aggregate: do not display task keys, canonical-position identities, provider names, source payloads, transport details, retry timestamps, or run/revision tokens in these groups. Weather's [product-facing status contract](weather.md) remains independent.
 
 ## Verification
 
-Deterministic/browser contract tests should cover:
+Verification focuses on the component's established behavior:
 
-- Lens initializing and persisting orientation, Guide, and Debug presentation preferences;
-- presentation geometry and composition constraints being derived from the actual rendered map rectangle, with Root/Line mode affecting Root-context capacity;
-- orientation, Guide, and Debug changes redrawing without replacing the current Nodus or starting acquisition;
-- the Debug-only topbar presenting Map, Settling, Frontier and all nine Structural/Supplementary icon-count values, with hover titles and accessible names, never entering Weather's announcement;
-- keyboard focus persisting on matching metrics through live redraws, including narrow horizontal inspection;
-- the Rail's collapsed Events header leaving Opening Explorer the remaining space; when expanded, the log taking most of the panel height, Copy log appearing as an icon and Clear log in a keyboard-operable overflow menu;
-- the separate, normally collapsed Advanced maintenance disclosure retaining Refetch view and Clear Explorer cache behavior, without confusing cache-reset actions with log management;
-- narrow viewport and keyboard/screen-reader inspection of Debug measurements without embedding them in Weather's live status;
-- turning Debug off removing the readout without changing Weather status or current-view settlement;
-- different effective presentation capacities causing same-Nodus Constellation recomposition;
-- presentation-only geometry changes redrawing accepted state without structural recomposition;
-- one geometry owner and one placement path deciding Nodus and surrounding-board placement for both structural directions, without a parallel Root layout;
-- a trustworthy provisional Constellation remaining visible and interactive while Weather is `Updating…`;
-- renderer resource state remaining presentation-local and never becoming current-view/domain truth;
-- normal presentation failure falling back to a degraded surface without changing structural truth.
+- Lens initializes and persists orientation, Guide, and Debug preferences.
+- Presentation geometry and Constellation capacities derive from the rendered map rectangle and active Root/Line mode.
+- Orientation, Guide, and Debug changes redraw without replacing the Nodus or starting acquisition.
+- Material capacity changes recompose the same Nodus; placement-only changes redraw.
+- One geometry and placement owner presents Roots, siblings, and Lines around the accepted Nodus.
+- A trustworthy provisional Constellation remains visible and interactive while Weather is Updating.
+- Debug displays aggregate Current View measures outside Weather's live status and does not alter structural readiness.
+- Renderer resource state stays presentation-local, and presentation failure degrades rather than leaving stale success.
+

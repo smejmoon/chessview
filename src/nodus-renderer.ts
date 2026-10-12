@@ -16,7 +16,7 @@ import { bindRecenterTarget, createBoardMoveRecenterHandler } from './recenter-i
 import { placeConstellation } from './presentation-geometry.ts';
 import type { NodePlacement, PresentationGeometry } from './presentation-geometry.ts';
 import { viewStatusSpec } from './view-status.ts';
-import { constellationStateTopbarHtml, constellationStateValuesHtml, debugMeasuresHtml } from './debug-measures.ts';
+import { debugTopbarHtml, debugTopbarValuesHtml } from './debug-measures.ts';
 
 type ChessgroundConfig = NonNullable<Parameters<typeof Chessground>[1]>;
 type BoardApi = ReturnType<typeof Chessground>;
@@ -106,7 +106,7 @@ function railExplorerHtml(view: RendererView): string {
 function debugRailHtml(view: RendererView, debug: boolean, expanded: boolean): string {
   if (!debug) return '';
   // Monitoring is continuous while Debug is on; investigation is optional.
-  return `<section class="rail-debug" aria-label="Development monitoring and tools">${debugMeasuresHtml(view)}<div class="debug-investigation ${expanded ? 'is-expanded' : 'is-collapsed'}"><div class="debug-head"><button class="debug-panel-toggle ${expanded ? 'is-active' : ''}" id="debug-panel-toggle" type="button" aria-expanded="${expanded}" aria-controls="debug-content">Events &amp; tools <small>${getDebugEntries().length} events</small> <span aria-hidden="true">${expanded ? '▾' : '▸'}</span></button></div><div class="debug-content" id="debug-content" ${expanded ? '' : 'hidden'}><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy log</button><button class="debug-action" id="debug-clear" type="button">Clear log</button></div><div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div><pre class="debug-log" id="debug-log" tabindex="0" aria-label="Recent debug events">${escapeHtml(debugText())}</pre></div></div></section>`;
+  return `<section class="rail-debug" aria-label="Development monitoring and tools"><div class="debug-investigation ${expanded ? 'is-expanded' : 'is-collapsed'}"><div class="debug-head"><button class="debug-panel-toggle ${expanded ? 'is-active' : ''}" id="debug-panel-toggle" type="button" aria-expanded="${expanded}" aria-controls="debug-content">Events &amp; tools <small>${getDebugEntries().length} events</small> <span aria-hidden="true">${expanded ? '▾' : '▸'}</span></button></div><div class="debug-content" id="debug-content" ${expanded ? '' : 'hidden'}><div class="debug-actions"><button class="debug-action" id="debug-copy" type="button">Copy log</button><button class="debug-action" id="debug-clear" type="button">Clear log</button></div><div class="debug-maintenance"><button class="debug-action" id="debug-refetch-view" type="button">Refetch view</button><button class="debug-action" id="debug-clear-explorer" type="button">Clear Explorer cache</button></div><pre class="debug-log" id="debug-log" tabindex="0" aria-label="Recent debug events">${escapeHtml(debugText())}</pre></div></div></section>`;
 }
 function rootContextButton(
   rootContext: boolean,
@@ -141,7 +141,6 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   let lichessEvalStatus: unknown = null;
   let debugPinnedToLatest = true;
   let debugScrollTop = 0;
-  let debugMeasuresScrollTop = 0;
   let debugExpanded = false;
 
   function disposeSatelliteBoards(): void { for (const api of satelliteBoards) api.destroy?.(); satelliteBoards.clear(); }
@@ -156,16 +155,6 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   }
 
   function bindDebugScroll(): void {
-    // Current View measurements are independent of the event log's tail-follow behavior.
-    // Preserve their inspection position across Rail redraws during active refinement.
-    const measures = app.querySelector('#debug-measures') as HTMLElement | null;
-    if (measures) {
-      measures.scrollTop = debugMeasuresScrollTop;
-      measures.addEventListener('scroll', () => {
-        debugMeasuresScrollTop = measures.scrollTop;
-      });
-    }
-
     const log = app.querySelector('#debug-log') as HTMLElement | null;
     if (!log) return;
     const scrollHeight = Number(log.scrollHeight ?? 0);
@@ -187,7 +176,6 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       if (opening) {
         debugPinnedToLatest = true;
         debugScrollTop = 0;
-        debugMeasuresScrollTop = 0;
         debugExpanded = false;
       }
       lens.toggleDebug();
@@ -286,10 +274,17 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
   }
 
   function updateChrome(view: RendererView, presentation: string, guide: boolean, debug: boolean): void {
-    const constellationState = app.querySelector('#topbar-constellation-state') as HTMLElement | null;
-    if (constellationState) {
-      constellationState.hidden = !debug;
-      constellationState.innerHTML = constellationStateValuesHtml(view);
+    const observations = app.querySelector('#topbar-debug-observations') as HTMLElement | null;
+    if (observations) {
+      const focused = document.activeElement as HTMLElement | null;
+      const metricKey = focused && observations.contains(focused) ? focused.dataset.debugMetric : undefined;
+      observations.hidden = !debug;
+      observations.innerHTML = debugTopbarValuesHtml(view);
+      if (debug && metricKey) {
+        [...observations.querySelectorAll<HTMLElement>('[data-debug-metric]')]
+          .find((metric) => metric.dataset.debugMetric === metricKey)
+          ?.focus({ preventScroll: true });
+      }
     }
     const back = app.querySelector('#back') as HTMLButtonElement | null;
     if (back) back.disabled = !view.navigation.canGoBack;
@@ -369,7 +364,7 @@ export function createNodusRenderer({ app: appOption = null, lens: lensOption = 
       updateDynamicMarkup(view, centerNode, turn, rootContext, structuralError, debug);
     } else {
       disposeBoards();
-      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a>${constellationStateTopbarHtml(view, debug)}<div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button" aria-pressed="${guide}">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${debug}">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage, view.activities?.rootDiscovery ?? 'idle')}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug, debugExpanded)}</aside></div></main>`;
+      app.innerHTML = `<main class="app-shell"><header class="topbar"><a class="brand" href="${import.meta.env.BASE_URL}" aria-label="Chessview start position"><span class="brand-mark">♞</span><span>Chessview</span></a>${debugTopbarHtml(view, debug)}<div class="topbar-meta"><span class="network-status">Lichess · rated standard</span><span id="view-status" class="view-status is-${presentation}" role="status" aria-live="polite" aria-label="${escapeHtml(status.title)}"><span class="view-status-mark">${status.mark}</span><span class="view-status-label">${status.label}</span></span><button class="toolbar-button" id="back" type="button" ${view.navigation.canGoBack ? '' : 'disabled'}>← Back</button><button class="toolbar-button guide-toggle ${guide ? 'is-active' : ''}" id="guide-toggle" type="button" aria-pressed="${guide}">Guide</button><button class="toolbar-button ${debug ? 'is-active' : ''}" id="debug-toggle" type="button" aria-pressed="${debug}">Debug</button><button class="icon-button" id="flip" type="button" aria-label="Flip all boards">⇅</button></div></header><div class="workspace"><section class="map" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="map-controls">${rootContextButton(rootContext, structure.rootCoverage, view.activities?.rootDiscovery ?? 'idle')}</div><div class="center-position position" data-key="${escapeHtml(view.center)}"><div class="center-board board-frame" id="center-board"></div><div class="center-hint">Drag a legal move, or choose a Line.</div></div><div id="satellites"></div><div id="map-message">${structuralError ? `<div class="toast">${escapeHtml(structuralError)}</div>` : ''}</div></section><aside class="analysis-rail">${railHtml(view, centerNode, turn, debug, debugExpanded)}</aside></div></main>`;
       renderLichessEvalStatus(lichessEvalStatus);
       createCenterBoard(view, actions, turn);
       bindStaticControls(actions);

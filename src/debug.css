@@ -75,6 +75,8 @@
   content: 'Clear all persisted and in-memory Explorer readings, then reload. Structural graph data is kept.';
 }
 .rail-debug { overflow: hidden; }
+.rail-debug:has(.debug-investigation.is-expanded) { flex: 0 1 38%; max-height: 38%; min-height: min(120px, 38%); }
+.rail-debug .debug-investigation.is-expanded { flex: 1 1 auto; }
 .debug-measures { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 6px 8px; color: #d5d0c7; }
 .debug-measure-group + .debug-measure-group { margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,.08); }
 .debug-measure-group h3 { margin: 0; color: var(--accent); font: 700 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }

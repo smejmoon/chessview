@@ -71,32 +71,47 @@ export function debugMeasureGroups(view: DebugMeasureView): readonly Group[] {
   ];
 }
 
-// Development-only observations in the app shell, not Weather's live region.
-export function constellationStateValuesHtml(view: DebugMeasureView): string {
-  const group = debugMeasureGroups(view)[0];
-  return group.measures.map((measure) => (
-      '<span class="topbar-constellation-measure"><span>' + escapeHtml(measure.name === 'Reading frontier' ? 'Frontier' : measure.name)
+// UI-only icon vocabulary. Current View alone publishes the observations.
+const descriptions: Record<string, Readonly<{ icon: string; explanation: string }>> = {
+  'Structural:Working': { icon: '↻', explanation: 'Structural obligations working in the active run.' },
+  'Structural:Satisfied': { icon: '✓', explanation: 'Successful structural work; may persist after incorporation.' },
+  'Structural:Incorporation pending': { icon: '⇥', explanation: 'Successful results awaiting settlement recomposition.' },
+  'Structural:Unavailable': { icon: '∅', explanation: 'Source acquisition could not complete; chess evidence is not thereby absent.' },
+  'Structural:Failed': { icon: '!', explanation: 'Failed obligations do not themselves establish ongoing progress.' },
+  'Structural:Unplanned': { icon: '?', explanation: 'Unplanned obligations do not themselves establish ongoing progress.' },
+  'Structural:Detached': { icon: '↗', explanation: 'Participants detached from the accepted Reading frontier.' },
+  'Supplementary:Active': { icon: '⚡', explanation: 'Active supplementary work does not block structural readiness.' },
+  'Supplementary:Total': { icon: 'Σ', explanation: 'Total supplementary participants; lookahead is excluded.' },
+};
+
+function metricGroupHtml(group: Group): string {
+  return '<span class="topbar-debug-group" role="group" aria-label="'
+    + escapeHtml(group.label + ' work') + '">' + group.measures.map((measure) => {
+      const description = descriptions[group.label + ':' + measure.name];
+      if (!description) return '';
+      const details = group.label + ' — ' + measure.name + ': ' + measure.value + '. ' + description.explanation;
+      return '<span class="topbar-debug-metric" tabindex="0" title="' + escapeHtml(details)
+        + '" aria-label="' + escapeHtml(details) + '" data-debug-metric="'
+        + escapeHtml(group.label + ':' + measure.name) + '">'
+        + '<span aria-hidden="true" class="topbar-debug-icon">' + escapeHtml(description.icon) + '</span>'
+        + '<strong aria-hidden="true">' + escapeHtml(measure.value) + '</strong></span>';
+    }).join('') + '</span>';
+}
+
+export function debugTopbarValuesHtml(view: DebugMeasureView): string {
+  const groups = debugMeasureGroups(view);
+  return '<span class="topbar-debug-map" role="group" aria-label="Map state and settling">'
+    + groups[0].measures.map((measure) => (
+      '<span class="topbar-constellation-measure"><span>'
+      + escapeHtml(measure.name === 'Reading frontier' ? 'Frontier' : measure.name)
       + '</span><strong>' + escapeHtml(measure.value) + '</strong></span>'
-    )).join('');
+    )).join('') + '</span>'
+    + groups.slice(1).map(metricGroupHtml).join('');
 }
 
-export function constellationStateTopbarHtml(view: DebugMeasureView, enabled: boolean): string {
-  return '<div class="topbar-constellation-state" id="topbar-constellation-state"'
-    + ' role="group" aria-label="Map state, settling and Explorer Reading frontier" tabindex="0"'
+export function debugTopbarHtml(view: DebugMeasureView, enabled: boolean): string {
+  return '<div class="topbar-debug-observations" id="topbar-debug-observations"'
+    + ' role="group" aria-label="Current View Debug measurements" tabindex="0"'
     + (enabled ? '' : ' hidden') + '>'
-    + constellationStateValuesHtml(view) + '</div>';
-}
-
-export function debugMeasuresHtml(view: DebugMeasureView): string {
-  return '<div class="debug-measures" id="debug-measures" role="region" tabindex="0" aria-label="Current View measurements">'
-    + debugMeasureGroups(view).slice(1).map((group, index) => {
-      const headingId = 'debug-measure-group-' + index;
-      return '<section class="debug-measure-group" aria-labelledby="' + headingId + '">'
-        + '<h3 id="' + headingId + '">' + escapeHtml(group.label) + '</h3>'
-        + '<p class="debug-measure-explanation">' + escapeHtml(group.explanation) + '</p>'
-        + '<dl class="debug-measure-list">' + group.measures.map((measure) => (
-          '<div class="debug-measure"><dt>' + escapeHtml(measure.name)
-          + '</dt><dd>' + escapeHtml(measure.value) + '</dd></div>'
-        )).join('') + '</dl></section>';
-    }).join('') + '</div>';
+    + debugTopbarValuesHtml(view) + '</div>';
 }

@@ -16,9 +16,10 @@ Follow `chatgpt/branch-preview.md` for publication mechanics and lifecycle. This
 
 ## Canonical topology scenarios
 
+Use opening-study positions with plausible rated Explorer coverage for interactive topology and Weather preview checks. Do not use unrelated sparse endgames as proxy opening fixtures; deterministic tests own deliberately synthetic, empty-data, and source-unavailable cases. Sparse or forcing openings can test limited breadth while remaining representative of Chessview's core experience.
+
 | Scenario | Stress | FEN | Default view |
 | --- | --- | --- | --- |
-| Sparse endgame smoke | fast cold-acquisition sanity check with little or no branching | `8/8/8/8/8/4k3/4P3/4K3 w - - 0 1` | `lines` |
 | Panov Attack | dense transpositions / move-order context | `rnbqkbnr/pp2pppp/8/3p4/2PP4/8/PP3PPP/RNBQKBNR b KQkq - 0 4` | `roots` |
 | QGD / English transposition | alternate move orders converging into one structure | `rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4` | `roots` |
 | Réti → Catalan structure | flank-opening transposition into a queen-pawn family | `rnbq1rk1/ppp1bppp/4pn2/3p4/2PP4/5NP1/PP2PPBP/RNBQ1RK1 b - - 0 6` | `roots` |

@@ -223,8 +223,8 @@ test('canonical Nodus presentation does not claim a route-dependent opening iden
   renderer.render(view, actions, 'ready');
   renderer.render(view, actions, 'ready');
 
-  assert.match(app.rail.innerHTML, /current position/);
-  assert.match(app.rail.innerHTML, /Explore from here/);
+  assert.match(app.rail.innerHTML, /aria-label="Current position"/);
+  assert.match(app.rail.innerHTML, /Opening Explorer/);
   assert.doesNotMatch(app.rail.innerHTML, /Panov|B14/);
 }));
 

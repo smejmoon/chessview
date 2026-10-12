@@ -1,18 +1,18 @@
 # Do:
 
-Browser-verify the independently scrollable Debug measurements and event log on the `10-11-weather` branch preview, especially narrow screens, keyboard navigation, auto-follow during live log activity, and screen-reader inspection. Confirm that `ConstellationState`, `FrontierWork`, and `EnrichmentFlow` show the published Current View aggregate measures, remain understandable without hovering, and do not enter Weather's live announcement region.
+Browser-verify the independently scrollable Debug measurements and event log on the `10-11-weather` preview. In particular, inspect 667×375 and 568×320 landscape as well as narrow portrait viewports with Debug on/off: the Nodus must remain playable, Rail content must remain inspectable, and the three Debug groups must remain separate from Weather's live announcements. Verify keyboard focus remains on matching Debug regions, maintenance controls, and Opening Explorer Lines through live same-Nodus refinement redraws, and inspect screen-reader behavior.
 
 Inspect Debug toggle-on/off while Weather is Updating and Ready/check, confirm the accepted Nodus board and Constellation remain interactive, and exercise fast structural settlement, terminal-unavailable Limited data, stale/late supplementary outcomes, and degraded presentation where feasible. Correct any observed UI or integration defects without introducing structural settlement logic into Debug or Weather. Close the outcome once its browser contract and exact-tip verification are established.
 
 # Blocked:
 
-Browser and assistive-technology verification on the deployed branch has not been established in this connected-GitHub session. This prevents claiming the narrow-viewport, keyboard/screen-reader, and transition-inspection completion checks, and therefore prevents Backlog Close. The current source-level regression tests, TypeScript checks, build, and branch publication have passed; deployed browser behavior and assistive-technology usability remain unverified.
+Browser and assistive-technology verification of short-landscape, portrait, focus persistence, and Weather transition behavior remains outstanding; without that evidence the outcome cannot close. The CSS now allocates map/Rail side by side in short landscape and caps the portrait Debug Rail to preserve map height; source-level focus regression tests, TypeScript checks, build, and branch publication passed for the repair checkpoint. These automated checks do not establish actual browser layout or screen-reader usability.
 
 # Because:
 
 [Current View](../docs/architecture/current-view.md) owns accepted projection validity, admitted structural settlement, incorporation order, and run-local participation. [Weather](../docs/components/weather.md) owns the compact readiness meaning. [Lens](../docs/components/lens.md#debug-observability) owns Debug presentation, with its renderer responsible for DOM, status acknowledgement timing, and presentation failure handling.
 
-Debug must expose existing aggregate observations independently of the Weather status and its live announcements; viewport width must not conceal the readout. The current Debug layout keeps those measurements in a separate, keyboard-scrollable Rail region with visible group explanations and labelled values. Event history follows the newest log entry only within its own scrollable region. Measurement inspection position survives Current View redraws.
+Debug must expose existing aggregate observations independently of the Weather status and its live announcements. Its measurements and event history occupy independently scrollable Rail regions; event tail-follow cannot hide the measurements. Responsive Rail allocation must not clip the playable Nodus, and same-Nodus Rail reconstruction must restore keyboard focus to matching live controls or regions without forcing focus onto a removed target.
 
 # Edges:
 
@@ -22,11 +22,11 @@ Keep Debug read-only and aggregate. Do not expose task keys, canonical-position 
 
 # Unsettled:
 
-Use browser evidence to judge whether the mobile Rail Debug takeover is sufficiently legible and whether the existing Updating/Ready/check delays avoid distracting flashes without creating a false Settled interval. Do not alter the delays on guesswork.
+Use browser evidence to judge whether short-landscape side-by-side Rail and portrait Debug space remain legible, whether focus and scroll inspection survive rapid live redraws (including Explorer navigation), and whether existing Updating/Ready/check delays avoid distracting flashes without creating a false Settled interval. Do not alter delays on guesswork.
 
 # Complete:
 
-The three Debug groups display the exact published Current View measures, including incorporation-pending distinct from satisfied and supplementary active/total. Primary Weather shows no Debug counters and stays independent of Debug visibility. Measurements are navigable/readable on narrow screens with keyboard and assistive technology, without log auto-follow scrolling them out of view; independently inspected measurement and history scroll positions survive Current View redraws.
+The three Debug groups display the exact published Current View measures, including incorporation-pending distinct from satisfied and supplementary active/total. Primary Weather shows no Debug counters and stays independent of Debug visibility. Measurements remain readable on portrait and short-landscape viewports without covering or disabling the Nodus; independently inspected measurement/log scroll positions and focus on corresponding Debug or Rail controls survive Current View redraws, including assistive-technology inspection.
 
 Same-projection structural refinement preserves interactive accepted boards while Updating; successful incorporation produces Ready/check; terminal structural unavailability permits a nonblocking Limited data indicator when a trustworthy map survives; failure to establish or present trustworthy structure degrades to unavailable. Supplementary and obsolete-run activity do not falsely reopen or settle Weather. Nodus/mode changes do not display obsolete spatial structure as current. Rapid transitions do not produce false Settled intervals. Exact-tip CI passes on the final implementation commit.
 

@@ -7,6 +7,7 @@ Chessview keeps durable product direction separate from unfinished work.
 - [Product contract](product.md) — what must remain true across the product, including usability, Weather, and cross-component commitments.
 - [Data stability](components/data-stability.md) — which chess knowledge and source observations remain useful, and how stability guides refresh.
 - [Position cache](architecture/position-cache.md) — immediate cached data, background refresh, and lean cache diagnostics.
+- [Find the Holes](components/holes.md) — a separate Lichess-position square-awareness game.
 - [Components](components/) — exact behavior, tunables, edge cases, and verification owned by each product component.
 - [Architecture](architecture/) — independently maintained technical boundaries and engineering guidance, including [ownership of quantitative values and constants](architecture/quantitative-values.md).
 - [`backlog/`](../backlog/) — outcomes and changes that are still intended but not yet complete.

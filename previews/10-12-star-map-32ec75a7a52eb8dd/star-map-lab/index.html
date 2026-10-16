@@ -33,6 +33,9 @@
   <div id="telescope" class="telescope" hidden><span class="eyebrow">TELESCOPE / READ ONLY</span><div id="preview-board"></div><div class="preview-label" id="preview-label"></div></div>
   <div id="error" hidden></div>
 </div>
-<script type="module" src="./app.js"></script>
+<script type="module">
+  if (new URLSearchParams(location.search).get('live') === '1') import('./live.js');
+  else import('./app.js');
+</script>
 </body>
 </html>

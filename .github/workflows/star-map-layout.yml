@@ -1,0 +1,45 @@
+name: Star map layout experiment
+
+on:
+  push:
+    branches:
+      - 10-12-star-map
+    paths:
+      - .github/workflows/star-map-layout.yml
+      - experiments/star-map/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Compare ELK.js and Dagre
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Install experiment-only layout engines
+        run: npm install --no-save --package-lock=false --no-audit --no-fund --prefix experiments/star-map elkjs@0.12.0 @dagrejs/dagre@3.1.1
+      - name: Verify pinned layout engines
+        run: |
+          node -p "require('./experiments/star-map/node_modules/elkjs/package.json').version"
+          node -p "require('./experiments/star-map/node_modules/@dagrejs/dagre/package.json').version"
+      - name: Compare graph layouts and build inspection gallery
+        run: |
+          node --check experiments/star-map/compare-layouts.mjs
+          node --check experiments/star-map/render-layouts.mjs
+          node experiments/star-map/compare-layouts.mjs
+          node experiments/star-map/render-layouts.mjs
+      - name: Upload comparison results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-map-layout-comparison
+          path: |
+            experiments/star-map/comparison-results.json
+            experiments/star-map/gallery.html
+          if-no-files-found: warn

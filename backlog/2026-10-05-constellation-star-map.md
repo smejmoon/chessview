@@ -1,51 +1,46 @@
 # Do:
 
-Explore how ChessView could make Constellation feel more like a star map: show more chess structure than fits as full boards, make important places to look visually obvious, keep the Nodus surroundings understandable, reuse mature graph/visualization machinery where it helps, and make movement through the graph feel spatial rather than like loading separate diagrams.
-
-Brainstorm several plausible directions for each question below, compare their UX and architectural tradeoffs, use concrete chess examples such as deep Lines, broad branches, transpositions, Roots, siblings, and move-order tricks, and inspect relevant prior art or third-party libraries where useful. The outcome of this entry is ideas for later work, not implementation here.
+Explore how ChessView can present a larger coherent Constellation as a mixed board/star map without losing canonical identity, meaningful chess structure, or usable navigation. Compare layout/viewport technology on representative chess graphs before choosing implementation machinery. This is exploratory work, not a renderer rewrite.
 
 # Because:
 
-The current Constellation can only show as much structure as can be rendered as boards. A star-map style could separate "this position belongs in the visible chess around the Nodus" from "this position deserves a full board right now": important positions may stay as boards while farther or lower-priority positions appear as stars or dots connected by subtler edges.
+Full boards consume the space that could show the continuation and breadth of chess. Distinguishing whether a canonical position belongs to the visible graph from whether it deserves a board allows a deeper Line, more siblings, and converging move orders to appear at once.
 
-That may let users perceive the shape of chess before opening every position: whether a Line keeps going, a position is broad or forcing, several routes converge into a transposition, or move-order context branches away and later rejoins. The metaphor should guide information design rather than add decorative space styling.
+# Settled direction:
 
-# Unsettled:
+- **One star = one canonical chess position.** Stars are not collapsed branches or summary aggregates; the same canonical position occurs once even when multiple move orders reach it. Connections correspond to actual Graph Edges.
+- Keep the playable **Nodus** prominent. Nearby positions normally earn boards, but automatically promote important distant positions to landmark boards when their chess meaning warrants it. The intervening Line can remain stars.
+- Landmark choices should respect meaningful alternatives and distinct evidence signals; proximity, play frequency, quality, uncertainty, and structural convergence are not interchangeable. Unknown evidence is not negative evidence.
+- Every visible star can be inspected as a **read-only floating telescope** near the hovered star. It may temporarily obscure neighbors; do not move the graph or introduce a broad collision-avoidance system. Prefer simple viewport-edge flipping. The telescope does not play moves or change the Nodus.
+- **Click a star to Recenter immediately**; moves are played from the new Nodus. A satellite landmark board remains a Recenter target. The telescope is transient rather than another navigable graph state.
+- Favor continuity of surviving nearby positions between Nodus projections over a permanent universal coordinate system. The specific camera motion is not settled.
 
-1. **How should we show a much bigger chess graph without turning everything into boards?**
+# Technology evidence:
 
-   Explore a visual grammar for full boards, smaller boards, stars/dots, faint distant positions, labels, and strong or subtle edges. Ask how much farther in breadth and depth the visible Constellation can extend while its shape still reads quickly. A forcing Line might continue as stars past the last board; a broad position might fan into many lightweight points instead of ending abruptly at board capacity.
+- [Lens](../docs/components/lens.md) currently derives board-based capacities and places surrounding boards through [presentation-geometry.ts](../src/presentation-geometry.ts). [NodusRenderer](../src/nodus-renderer.ts) uses Chessground for the Nodus and satellite boards and recreates satellites on redraw. [Constellation](../docs/components/constellation.md) remains owner of selected canonical positions and relationships. Replacing the board-capacity-only constraint is a meaningful domain/presentation integration problem, not just adding dot elements.
+- The reproducible, **non-production** [Graphviz layout probe](../experiments/star-map/README.md) covers a long forcing Line, broad branches, convergence, upstream Roots and siblings, and a before/after recenter. Layered layout succeeded in arranging mixed-size nodes; on recenter, anchoring one shared node still left other nodes displaced by ~15–99 layout points. Automatic re-layout by itself does not ensure geographic continuity.
+- ELK.js and current Dagre are promising **layout** candidates; Dagre now documents dynamic layout support, so it deserves a genuine runtime comparison rather than dismissal as static-only. D3 Zoom can manage the camera independently. Browser Graphviz via WebAssembly is another possible layout engine. Sigma/Cytoscape may bring rendering machinery that existing SVG + DOM does not yet need.
+- A generic browser smoke test showed a near-star, pointer-transparent read-only overlay and independent click without graph reflow, but **not** a real Chessground integration. The GitHub Actions experiment successfully installed pinned ELK.js 0.12.0 and Dagre 3.1.1 and ran the same six fixtures. Both preserved all nodes/edges, with zero overlaps or backward directed edges. ELK.js was horizontally more compact in several fixtures; Dagre completed sooner in this single small un-warmed run, which does not support production performance claims. Both moved shared nodes on recenter (up to 100 px with destination anchored). Results, constraints, and the rendered gallery are recorded in the probe report. Realistic graph scale, continuity-preserving options and Chessground integration remain unverified; no library is selected.
+- See [probe findings and reproductions](../experiments/star-map/README.md). The experiment does not define a library choice or a new contract.
 
-2. **How should the map show where interesting chess continues?**
+# Still to explore:
 
-   Explore visual cues for "look here next" without collapsing different meanings into one signal. A position may be interesting because it is Notable, heavily played, tactically sharp, uncertain, transpositional, or because a rich subtree continues behind it. Consider what the chess equivalent of a bright star is, and keep popularity, evaluation, structural importance, and uncertainty distinguishable where that matters.
-
-3. **How should the immediate surroundings of the Nodus be represented?**
-
-   Explore the local visual grammar for Lines, deeper continuations, Root context, siblings, families/asterisms, and transpositions. Consider whether families need any explicit decoration or whether placement plus connecting paths are enough; how Roots and siblings explain move-order tricks; how convergence should look; and how the Nodus keeps visual priority without forcing a rigid left/right or lattice layout.
-
-4. **Can third-party graph or star-map libraries solve the generic spatial problems while ChessView supplies the chess semantics?**
-
-   Investigate libraries or engines for force-directed or hierarchical graphs, semantic zoom, collision avoidance, pan/zoom, spatial indexing, stable transitions, and custom rich nodes. Explore whether Chessground boards can be overlaid or embedded as custom nodes while the library handles geometry and motion. Prefer experiments that reveal what constraints ChessView actually needs—such as Nodus stability, past/future bias, family attraction, readable boards, and transposition convergence—before committing to a library or maintaining more custom layout code.
-
-5. **How should users travel through the Constellation?**
-
-   Explore recentering, hover inspection, semantic zoom, and spatial continuity. A star might open a full-board "telescope" preview without reflow; clicking it could promote that position into the Nodus; zooming out could reveal more stars while zooming in promotes stars into boards. Ask whether surviving positions can keep approximate spatial continuity so following a Line feels like moving through one chess sky rather than replacing one diagram with another.
+1. **Bigger graph grammar:** how Constellation admits more actual stars with legible connectors, and how many distant nodes are useful rather than mere density. Compare individual stars, faded peripheral stars, and view limits; no aggregate-star shortcut.
+2. **Interesting continuation:** compare automatic landmark allocation by proximity baseline, Line-relative significance, tactical/evidence cues, and transposition centrality. Preserve distinct signal meanings and coherent sibling breadth.
+3. **Nodus neighborhood:** test Root/sibling placement, separate early Line families, converging paths, and move-order tricks, including whether any family shading adds value beyond connectors/placement.
+4. **Technology:** use the verified ELK.js/Dagre baseline to examine continuity-preserving constraints/dynamic layout, family attraction, routed edge legibility, and larger, more realistic chess graphs. Assess browser bundle size and runtime under meaningful graph counts. Then test real Chessground boards alongside SVG stars/edges and a zoom/camera layer. Consider Sigma/Cytoscape or Graphviz WASM only if a measured need emerges.
+5. **Movement:** compare quick recenter with modest spatial continuity against camera travel; inspect what retained positions can actually keep stable after changing the Nodus. Preview placement beyond simple nearby/edge-flip behavior need not be optimized in advance.
 
 # Edges:
 
-This entry is exploratory. Do not choose production APIs, rewrite Constellation ownership, or implement a new renderer merely to make the exploration concrete. Constellation continues to own which canonical positions and relationships belong in the current surroundings; Interface owns how those selected positions are represented and placed.
+Do not implement a production renderer, commit to an external API, redefine canonical position identity, or move graph membership into Lens. Constellation owns which positions/Graph Edges constitute the accepted surroundings; Lens owns geometry, presentation constraints, node representation, and preview interaction. Preserve the existing ChartedGraph, Evidence, Current View, and Weather boundaries.
 
-`backlog/2026-10-01-constellation-zoom.md` is a narrower existing outcome about trading board scale for coverage. This exploration may later suggest rewriting, splitting, or replacing parts of that outcome—for example if semantic zoom becomes board-to-star promotion rather than only board resizing—but it does not implement or close zoom now.
-
-Performance and loading of very large graphs are relevant when they change feasibility, but they are not the primary question yet. First determine what experience is worth building; later work can size the technical problem against the intended number of boards, stars, edges, labels, and transitions.
+[The existing zoom outcome](2026-10-01-constellation-zoom.md) remains open. Star/board semantic zoom may later reshape it, but this exploration does not replace its contract or close it. First determine a useful visual experience; quantify large-graph loading/rendering only where it changes feasibility.
 
 # Complete:
 
-For each of the five questions, record multiple credible approaches with the important UX and architectural tradeoffs, concrete chess examples, and useful prior art or library findings where applicable. End with a short synthesis of the strongest product ideas and a set of clearly bounded candidate follow-up outcomes that can be tracked independently. Also state how those ideas affect the existing Constellation zoom outcome, if at all.
-
-No implementation decision is required for this entry to complete; it succeeds when the exploration is rich enough to generate well-shaped later work rather than one prematurely chosen design.
+For each of the five areas, record credible competing approaches, chess examples and meaningful tradeoffs. Compare useful third-party prior art and produce a short synthesis with independently bounded candidate follow-up outcomes. Say explicitly whether the narrower Constellation zoom outcome should remain, split, or change. A production implementation decision is not required.
 
 # Sync:
 
-After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around the factual work and verification still open; do not accumulate progress history. If an outcome's completion condition is satisfied, run Backlog Close for that outcome. If Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.
+After any implementation or verification step that changes what remains, and before ending an implementation pass, synchronize this entry using Backlog Tend. Also synchronize when an action completes or becomes unavailable, a blocking condition changes, or a judgment is settled. Rewrite around factual work and verification still open; do not accumulate progress history. If the completion condition is satisfied, run Backlog Close; if Close cannot pass its normal gates, leave the entry open with the blocking condition explicit.

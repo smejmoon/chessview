@@ -39,6 +39,7 @@ function visibleEdges(view): readonly EvidenceEdge[] {
 export function createNodusPresenter({
   renderer = null,
   statusPresenter = null,
+  onPresented = null,
   prepareEvidence = prepareConstellationEvidence,
   log = (..._args) => {},
 } = {}) {
@@ -86,6 +87,7 @@ export function createNodusPresenter({
 
     try {
       await renderer.render(view, actions, status.presentation);
+      onPresented?.(view, actions);
       preparePresentationEvidence(view, actions, revision);
       return true;
     } catch (error) {

@@ -27,6 +27,7 @@ import { composeNodusRail } from './rail-source.ts';
 import { rootTranspositionEnricher } from './root-enrichment.ts';
 import { createRouteLedger } from './route-ledger.ts';
 import { preferenceStore } from './preference-store.ts';
+import { createStarMapPreview } from './star-map-preview.ts';
 
 const RESIZE_UPDATE_DEBOUNCE_MS = 120;
 const routeLedger = createRouteLedger({ preferences: preferenceStore });
@@ -58,8 +59,10 @@ const lichessEvalStatusPresenter = createLichessEvalStatusPresenter({
   log: (message, detail) => { debugLog(message, detail, 'error'); },
 });
 const stopLichessEvalStatus = lichessEval.subscribe(lichessEvalStatusPresenter.update);
+const starMapPreview = createStarMapPreview();
 const presenter = createNodusPresenter({
   renderer,
+  onPresented: (view, actions) => starMapPreview?.publish(view, actions),
   log: (message, detail) => { debugLog(message, detail, 'error'); },
 });
 
@@ -247,6 +250,7 @@ window.addEventListener('beforeunload', () => {
   stopLichessEvalStatus();
   controller.dispose();
   presenter.dispose();
+  starMapPreview?.dispose();
 }, { once: true });
 
 await authorizeAndStart();

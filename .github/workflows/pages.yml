@@ -47,10 +47,11 @@ jobs:
         run: |
           npm install --prefix experiments/star-map/visual --no-save --package-lock=false --no-audit --no-fund three@0.180.0 esbuild@0.25.12
           node --check experiments/star-map/visual/app.js
+          node --check experiments/star-map/visual/live.js
           mkdir -p dist/star-map-lab
           cp experiments/star-map/visual/index.html dist/star-map-lab/index.html
           cp experiments/star-map/visual/style.css dist/star-map-lab/style.css
-          experiments/star-map/visual/node_modules/.bin/esbuild experiments/star-map/visual/app.js --bundle --format=esm --target=es2022 --minify --outfile=dist/star-map-lab/app.js
+          experiments/star-map/visual/node_modules/.bin/esbuild experiments/star-map/visual/app.js experiments/star-map/visual/live.js --bundle --format=esm --target=es2022 --minify --outdir=dist/star-map-lab
           test -s dist/star-map-lab/app.js
 
       - name: Publish dist to gh-pages

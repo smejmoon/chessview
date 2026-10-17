@@ -89,3 +89,25 @@ After anchoring shared position `E` in the recenter fixture, remaining shared no
 The layout [gallery](https://github.com/smejmoon/chessview/actions/runs/38313341891) visually confirms two branches converging on one target and Roots/siblings upstream of the Nodus. Gallery edges were rendered as straight lines for inspection and **do not** measure either engine's routed edges. The fixture nodes are synthetic position placeholders, not validated legal FEN positions. The unmodified static-layout test does not exercise Dagre's dynamic options or ELK's incremental constraints.
 
 **Conclusion:** both engines satisfy basic mixed-size layout and canonical merge topology. Neither yields stable geography across a fresh recenter on its own. The next discriminating work is to test continuity-preserving options and graphs of more realistic size/shape, then real Chessground/DOM rendering with a separate camera. No production engine selected.
+
+### Interactive 2.5D / 3D star-field lab (experimental)
+
+[Spatial visual lab](visual/index.html) is a standalone browser comparison, built only into the `10-12-star-map` **branch Pages preview** at `star-map-lab/`. Both modes render **the same canonical chess graph**; the main difference is the camera:
+
+- **2.5D:** fixed viewing direction, gentle parallax, pan/zoom and perspective depth. It stays easy to orient but cannot be rotated around.
+- **3D:** true X/Y/Z coordinates with Three.js WebGL, OrbitControls rotation, pan and zoom. Camera-facing, read-only board planes preserve some legibility while rotating.
+
+The graph is generated from legal opening move sequences with `chess.js` and merged by the four-field canonical FEN key. A queen-pawn / Réti transposition reaches one canonical position through two different legal move orders. Every navigable star is a position; edges correspond to legal moves. The selected Nodus has a larger chessboard; immediate and transpositional landmarks get smaller boards. Hovering a star opens a **read-only** board telescope; clicking recenters. It is not wired to Lichess, Constellation selection, Evidence, or Chessground, and the coordinates are illustrative, hand-derived family/depth placements—not a validated 3D layout algorithm or gameplay surface.
+
+Source: [visual/app.js](visual/app.js), [visual/style.css](visual/style.css), [visual/index.html](visual/index.html).
+
+The [Pages workflow](../../.github/workflows/pages.yml) temporarily installs pinned `three@0.180.0` and `esbuild@0.25.12` within the experiment folder **only on branch `10-12-star-map`**, bundles the JS into `dist/star-map-lab/`, and publishes it under that branch's isolated preview. Production dependencies and app source remain untouched. A successful bundle/deploy does not by itself prove WebGL/browser behavior; inspect the deployed page in a WebGL-capable browser. This demo provides the missing visual decision evidence, not a production renderer selection.
+
+
+### Chromium visual verification
+
+The branch-only [Star map visual browser check](../../.github/workflows/star-map-browser.yml) builds the visual experiment in isolation and opens it in headless Chromium with WebGL software rendering. Its checks require a nonempty legal position graph, at least one true canonical convergence, a working WebGL2 canvas, successful switches between 2.5D and 3D modes, and no browser exceptions; it captures a screenshot of each mode. These are runtime smoke tests, **not** user-experience validation, gameplay/Chessground integration, or assurance that browser GPU drivers will perform the same.
+
+### Observed browser result
+
+[GitHub Actions run 38314948683](https://github.com/smejmoon/chessview/actions/runs/38314948683) completed successfully with a headless Chromium/WebGL2 smoke test. The browser reported **65 positions, 65 edges, one canonical convergence**, canvas/WebGL2 present, successful 2.5D-to-3D-to-2.5D toggling, and no JavaScript console or page errors. It exported `2-point-5d.png` and `3d.png` in its `star-map-browser-smoke` artifact. The artifact screenshots were inspected: boards and glowing connected positions render, but the two default camera views are visually rather similar. An actual orbit interaction is needed to judge whether the extra 3D dimension contributes to understanding. Board images are simplistic painted textures and some projections get dense; these limitations are not production acceptance criteria. The test did not exercise hit-testing by clicking a node, camera transitions, a real Chessground board, or a live Constellation.

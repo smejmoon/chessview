@@ -1,0 +1,46 @@
+name: Star map visual browser check
+
+on:
+  push:
+    branches:
+      - 10-12-star-map
+    paths:
+      - .github/workflows/star-map-browser.yml
+      - experiments/star-map/visual/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: Verify 2.5D and 3D in Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Install isolated experiment dependencies
+        run: |
+          npm ci
+          npm install --prefix experiments/star-map/visual --no-save --package-lock=false --no-audit --no-fund three@0.180.0 esbuild@0.25.12 playwright@1.56.0
+          experiments/star-map/visual/node_modules/.bin/playwright install chromium --with-deps
+      - name: Bundle lab for local browser
+        run: |
+          mkdir -p dist/star-map-lab
+          cp experiments/star-map/visual/index.html dist/star-map-lab/index.html
+          cp experiments/star-map/visual/style.css dist/star-map-lab/style.css
+          experiments/star-map/visual/node_modules/.bin/esbuild experiments/star-map/visual/app.js --bundle --format=esm --target=es2022 --minify --outfile=dist/star-map-lab/app.js
+      - name: Browser smoke test
+        run: |
+          python3 -m http.server 8765 --directory dist/star-map-lab > /tmp/star-map-lab-server.log 2>&1 &
+          node experiments/star-map/visual/browser-check.cjs
+      - name: Upload browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-map-browser-smoke
+          path: experiments/star-map/visual/screenshots/
+          if-no-files-found: warn

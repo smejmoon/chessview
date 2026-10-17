@@ -41,6 +41,18 @@ jobs:
           PAGES_BASE: ${{ steps.pages.outputs.base }}
         run: npm run build -- --base "$PAGES_BASE"
 
+      # Non-production visual experiment: only on its named task branch.
+      - name: Build spatial star-map lab
+        if: github.ref_name == '10-12-star-map'
+        run: |
+          npm install --prefix experiments/star-map/visual --no-save --package-lock=false --no-audit --no-fund three@0.180.0 esbuild@0.25.12
+          node --check experiments/star-map/visual/app.js
+          mkdir -p dist/star-map-lab
+          cp experiments/star-map/visual/index.html dist/star-map-lab/index.html
+          cp experiments/star-map/visual/style.css dist/star-map-lab/style.css
+          experiments/star-map/visual/node_modules/.bin/esbuild experiments/star-map/visual/app.js --bundle --format=esm --target=es2022 --minify --outfile=dist/star-map-lab/app.js
+          test -s dist/star-map-lab/app.js
+
       - name: Publish dist to gh-pages
         env:
           PAGES_TARGET: ${{ steps.pages.outputs.target }}

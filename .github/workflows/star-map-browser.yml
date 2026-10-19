@@ -32,11 +32,12 @@ jobs:
           mkdir -p dist/star-map-lab
           cp experiments/star-map/visual/index.html dist/star-map-lab/index.html
           cp experiments/star-map/visual/style.css dist/star-map-lab/style.css
-          experiments/star-map/visual/node_modules/.bin/esbuild experiments/star-map/visual/app.js --bundle --format=esm --target=es2022 --minify --outfile=dist/star-map-lab/app.js
+          experiments/star-map/visual/node_modules/.bin/esbuild experiments/star-map/visual/app.js experiments/star-map/visual/live.js --bundle --format=esm --target=es2022 --minify --outdir=dist/star-map-lab
       - name: Browser smoke test
         run: |
           python3 -m http.server 8765 --directory dist/star-map-lab > /tmp/star-map-lab-server.log 2>&1 &
           node experiments/star-map/visual/browser-check.cjs
+          node experiments/star-map/visual/live-browser-check.cjs
       - name: Upload browser screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -18,6 +18,7 @@
   },
   "include": [
     "src/**/*.ts",
+    "prototypes/lichess-studies/**/*.ts",
     "vite.config.ts"
   ]
 }

@@ -7,6 +7,7 @@ export default defineConfig({
     rollupOptions: { input: {
       chessview: 'index.html',
       holes: 'holes.html',
+      studies: 'prototypes/lichess-studies/index.html',
     } },
   },
 });

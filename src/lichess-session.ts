@@ -105,7 +105,7 @@ export function createLichessSession({
     return base64Url(new Uint8Array(digest));
   }
 
-  async function signIn() {
+  async function signIn({ scope = '' }: { scope?: string } = {}) {
     const verifier = randomUrlSafe(64);
     const state = randomUrlSafe(32);
     const redirectUri = cleanRedirectUri();
@@ -123,8 +123,9 @@ export function createLichessSession({
     url.searchParams.set('code_challenge_method', 'S256');
     url.searchParams.set('code_challenge', challenge);
     url.searchParams.set('state', state);
+    if (scope) url.searchParams.set('scope', scope);
 
-    log('lichess auth redirect', { redirectUri, clientId: CLIENT_ID });
+    log('lichess auth redirect', { redirectUri, clientId: CLIENT_ID, requestedScope: scope || '(default)' });
     redirect(url.toString());
   }
 

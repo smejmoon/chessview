@@ -298,8 +298,6 @@ async function initialize() {
     username = await accountName(log, signal);
     el('identity').textContent = 'Signed in: ' + username;
     status('Signed in as ' + username + '. Ready to compare.');
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('autorun') === '1') log('ui', 'autorun requested; use Find similar players to begin');
   } catch (error) {
     log('error', 'authorization failed', { reason: error instanceof Error ? error.message : String(error) });
     status('Lichess connection failed. Reload the page to retry.', true);

@@ -4,7 +4,7 @@ A **separate experimental page** for identifying titled Lichess players whose re
 
 ## Use
 
-Run \`npm install && npm run dev\` and visit \`/prototypes/repertoire-matches/\`, or open the deployed path \`/chessview/prototypes/repertoire-matches/\`. It uses Chessview's existing Lichess OAuth2/PKCE login, including the same session token; it does not implement a second authentication system. Press **Find similar players** after signing in.
+Run `npm install && npm run dev` and visit `/prototypes/repertoire-matches/`, or open the deployed path `/chessview/prototypes/repertoire-matches/`. It uses Chessview's existing Lichess OAuth2/PKCE login, including the same session token; it does not implement a second authentication system. Press **Find similar players** after signing in.
 
 Choose a recent-history window (6, 12 or 24 months) and cohort size (8, 16 or 30). The prototype exports up to 500 of the signed-in player's and 250 of each candidate's recent rated standard blitz/rapid/classical games, then builds separate White and Black opening profiles. Game exports are bounded to 3 MB each. Only the first 24 plies are analyzed; position choices begin at ply 2. A position is counted once per game per color. Broken or unsupported games are skipped. No personal game library is persisted.
 
@@ -12,7 +12,7 @@ Candidate discovery samples three Lichess top-100 leaderboards (blitz, rapid, cl
 
 ## Meaning of the score
 
-For each player color, compare the user's canonical positions where they made opening decisions with the candidate's sampled positions of that same color. Transpositions unify naturally because the same \`canonicalPosition\` identity is used. Each user position receives \`ownVisits × depthWeight\`, where the depth weight rises from 1 to 3.5 across the opening.
+For each player color, compare the user's canonical positions where they made opening decisions with the candidate's sampled positions of that same color. Transpositions unify naturally because the same `canonicalPosition` identity is used. Each user position receives `ownVisits × depthWeight`, where the depth weight rises from 1 to 3.5 across the opening.
 
 - **Coverage** = weighted user positions also observed in the candidate's repertoire / all weighted user positions.
 - **Agreement** = at covered positions, the probability that independently sampled moves from the two players coincide, weighted by the user's visits and depth.
@@ -22,7 +22,7 @@ The top shared positions link to Chessview by canonical FEN and to a real Liches
 
 ## Data and network boundaries
 
-Every Lichess application request uses the existing \`LichessGateway\` (account/game exports through \`LichessSession.authorizedRequest\`; public leaderboards directly through the gateway). The existing request serialization, request spacing, priority, cancellation and shared HTTP 429 cooldown still apply. No application-issued requests bypass the gateway. OAuth navigation is the existing browser handoff.
+Every Lichess application request uses the existing `LichessGateway` (account/game exports through `LichessSession.authorizedRequest`; public leaderboards directly through the gateway). The existing request serialization, request spacing, priority, cancellation and shared HTTP 429 cooldown still apply. No application-issued requests bypass the gateway. OAuth navigation is the existing browser handoff.
 
 Leaderboard failures are recorded and non-fatal unless the API indicates 401/429. Per-player export failures are shown as diagnostics, not zero games or zero overlap. HTTP 429 stops the comparison rather than enqueuing more calls behind a long cooldown. Cancel stops subsequent requests and preserves the matches that already finished.
 
@@ -30,9 +30,9 @@ Activity logs show account name, requested player names, HTTP statuses, duration
 
 ## Validation
 
-- \`npm test\` includes deterministic repertoire comparison tests.
-- \`npm run typecheck\` includes all prototype TypeScript.
-- \`npm run build\` emits a dedicated Vite HTML entry.
+- `npm test` includes deterministic repertoire comparison tests.
+- `npm run typecheck` includes all prototype TypeScript.
+- `npm run build` emits a dedicated Vite HTML entry.
 - Manual browser validation: OAuth callback and reuse, mixed-color user samples, comparing candidates, board inspector, transposition links, cancellation, and 401/429/network failures.
 
 This prototype is read-only and does **not** modify the production Constellation, Rail, opening data cache, graph store, or top bar. There is no production navigation link yet.

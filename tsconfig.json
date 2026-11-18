@@ -19,6 +19,7 @@
   "include": [
     "src/**/*.ts",
     "prototypes/lichess-studies/**/*.ts",
+    "prototypes/repertoire-matches/**/*.ts",
     "vite.config.ts"
   ]
 }

@@ -1,43 +1,61 @@
 # Repertoire Lab · Chessview prototype
 
-A **separate experimental page** for identifying titled Lichess players whose real opening choices overlap the currently logged-in player's repertoire.
+A compact, isolated experiment for discovering **titled Lichess players whose actual games contain the signed-in player's opening branches**. It uses the existing Chessview Lichess OAuth2/PKCE session, `LichessSession`, `LichessGateway`, canonical position identity and chessground. No second login, server, local game database, or production Constellation/Rail change.
 
-## Use
+## Run and test
 
-Run `npm install && npm run dev` and visit `/prototypes/repertoire-matches/`, or open the deployed path `/chessview/prototypes/repertoire-matches/`. It uses Chessview's existing Lichess OAuth2/PKCE login, including the same session token; it does not implement a second authentication system. Press **Find similar players** after signing in.
+Run `npm install && npm run dev` and open `/prototypes/repertoire-matches/`, or use the Pages path `/chessview/prototypes/repertoire-matches/` after successful deployment. Sign in with Lichess and click **Find matches**. Defaults: last 12 months, 12 candidates. Optional samples: 8 or 20 players; history: 6 or 24 months.
 
-Choose a recent-history window (6, 12 or 24 months) and cohort size (8, 16 or 30). The prototype exports up to 500 of the signed-in player's and 250 of each candidate's recent rated standard blitz/rapid/classical games, then builds separate White and Black opening profiles. Game exports are bounded to 3 MB each. Only the first 24 plies are analyzed; position choices begin at ply 2. A position is counted once per game per color. Broken or unsupported games are skipped. No personal game library is persisted.
+The page uses a narrow header and toolbar, dense sidebar results, and a read-only position inspector. Compare **Different choices** or **Common positions**; select a position to see its board and links to the Chessview Nodus and a candidate's Lichess game. Diagnostics stay collapsed by default.
 
-Candidate discovery samples three Lichess top-100 leaderboards (blitz, rapid, classical), round-robins them, and keeps titled GM/WGM/IM/WIM/FM/WFM accounts rated 2200+ in the leaderboard discipline. The result is a **sample of strong Lichess players**, not a comprehensive grandmaster database. Candidates without available analyzed games are not ranked. The system reports coverage/decision agreement and sample sizes, rather than claiming a precise personality match.
+### After every test: transfer evidence
 
-## Meaning of the score
+Open **Diagnostics**, then either:
 
-For each player color, compare the user's canonical positions where they made opening decisions with the candidate's sampled positions of that same color. Transpositions unify naturally because the same `canonicalPosition` identity is used. Each user position receives `ownVisits × depthWeight`, where the depth weight rises from 1 to 3.5 across the opening.
+- **Copy report**: paste the JSON into a new ChessView chat.
+- **Download JSON**: attach the `chessview-repertoire-report-YYYY-MM-DD.json` file to the chat.
+- **Copy log**: fallback to the chronological text trace.
 
-- **Coverage** = weighted user positions also observed in the candidate's repertoire / all weighted user positions.
-- **Agreement** = at covered positions, the probability that independently sampled moves from the two players coincide, weighted by the user's visits and depth.
-- **Similarity** = 70% coverage plus 30% covered-weighted move agreement, both relative to all user position weight.
+Prefer the structured JSON report. It includes schema version `repertoire-lab-2`, test settings and timestamps, account name, bounded game-export counters and byte sizes, skipped-game reasons, color-specific sample sizes, frequent opening seeds, candidate discovery sources/branch hits, scored positions, disagreements, failed calls, and chronological log events. The report contains **no OAuth tokens, raw game export or full move histories**. It **does** contain account names, canonical positions, and opening routes; review before sharing.
 
-The top shared positions link to Chessview by canonical FEN and to a real Lichess game showing the candidate's most common observed move. The board preview is read-only. Scores depend on sample size, player activity, and cohort selection, and must **not** be interpreted as precise estimates of lifetime repertoire similarity. The data describes sampled games only, not opening preparation or optimal play.
+For quality feedback, describe which displayed opening similarities are relevant or misleading and whether player matches differ between White and Black.
 
-## Data and network boundaries
+## Discovery
 
-Every Lichess application request uses the existing `LichessGateway` (account/game exports through `LichessSession.authorizedRequest`; public leaderboards directly through the gateway). The existing request serialization, request spacing, priority, cancellation and shared HTTP 429 cooldown still apply. No application-issued requests bypass the gateway. OAuth navigation is the existing browser handoff.
+1. Export up to 500 recent rated standard blitz/rapid/classical games from the logged-in account.
+2. Parse the opening prefix (first **18 plies**) into White and Black choices, including White's first move and Black's first response. Reject malformed games transactionally, accounting for a specific skip reason. Canonical positions merge transpositions.
+3. Choose up to **four frequent opening-position seeds per color**, at plies 4–11, diversifying the first four move plies when possible.
+4. Query the rated Lichess Opening Explorer at each seed, restricted to rating groups 2200 and 2500, and take up to four top and eight recent game references per position. Find players of the matching color from those games. Resolve candidate titles/current profiles in a bounded `POST /api/users` call (Explorer titles are a fallback when lookup fails). Prefer candidates who appear across more selected opening branches.
+5. Only if that pool is insufficient, fill from titled 2200+ Lichess blitz/rapid/classical leaderboards, explicitly marking such candidates as **Leaderboard fallback**.
+6. Export up to **140 recent games** per selected candidate and compare them to the user's sampled position choices. Candidate sampling is intentionally smaller than in v1 to reduce download time, at the expense of statistical confidence.
 
-Leaderboard failures are recorded and non-fatal unless the API indicates 401/429. Per-player export failures are shown as diagnostics, not zero games or zero overlap. HTTP 429 stops the comparison rather than enqueuing more calls behind a long cooldown. Cancel stops subsequent requests and preserves the matches that already finished.
+The user export and player exports honor the local sample limit even if the API returns extra records. The difference between requested, received and used records is logged as `overflow`. No entire game list is persisted.
 
-Activity logs show account name, requested player names, HTTP statuses, durations, progress, accepted/rejected game counts, position counts, and scores. They are visible on the page and in the browser console. They never contain authentication tokens or full game text. A user may copy or clear the log.
+## Ranking and interpretation
 
-## Validation
+- **Coverage** is the percentage of the user's weighted opening decisions occurring in candidate games of the **same color**.
+- **Agreement** is the weighted probability the user and candidate play the same move from a shared position.
+- Per-color score = 70% coverage plus 30% covered-weighted agreement, relative to all the user's decision weight. Early decisions count; depth gently increases position weights. Combined score uses both colors.
+- Sidebar rank uses the **better of White or Black scores**, clearly marked `best side`; the main panel shows both separate scores, coverage, agreement, and game counts.
+- **Different choices** highlights shared positions where the players' most frequent moves differ, while **Common positions** shows their highest-weight overlaps.
 
-- `npm test` includes deterministic repertoire comparison tests.
-- `npm run typecheck` includes all prototype TypeScript.
-- `npm run build` emits a dedicated Vite HTML entry.
-- Manual browser validation: OAuth callback and reuse, mixed-color user samples, comparing candidates, board inspector, transposition links, cancellation, and 401/429/network failures.
+This is descriptive overlap from **samples**, not an evaluation of move quality, chess strength, or lifetime opening preference. Matching an early position does not imply matching an entire named opening. Sparse seeds, inactive master accounts, and missing representative games can limit discovery. Lichess Opening Explorer's game arrays are partial references, not an exhaustive candidate index. Historical over-the-board grandmasters are not covered.
 
-This prototype is read-only and does **not** modify the production Constellation, Rail, opening data cache, graph store, or top bar. There is no production navigation link yet.
+## Network and diagnostics policy
 
-API references:
-- [User game export](https://lichess.org/api#tag/Games/operation/apiGamesUser)
-- [Lichess leaderboard](https://lichess.org/api#tag/Users/operation/playerTopNbPerfType)
-- [Lichess account](https://lichess.org/api#tag/Account/operation/accountMe)
+All application-issued Lichess HTTP requests pass through the shared `LichessGateway`: game exports and user-profile lookup via `LichessSession.authorizedRequest`, Opening Explorer and leaderboards through the gateway. The existing global one-request-at-a-time queue, voluntary >=250 ms spacing, background urgency, obsolete-request cancellation and 429 full-minute cooldown apply.
+
+A nonfatal Explorer/leaderboard failure appears in the report; 401/429 stops discovery. A candidate export failure is recorded but doesn't invent a zero-score match. Cancelling a run preserves the report and completed results.
+
+Logging is intentionally verbose but kept out of the main page. The console mirrors events and the downloadable report retains up to 700 events; the expanded on-page log displays the latest 160. No auth tokens or full game text are logged.
+
+## Verification
+
+- `npm test`: deterministic matcher tests for first moves, both colors, actual opening seeds, rejected-game reasons, disagreements, transpositions and empty profiles.
+- `npm run typecheck`: includes prototype TypeScript through the existing `tsconfig.json`.
+- `npm run build`: retains the dedicated Vite HTML entry.
+- Browser checks: OAuth callback and reuse; title lookup and possible CORS failure; different opening seeds; selecting candidates while new results arrive; position orientation; report copy/download; cancellation and 429.
+
+This is still an **experimental prototype**. It does not change production Chessview navigation, graph admission rules, or persistent chess evidence.
+
+External API specifications: [game export](https://lichess.org/api#tag/Games/operation/apiGamesUser), [Opening Explorer](https://github.com/lichess-org/api/blob/master/doc/specs/tags/openingexplorer/lichess.yaml), [batch user lookup](https://github.com/lichess-org/api/blob/master/doc/specs/tags/users/api-users.yaml).

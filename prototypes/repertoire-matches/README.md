@@ -43,7 +43,7 @@ This is descriptive overlap from **samples**, not an evaluation of move quality,
 
 ## Network and diagnostics policy
 
-All application-issued Lichess HTTP requests pass through the shared `LichessGateway`: game exports and user-profile lookup via `LichessSession.authorizedRequest`, Opening Explorer and leaderboards through the gateway. The existing global one-request-at-a-time queue, voluntary >=250 ms spacing, background urgency, obsolete-request cancellation and 429 full-minute cooldown apply.
+All application-issued Lichess HTTP requests pass through the shared `LichessGateway`: game exports, user-profile lookup **and Opening Explorer discovery** use `LichessSession.authorizedRequest` to attach the current Lichess Bearer token; public leaderboards use the gateway directly. Earlier versions inadvertently sent unauthenticated Opening Explorer requests and failed with HTTP 401. The existing global one-request-at-a-time queue, voluntary >=250 ms spacing, background urgency, obsolete-request cancellation and 429 full-minute cooldown apply.
 
 A nonfatal Explorer/leaderboard failure appears in the report; 401/429 stops discovery. A candidate export failure is recorded but doesn't invent a zero-score match. Cancelling a run preserves the report and completed results.
 

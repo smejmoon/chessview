@@ -6,302 +6,451 @@ import './style.css';
 import { Chessground } from '@lichess-org/chessground';
 import { lichessSession } from '../../src/lichess-session.ts';
 import { toPlayableFen } from '../../src/graph.ts';
-import { buildRepertoire, compareRepertoires } from './matcher.ts';
-import type { Repertoire, RepertoireMatch, SharedPosition } from './matcher.ts';
+import { buildRepertoire, compareRepertoires, openingSeeds } from './matcher.ts';
+import type { OpeningSeed, Repertoire, RepertoireMatch, SharedPosition, Side } from './matcher.ts';
 import { accountName, discoverCandidates, exportGames, httpStatus } from './lichess-source.ts';
-import type { Log, StrongPlayer } from './lichess-source.ts';
+import type { GameResult, Log, StrongPlayer } from './lichess-source.ts';
 
 const app = document.querySelector<HTMLElement>('#app');
-if (!app) throw new Error('Repertoire lab needs #app');
+if (!app) throw new Error('Repertoire Lab requires #app');
 app.innerHTML = [
-  '<div class="lab"><header class="top"><a id="home" class="brand">♞ Chessview</a><span class="lab-tag">REPERTOIRE LAB / PROTOTYPE</span><span id="identity">Connecting…</span></header>',
-  '<section class="intro"><div><span class="eyebrow">FIND YOUR CHESS TWINS</span><h1>Who plays your openings?</h1>',
-  '<p>Compare your recent rated games with strong titled Lichess players. Shared positions, similar decisions, and useful differences — with real games behind the matches.</p></div>',
-  '<form id="controls"><label for="months">Game history</label><select id="months"><option value="6">Last 6 months</option><option value="12" selected>Last 12 months</option><option value="24">Last 24 months</option></select>',
-  '<label for="candidates">Candidate sample</label><select id="candidates"><option value="8">8 players · quick</option><option value="16" selected>16 players</option><option value="30">30 players · broader</option></select>',
-  '<button id="start" type="submit">Find similar players</button><button id="stop" type="button" disabled>Cancel</button>',
-  '<span id="status" role="status" aria-live="polite">Connect to Lichess to begin.</span></form></section>',
+  '<div class="lab"><header class="top"><a id="home" class="brand">♞ Chessview</a>',
+  '<span class="app-title">Repertoire Lab <small>EXPERIMENT</small></span><span id="identity">Connecting…</span></header>',
+  '<div class="toolbar"><form id="controls"><label>History <select id="months">',
+  '<option value="6">6 months</option><option value="12" selected>12 months</option><option value="24">24 months</option>',
+  '</select></label><label>Compare <select id="candidates"><option value="8">8 players</option>',
+  '<option value="12" selected>12 players</option><option value="20">20 players</option></select></label>',
+  '<button id="start" type="submit" class="primary">Find matches</button><button id="stop" type="button" disabled>Cancel</button></form>',
+  '<span id="status" role="status" aria-live="polite">Sign in with Lichess to begin.</span></div>',
+  '<div class="profile-line" id="profile-line">Opening-first discovery · White and Black analyzed separately</div>',
   '<section class="content"><aside class="rankings"><div class="pane-title">MATCHES <span id="match-count">—</span></div>',
-  '<div id="results"><p class="muted">Run a search to discover titled players who reach positions you play.</p></div></aside>',
-  '<main class="details"><div id="summary" class="summary"><h2>Repertoire comparison</h2><p class="muted">Scores use your position frequencies, with deeper opening decisions weighted more heavily. All comparisons are separated by color.</p></div>',
-  '<div id="shared" class="shared"></div></main></section>',
-  '<details class="diagnostics" open><summary><b>Activity log</b><span id="log-count">0 events</span></summary>',
-  '<div class="log-tools"><span>Requests, parsed game counts, coverage, and failures. No tokens or full game content are logged.</span>',
-  '<button id="copy" type="button">Copy log</button><button id="clear" type="button">Clear</button></div>',
+  '<div id="results"><p class="muted">Run a search to find titled players appearing in your opening branches.</p></div></aside>',
+  '<main class="details"><div id="summary" class="summary"><h2>Select a match</h2>',
+  '<p class="muted">The experiment compares sampled game positions and actual move choices.</p></div>',
+  '<div class="detail-tools"><label for="view">Inspect</label><select id="view"><option value="differences">Different choices</option>',
+  '<option value="shared">Common positions</option></select><span id="position-count" class="muted"></span></div>',
+  '<div class="workspace"><div id="positions" class="positions"></div>',
+  '<aside id="board-panel" class="board-panel" hidden><div id="board-title" class="board-title"></div>',
+  '<div id="board" class="board"></div><div id="board-links" class="board-links"></div></aside></div>',
+  '</main></section>',
+  '<details id="diagnostics" class="diagnostics"><summary><b>Diagnostics</b><span id="log-count">0 events</span>',
+  '<span class="hint">Export report to share after testing</span></summary>',
+  '<div class="log-tools"><span>Contains opening positions and account names, but no tokens or complete game text.</span>',
+  '<button id="copy-report" type="button">Copy report</button><button id="download-report" type="button">Download JSON</button>',
+  '<button id="copy-log" type="button">Copy log</button><button id="clear" type="button">Clear visible log</button></div>',
   '<div id="events" role="log" class="events"></div></details></div>',
 ].join('');
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
   const found = app!.querySelector<T>('#' + id);
-  if (!found) throw new Error('Missing prototype element ' + id);
+  if (!found) throw new Error('Missing prototype element: ' + id);
   return found;
 }
 el<HTMLAnchorElement>('home').href = import.meta.env.BASE_URL;
-const logContainer = el('events');
-const records: { timestamp: string; area: string; event: string; detail: Record<string, unknown> }[] = [];
+const eventsNode = el('events');
+type Event = { timestamp: string; area: string; event: string; detail: Record<string, unknown> };
+const events: Event[] = [];
 const log: Log = (area, event, detail = {}) => {
-  const record = { timestamp: new Date().toISOString(), area, event, detail };
-  records.push(record);
-  if (records.length > 400) records.shift();
-  const row = document.createElement('div');
-  row.className = 'event' + (area === 'error' ? ' error' : '');
+  const record: Event = { timestamp: new Date().toISOString(), area, event, detail };
+  events.push(record);
+  if (events.length > 700) events.shift();
+  const line = document.createElement('div');
+  line.className = 'event' + (area === 'error' ? ' error' : '');
   const time = document.createElement('time');
   time.textContent = record.timestamp.slice(11, 23);
   const kind = document.createElement('span');
   kind.textContent = area.toUpperCase();
   const message = document.createElement('span');
   message.textContent = event + (Object.keys(detail).length ? ' · ' + JSON.stringify(detail) : '');
-  row.append(time, kind, message);
-  logContainer.append(row);
-  while (logContainer.children.length > 400) logContainer.firstElementChild?.remove();
-  logContainer.scrollTop = logContainer.scrollHeight;
-  el('log-count').textContent = records.length + ' events';
+  line.append(time, kind, message);
+  eventsNode.append(line);
+  while (eventsNode.children.length > 160) eventsNode.firstElementChild?.remove();
+  eventsNode.scrollTop = eventsNode.scrollHeight;
+  el('log-count').textContent = events.length + ' events';
   (area === 'error' ? console.error : console.info)('[Chessview Repertoire Lab]', area, event, detail);
 };
 
-type MatchRow = { player: StrongPlayer; match: RepertoireMatch; repertoire: Repertoire };
+type MatchRow = {
+  player: StrongPlayer;
+  match: RepertoireMatch;
+  repertoire: Repertoire;
+  exportMeta: Omit<GameResult, 'games'>;
+  elapsedMs: number;
+};
+type Failure = { player?: string; phase: string; status: number | null; reason: string };
+type SessionReport = {
+  startedAt: string;
+  finishedAt: string | null;
+  state: 'running' | 'complete' | 'cancelled' | 'failed';
+  settings: { months: number; candidates: number; ownGameLimit: number; candidateGameLimit: number };
+  ownExport: Omit<GameResult, 'games'> | null;
+  failures: Failure[];
+};
 let username: string | null = null;
 let controller: AbortController | null = null;
-let selected = -1;
-let foundMatches: MatchRow[] = [];
+let selectedId: string | null = null;
+let rows: MatchRow[] = [];
 let ownProfile: Repertoire | null = null;
+let seeds: OpeningSeed[] = [];
+let report: SessionReport | null = null;
 let ground: ReturnType<typeof Chessground> | null = null;
 let running = false;
+
+const SIDES: Side[] = ['white', 'black'];
+const nowIso = () => new Date().toISOString();
+const percentage = (v: number | null) => v === null ? '—' : Math.round(v * 100) + '%';
+const score = (row: MatchRow) => Math.max(row.match.bySide.white.score ?? 0, row.match.bySide.black.score ?? 0);
+const sourceLabel = (p: StrongPlayer) => p.source === 'opening-explorer' ?
+  'Opening ' + p.seedHits + ' branch' + (p.seedHits === 1 ? '' : 'es') : 'Leaderboard fallback';
 
 function status(message: string, error = false) {
   el('status').textContent = message;
   el('status').classList.toggle('bad', error);
   log(error ? 'error' : 'ui', message);
 }
-function toggleRunning(value: boolean) {
+function runningState(value: boolean) {
   running = value;
   el<HTMLButtonElement>('start').disabled = value || !username;
   el<HTMLButtonElement>('stop').disabled = !value;
   el<HTMLSelectElement>('months').disabled = value;
   el<HTMLSelectElement>('candidates').disabled = value;
 }
-function node(tag: string, text: string, cls = ''): HTMLElement {
-  const element = document.createElement(tag);
-  element.textContent = text;
-  if (cls) element.className = cls;
-  return element;
+function node(tag: string, content: string, cls = ''): HTMLElement {
+  const item = document.createElement(tag);
+  item.textContent = content;
+  item.className = cls;
+  return item;
 }
-function ratio(value: number | null): string {
-  return value === null ? '—' : Math.round(value * 100) + '%';
+function link(url: string, label: string) {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.textContent = label;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener noreferrer';
+  return anchor;
 }
 function clearBoard() {
   ground?.destroy();
   ground = null;
+  el('board').replaceChildren();
+  el('board-panel').hidden = true;
 }
-function resultRank(row: MatchRow, index: number) {
-  const button = document.createElement('button');
-  button.className = 'result' + (selected === index ? ' active' : '');
-  const name = node('strong', row.player.title + ' ' + row.player.name);
-  const rating = node('small', row.player.board + ' ' + row.player.rating);
-  const score = node('span', row.match.score + '%', 'score');
-  const nameColumn = document.createElement('div');
-  nameColumn.append(name, rating);
-  const subtitle = node('span',
-    'White ' + ratio(row.match.bySide.white.coverage) + ' · Black ' + ratio(row.match.bySide.black.coverage),
-    'muted');
-  button.append(nameColumn, score, subtitle);
-  button.addEventListener('click', () => { selected = index; render(); log('ui', 'candidate selected', { player: row.player.name }); });
-  return button;
-}
-function actionLink(url: string, text: string): HTMLAnchorElement {
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.target = '_blank';
-  anchor.rel = 'noopener noreferrer';
-  anchor.textContent = text;
-  return anchor;
-}
-function findPosition(position: SharedPosition, player: StrongPlayer) {
-  const card = document.createElement('article');
-  card.className = 'position';
-  const heading = document.createElement('div');
-  heading.className = 'position-head';
-  heading.append(node('strong', position.side.toUpperCase() + ' · ply ' + Math.round(position.ply + 1)),
-    node('span', position.visits + ' yours / ' + position.candidateVisits + ' theirs', 'muted'));
-  const decision = node('p',
-    'Your main move: ' + position.userMove + ' (' + ratio(position.userShare) + ')' +
-    '  ·  ' + player.name + ': ' + position.candidateMove + ' (' + ratio(position.candidateShare) + ')');
-  const links = document.createElement('div');
-  links.className = 'position-links';
-  const route = new URL(import.meta.env.BASE_URL, window.location.href);
-  route.searchParams.set('fen', position.key);
-  links.append(actionLink(route.toString(), 'Open position in Chessview'),
-    actionLink('https://lichess.org/' + position.exampleGame, 'Example game'));
-  const previewButton = node('button', 'Inspect board') as HTMLButtonElement;
-  previewButton.type = 'button';
-  previewButton.addEventListener('click', () => {
-    const host = el('preview');
-    host.replaceChildren();
-    clearBoard();
-    ground = Chessground(host, {
-      fen: toPlayableFen(position.key), orientation: position.side,
-      viewOnly: true, animation: { enabled: false }, drawable: { enabled: false },
+function renderRanks() {
+  const results = el('results');
+  results.replaceChildren();
+  el('match-count').textContent = String(rows.length);
+  if (!rows.length) results.append(node('p', 'No scored candidates yet.', 'muted'));
+  rows.forEach(row => {
+    const button = node('button', '', 'result' + (selectedId === row.player.id ? ' active' : '')) as HTMLButtonElement;
+    button.type = 'button';
+    const top = node('div', '', 'result-main');
+    top.append(node('strong', row.player.title + ' ' + row.player.name),
+      node('span', score(row) + '% best side', 'result-score'));
+    const more = node('div', '', 'result-meta');
+    more.append(node('span', 'W ' + (row.match.bySide.white.score ?? 0) + '%  ·  B ' +
+      (row.match.bySide.black.score ?? 0) + '%'),
+      node('small', sourceLabel(row.player)));
+    button.append(top, more);
+    button.addEventListener('click', () => {
+      selectedId = row.player.id;
+      renderRanks();
+      renderDetail();
+      log('ui', 'candidate selected', { player: row.player.name });
     });
-    log('ui', 'preview position', { side: position.side, ply: position.ply, player: player.name });
+    results.append(button);
   });
-  links.prepend(previewButton);
-  card.append(heading, decision, links);
-  return card;
 }
-function render() {
-  const resultNode = el('results');
-  resultNode.replaceChildren();
-  el('match-count').textContent = foundMatches.length ? String(foundMatches.length) : '—';
-  for (const [index, item] of foundMatches.entries()) resultNode.append(resultRank(item, index));
-  if (!foundMatches.length) resultNode.append(node('p', 'No scored candidates yet.', 'muted'));
-  const summary = el('summary');
-  const shared = el('shared');
-  summary.replaceChildren();
-  shared.replaceChildren();
+function inspectPosition(position: SharedPosition, player: StrongPlayer) {
   clearBoard();
-  if (selected < 0 || !foundMatches[selected]) {
-    summary.append(node('h2', 'Repertoire comparison'),
-      node('p', ownProfile ? ownProfile.accepted + ' of your games analyzed; candidate matches will appear as they arrive.' :
-        'Sign in and run a comparison.', 'muted'));
+  el('board-panel').hidden = false;
+  el('board-title').textContent = (position.side === 'white' ? 'White' : 'Black') +
+    ' · ' + (position.route || 'starting position');
+  const boardHost = el('board');
+  ground = Chessground(boardHost, {
+    fen: toPlayableFen(position.key), orientation: position.side,
+    viewOnly: true, animation: { enabled: false }, drawable: { enabled: false },
+  });
+  const url = new URL(import.meta.env.BASE_URL, window.location.href);
+  url.searchParams.set('fen', position.key);
+  el('board-links').replaceChildren(
+    link(url.toString(), 'Open Nodus in Chessview'),
+    link('https://lichess.org/' + position.exampleGame, 'Example ' + player.name + ' game'),
+  );
+  log('ui', 'opening position inspected', {
+    player: player.name, side: position.side, route: position.route, userMove: position.userMove,
+    candidateMove: position.candidateMove,
+  });
+}
+function renderPositions(row: MatchRow) {
+  const container = el('positions');
+  container.replaceChildren();
+  clearBoard();
+  const isDifference = el<HTMLSelectElement>('view').value === 'differences';
+  const set = isDifference ? row.match.differences : row.match.shared;
+  el('position-count').textContent = set.length + ' positions';
+  if (!set.length) {
+    container.append(node('p', isDifference ? 'No different choices in the overlapping sample.' :
+      'No common positions in the sampled openings.', 'muted'));
     return;
   }
-  const { player, match, repertoire } = foundMatches[selected];
-  summary.append(node('h2', player.title + ' ' + player.name),
-    node('p', match.score + '% weighted similarity · ' + ratio(match.coverage) +
-      ' position coverage · ' + ratio(match.agreement) + ' move-choice agreement'),
-    actionLink('https://lichess.org/@/' + encodeURIComponent(player.name), 'Lichess profile'));
-  const stats = document.createElement('div');
-  stats.className = 'stats';
-  for (const side of ['white', 'black'] as const) {
-    const data = match.bySide[side];
-    const box = document.createElement('div');
-    box.className = 'stat';
-    box.append(node('h3', side === 'white' ? 'As White' : 'As Black'),
-      node('strong', ratio(data.coverage) + ' shared positions'),
-      node('span', ratio(data.agreement) + ' move-choice agreement'),
-      node('small', data.sharedPositions + ' / ' + data.profilePositions + ' distinct positions; ' +
-        data.userGames + ' your games, ' + data.candidateGames + ' candidate games'));
-    stats.append(box);
+  for (const p of set) {
+    const button = node('button', '', 'position') as HTMLButtonElement;
+    const main = node('div', '', 'position-main');
+    main.append(node('strong', p.side === 'white' ? 'W' : 'B', 'side'),
+      node('span', p.route || 'Starting position', 'route'));
+    const choices = node('div', '', 'choices');
+    choices.append(node('span', 'You: ' + p.userMove + ' (' + percentage(p.userShare) + ')'),
+      node('span', row.player.name + ': ' + p.candidateMove + ' (' + percentage(p.candidateShare) + ')'));
+    const meta = node('div', p.visits + ' your games · ' + p.candidateVisits +
+      ' theirs · ' + percentage(p.agreement) + ' move agreement', 'position-meta');
+    button.append(main, choices, meta);
+    button.addEventListener('click', () => inspectPosition(p, row.player));
+    container.append(button);
   }
-  const note = node('p',
-    'Sample: ' + repertoire.accepted + ' games analyzed for ' + player.name + ', ' +
-    repertoire.skipped + ' excluded. Similarity is descriptive, not a chess strength rating; sparse samples may understate overlap.',
-    'muted');
-  summary.append(stats, note);
-  const heading = node('h3', 'Shared opening decisions · ' + match.shared.length + ' shown');
-  const preview = node('div', '', 'board-preview');
-  preview.id = 'preview';
-  shared.append(heading, preview);
-  if (!match.shared.length) shared.append(node('p', 'No matching opening positions in the sampled games.', 'muted'));
-  for (const position of match.shared) shared.append(findPosition(position, player));
+}
+function renderDetail() {
+  const summary = el('summary');
+  summary.replaceChildren();
+  const row = rows.find(r => r.player.id === selectedId);
+  if (!row) {
+    summary.append(node('h2', 'Repertoire comparison'),
+      node('p', ownProfile ?
+        ownProfile.accepted + ' your games analyzed; comparing titled players…' :
+        'Run a search to see shared openings and different choices.', 'muted'));
+    el('positions').replaceChildren();
+    el('position-count').textContent = '';
+    clearBoard();
+    return;
+  }
+  const heading = node('div', '', 'summary-heading');
+  heading.append(node('h2', row.player.title + ' ' + row.player.name),
+    link('https://lichess.org/@/' + encodeURIComponent(row.player.name), 'Player profile'));
+  summary.append(heading);
+  const stats = node('div', '', 'stats');
+  for (const side of SIDES) {
+    const match = row.match.bySide[side];
+    const block = node('div', '', 'stat');
+    block.append(node('span', side === 'white' ? 'AS WHITE' : 'AS BLACK', 'stat-label'),
+      node('strong', (match.score ?? 0) + '%', 'stat-value'),
+      node('span', percentage(match.coverage) + ' coverage · ' + percentage(match.agreement) + ' agreement'),
+      node('small', match.userGames + ' your games / ' + match.candidateGames + ' theirs'));
+    stats.append(block);
+  }
+  summary.append(stats, node('p', sourceLabel(row.player) + ' · ' + row.repertoire.accepted +
+    ' analyzed games (' + row.repertoire.skipped + ' excluded) · combined score ' + row.match.score +
+    '%. Small samples can understate overlap.', 'muted compact'));
+  renderPositions(row);
 }
 
+function createReport() {
+  return {
+    schemaVersion: 'repertoire-lab-2',
+    exportedAt: nowIso(),
+    app: 'Chessview / Repertoire Lab',
+    viewer: username,
+    session: report,
+    own: ownProfile ? {
+      accepted: ownProfile.accepted, skipped: ownProfile.skipped,
+      skippedReasons: ownProfile.skippedReasons,
+      games: ownProfile.games,
+      positions: {
+        white: ownProfile.positions.white.size,
+        black: ownProfile.positions.black.size,
+      },
+    } : null,
+    openingSeeds: seeds,
+    candidates: rows.map(row => ({
+      player: row.player,
+      sample: {
+        accepted: row.repertoire.accepted,
+        skipped: row.repertoire.skipped,
+        skippedReasons: row.repertoire.skippedReasons,
+        games: row.repertoire.games,
+        export: row.exportMeta,
+        elapsedMs: row.elapsedMs,
+      },
+      score: row.match.score, coverage: row.match.coverage, agreement: row.match.agreement,
+      sides: row.match.bySide,
+      commonPositions: row.match.shared,
+      differentChoices: row.match.differences,
+    })),
+    events: [...events],
+    note: 'No OAuth tokens or full game move lists; includes account names and opening positions. Review before sharing.',
+  };
+}
+function reportJson() {
+  return JSON.stringify(createReport(), null, 2);
+}
+function captureFailure(phase: string, error: unknown, player?: string) {
+  const failure = {
+    phase, player, status: httpStatus(error),
+    reason: error instanceof Error ? error.message : String(error),
+  };
+  report?.failures.push(failure);
+  log('error', 'operation failed', failure);
+}
 async function run() {
   if (!username || running) return;
   controller?.abort();
   const active = new AbortController();
   controller = active;
-  toggleRunning(true);
-  selected = -1;
-  foundMatches = [];
-  ownProfile = null;
-  render();
+  runningState(true);
   const months = Number(el<HTMLSelectElement>('months').value);
-  const count = Number(el<HTMLSelectElement>('candidates').value);
+  const candidatesCount = Number(el<HTMLSelectElement>('candidates').value);
+  report = {
+    startedAt: nowIso(), finishedAt: null, state: 'running',
+    settings: { months, candidates: candidatesCount, ownGameLimit: 500, candidateGameLimit: 140 },
+    ownExport: null, failures: [],
+  };
+  selectedId = null;
+  rows = [];
+  ownProfile = null;
+  seeds = [];
+  renderRanks();
+  renderDetail();
   const started = performance.now();
   try {
-    status('Analyzing your recent games…');
-    const own = await exportGames(username, 500, months, log, active.signal);
-    ownProfile = buildRepertoire(username, own.games);
-    log('profile', 'own repertoire constructed', {
-      games: ownProfile.accepted, skipped: ownProfile.skipped, white: ownProfile.games.white,
-      black: ownProfile.games.black, whitePositions: ownProfile.positions.white.size,
-      blackPositions: ownProfile.positions.black.size,
+    status('Loading your recent games…');
+    const mine = await exportGames(username, 500, months, log, active.signal);
+    report.ownExport = {
+      rejected: mine.rejected, received: mine.received, overflow: mine.overflow, bytes: mine.bytes,
+    };
+    ownProfile = buildRepertoire(username, mine.games);
+    log('profile', 'user repertoire constructed', {
+      games: ownProfile.accepted, skipped: ownProfile.skipped, skippedReasons: ownProfile.skippedReasons,
+      white: ownProfile.games.white, black: ownProfile.games.black,
+      whitePositions: ownProfile.positions.white.size, blackPositions: ownProfile.positions.black.size,
     });
-    if (ownProfile.accepted === 0) throw new Error('No eligible rated standard games found in the selected period.');
-    status('Finding strong-player candidates…');
-    const candidates = await discoverCandidates(username, count, log, active.signal);
-    if (!candidates.length) throw new Error('No titled players found on available leaderboards.');
+    if (!ownProfile.accepted) throw new Error('No eligible rated standard games in this period.');
+    seeds = openingSeeds(ownProfile);
+    log('profile', 'opening branches selected', {
+      seeds: seeds.map(s => ({ side: s.side, route: s.route, visits: s.visits, ply: s.ply })),
+    });
+    el('profile-line').textContent = ownProfile.accepted + ' games · ' +
+      seeds.filter(s => s.side === 'white').length + ' White branches · ' +
+      seeds.filter(s => s.side === 'black').length + ' Black branches';
+    status('Finding titled players in your opening branches…');
+    const candidates = await discoverCandidates(username, seeds, candidatesCount, log, active.signal);
+    if (!candidates.length) throw new Error('No suitable titled-player candidates found.');
     for (const [index, candidate] of candidates.entries()) {
       if (active.signal.aborted) break;
       status('Comparing ' + (index + 1) + '/' + candidates.length + ': ' + candidate.name);
+      const candidateStarted = performance.now();
       try {
-        const exported = await exportGames(candidate.name, 250, months, log, active.signal);
+        const exported = await exportGames(candidate.name, 140, months, log, active.signal);
         const repertoire = buildRepertoire(candidate.name, exported.games);
         const match = compareRepertoires(ownProfile, repertoire);
         log('match', 'candidate scored', {
-          player: candidate.name, score: match.score, coverage: ratio(match.coverage),
-          agreement: ratio(match.agreement), games: repertoire.accepted,
-          skipped: repertoire.skipped, sharedWhite: match.bySide.white.sharedPositions,
+          player: candidate.name, source: candidate.source, seeds: candidate.seedHits,
+          bestWhite: match.bySide.white.score, bestBlack: match.bySide.black.score,
+          score: match.score, coverage: percentage(match.coverage), agreement: percentage(match.agreement),
+          games: repertoire.accepted, skippedReasons: repertoire.skippedReasons,
+          sharedWhite: match.bySide.white.sharedPositions,
           sharedBlack: match.bySide.black.sharedPositions,
         });
         if (repertoire.accepted) {
-          foundMatches.push({ player: candidate, match, repertoire });
-          foundMatches.sort((a, b) => b.match.score - a.match.score ||
-            (b.match.shared.length - a.match.shared.length));
-          if (selected < 0) selected = 0;
-          render();
+          rows.push({
+            player: candidate, match, repertoire,
+            exportMeta: {
+              rejected: exported.rejected, received: exported.received,
+              overflow: exported.overflow, bytes: exported.bytes,
+            },
+            elapsedMs: Math.round(performance.now() - candidateStarted),
+          });
+          rows.sort((a, b) => score(b) - score(a) || b.match.score - a.match.score);
+          if (!selectedId) selectedId = rows[0].player.id;
+          renderRanks();
+          if (selectedId === candidate.id) renderDetail();
         }
       } catch (error) {
         if (active.signal.aborted) break;
-        log('error', 'candidate acquisition failed', {
-          player: candidate.name, status: httpStatus(error),
-          reason: error instanceof Error ? error.message : String(error),
-        });
-        if (httpStatus(error) === 429 || httpStatus(error) === 401) throw error;
+        captureFailure('candidate export', error, candidate.name);
+        if ([401, 429].includes(httpStatus(error) ?? -1)) throw error;
       }
     }
     if (active.signal.aborted) return;
-    status('Compared ' + foundMatches.length + ' candidates in ' +
-      Math.round((performance.now() - started) / 1000) + 's. Select any match to inspect.');
+    report.state = 'complete';
+    status('Finished: ' + rows.length + ' players · ' +
+      Math.round((performance.now() - started) / 1000) + 's. Export diagnostics after reviewing.');
+    log('summary', 'run completed', {
+      ranked: rows.length, elapsedMs: Math.round(performance.now() - started),
+      top: rows.slice(0, 8).map(row => ({
+        player: row.player.name, source: row.player.source,
+        white: row.match.bySide.white.score, black: row.match.bySide.black.score,
+        combined: row.match.score,
+      })),
+    });
   } catch (error) {
     if (!active.signal.aborted) {
+      report.state = 'failed';
+      captureFailure('run', error);
       status(error instanceof Error ? error.message : String(error), true);
-      log('error', 'comparison stopped', { status: httpStatus(error) });
     }
   } finally {
+    if (active.signal.aborted) report.state = 'cancelled';
+    report.finishedAt = nowIso();
     if (controller === active) {
       controller = null;
-      toggleRunning(false);
+      runningState(false);
     }
   }
 }
 
-el<HTMLFormElement>('controls').addEventListener('submit', (event) => {
+el<HTMLFormElement>('controls').addEventListener('submit', event => {
   event.preventDefault();
   void run();
 });
 el('stop').addEventListener('click', () => {
   controller?.abort();
-  status('Comparison cancelled. Completed matches remain visible.');
+  status('Cancelled; available matches and the report are retained.');
 });
-el('copy').addEventListener('click', async () => {
+el<HTMLSelectElement>('view').addEventListener('change', () => {
+  const row = rows.find(r => r.player.id === selectedId);
+  if (row) renderPositions(row);
+});
+el('copy-report').addEventListener('click', async () => {
   try {
-    await navigator.clipboard.writeText(records.map(x =>
-      x.timestamp + ' [' + x.area + '] ' + x.event + ' ' + JSON.stringify(x.detail)).join('\n'));
+    await navigator.clipboard.writeText(reportJson());
+    status('Diagnostic report copied. Paste it into the next ChessView chat.');
+  } catch { status('Clipboard unavailable; use Download JSON instead.', true); }
+});
+el('download-report').addEventListener('click', () => {
+  const payload = new Blob([reportJson()], { type: 'application/json' });
+  const url = URL.createObjectURL(payload);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'chessview-repertoire-report-' + nowIso().slice(0, 10) + '.json';
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  log('ui', 'diagnostic report downloaded', { bytes: payload.size });
+});
+el('copy-log').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(events.map(e =>
+      e.timestamp + ' [' + e.area + '] ' + e.event + ' ' + JSON.stringify(e.detail)).join('\n'));
     status('Activity log copied.');
-  } catch { status('Could not copy the log. Use the browser console.', true); }
+  } catch { status('Clipboard unavailable; download the report instead.', true); }
 });
 el('clear').addEventListener('click', () => {
-  records.length = 0;
-  logContainer.replaceChildren();
-  el('log-count').textContent = '0 events';
+  eventsNode.replaceChildren();
+  log('ui', 'visible activity log cleared (report history retained)');
 });
 
 async function initialize() {
-  toggleRunning(true);
+  runningState(true);
   try {
     log('auth', 'establishing shared Lichess session');
     const token = await lichessSession.establishAuthorization();
-    if (!token) return; // OAuth redirect is underway.
-    const signal = new AbortController().signal;
-    username = await accountName(log, signal);
+    if (!token) return;
+    username = await accountName(log, new AbortController().signal);
     el('identity').textContent = 'Signed in: ' + username;
-    status('Signed in as ' + username + '. Ready to compare.');
+    status('Ready. Choose a sample and find matches.');
   } catch (error) {
-    log('error', 'authorization failed', { reason: error instanceof Error ? error.message : String(error) });
-    status('Lichess connection failed. Reload the page to retry.', true);
+    captureFailure('authorization', error);
     el('identity').textContent = 'Not connected';
-  } finally { toggleRunning(false); }
+    status('Lichess connection failed. Reload to retry.', true);
+  } finally {
+    runningState(false);
+  }
 }
 void initialize();

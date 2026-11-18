@@ -8,6 +8,7 @@ export default defineConfig({
       chessview: 'index.html',
       holes: 'holes.html',
       studies: 'prototypes/lichess-studies/index.html',
+      repertoires: 'prototypes/repertoire-matches/index.html',
     } },
   },
 });

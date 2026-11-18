@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
 import { canonicalPosition } from '../src/graph.ts';
 import { buildRepertoire, compareRepertoires, openingSeeds } from '../prototypes/repertoire-matches/matcher.ts';
+import { discoverCandidates } from '../prototypes/repertoire-matches/lichess-source.ts';
 
 function game(id: string, white: string, black: string, moves: string) {
   return { id, rated: true, variant: 'standard', moves,
@@ -108,4 +109,41 @@ test('empty profiles have no manufactured coverage or agreement', () => {
   assert.equal(result.agreement, null);
   assert.equal(result.bySide.white.score, null);
   assert.equal(result.score, 0);
+});
+
+test('opening-first discovery uses authenticated requests for Explorer and user details', async () => {
+  const controller = new AbortController();
+  const calls: { url: string; method: string }[] = [];
+  const authenticated: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async (input, init) => {
+      const url = String(input);
+      calls.push({ url, method: init?.method ?? 'GET' });
+      if (url.startsWith('https://explorer.lichess.org/lichess')) {
+        assert.equal(init?.signal, controller.signal);
+        return new Response(JSON.stringify({
+          white: 40, draws: 20, black: 40,
+          topGames: [{ id: 'abcd1234', white: { name: 'GMChess', title: 'GM', rating: 2600 },
+            black: { name: 'Someone', rating: 2200 } }],
+          recentGames: [],
+        }), { status: 200 });
+      }
+      if (url.startsWith('https://lichess.org/api/users')) {
+        assert.equal(init?.method, 'POST');
+        return new Response(JSON.stringify([
+          { id: 'gmchess', username: 'GMChess', title: 'GM', perfs: { blitz: { rating: 2660 } } },
+        ]), { status: 200 });
+      }
+      throw new Error('Unexpected API request: ' + url);
+    };
+  const logs: string[] = [];
+  const result = await discoverCandidates('alice', [{
+    side: 'white', key: canonicalPosition(new Chess().fen()), route: '',
+    ply: 4, visits: 12,
+  }], 1, (area, event) => logs.push(area + ':' + event), controller.signal, authenticated);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].name, 'GMChess');
+  assert.equal(result[0].source, 'opening-explorer');
+  assert.deepEqual(calls.map(c => c.method), ['GET', 'POST']);
+  assert.ok(logs.includes('network:opening explorer response'));
+  assert.ok(calls[0].url.startsWith('https://explorer.lichess.org/lichess'));
 });

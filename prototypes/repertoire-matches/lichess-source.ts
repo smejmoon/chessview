@@ -1,20 +1,36 @@
 import { lichessGateway } from '../../src/lichess-gateway.ts';
 import { lichessSession } from '../../src/lichess-session.ts';
-import type { GameRecord } from './matcher.ts';
+import type { GameRecord, OpeningSeed, Side } from './matcher.ts';
 
 export type Log = (area: string, event: string, detail?: Record<string, unknown>) => void;
-export type StrongPlayer = { id: string; name: string; title: string; rating: number; board: string };
-export type GameResult = { games: GameRecord[]; rejected: number };
+export type StrongPlayer = {
+  id: string;
+  name: string;
+  title: string;
+  rating: number;
+  board: string;
+  source: 'opening-explorer' | 'leaderboard';
+  seedHits: number;
+  seedRoutes: string[];
+  exampleGames: number;
+};
+export type GameResult = {
+  games: GameRecord[];
+  rejected: number;
+  received: number;
+  overflow: number;
+  bytes: number;
+};
 const SPEEDS = ['blitz', 'rapid', 'classical'] as const;
 const TITLES = new Set(['GM', 'WGM', 'IM', 'WIM', 'FM', 'WFM']);
 const MAX_BYTES = 3_000_000;
+const USERNAME = /^[A-Za-z0-9_-]{2,30}$/;
 
 function httpError(label: string, status: number): Error {
   const error = new Error(label + ' returned HTTP ' + status);
   Object.assign(error, { status });
   return error;
 }
-
 export function httpStatus(error: unknown): number | null {
   const status = (error as { status?: unknown } | null)?.status;
   return typeof status === 'number' ? status : null;
@@ -30,67 +46,211 @@ export async function accountName(log: Log, signal: AbortSignal): Promise<string
   if (!response.ok) throw httpError('Lichess account', response.status);
   const value = await response.json();
   const name = value?.username || value?.id;
-  if (typeof name !== 'string' || !/^[A-Za-z0-9_-]{2,30}$/.test(name)) {
+  if (typeof name !== 'string' || !USERNAME.test(name)) {
     throw new Error('Lichess account returned no usable username');
   }
   return name;
 }
 
-export async function discoverCandidates(
-  ownUsername: string, count: number, log: Log, signal: AbortSignal,
-): Promise<StrongPlayer[]> {
-  const lists: StrongPlayer[][] = [];
-  for (const board of SPEEDS) {
-    const started = performance.now();
-    log('discovery', 'requesting leaderboard', { board });
-    try {
-      const url = 'https://lichess.org/api/player/top/100/' + board;
-      const response = await lichessGateway.request(url, {
-        headers: { Accept: 'application/vnd.lichess.v3+json' }, signal,
-      }, { signal, urgency: 'background' });
-      log('network', 'leaderboard response', { board, status: response.status, ms: Math.round(performance.now() - started) });
-      if (!response.ok) throw httpError('Leaderboard ' + board, response.status);
-      const payload = await response.json();
-      if (!Array.isArray(payload?.users)) throw new Error('Malformed leaderboard response: ' + board);
-      const players: StrongPlayer[] = [];
-      for (const value of payload.users) {
-        const id = value?.id;
-        const name = value?.username;
-        const title = value?.title;
-        const rating = value?.perfs?.[board]?.rating;
-        if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{2,30}$/.test(id) ||
-            typeof name !== 'string' || !TITLES.has(title) ||
-            !Number.isFinite(rating) || rating < 2200) continue;
-        players.push({ id, name, title, rating, board });
+type Prospect = {
+  id: string;
+  name: string;
+  title: string | null;
+  maxObservedRating: number;
+  routes: Set<string>;
+  seenGames: Set<string>;
+};
+function extractProspects(seeds: OpeningSeed[], responses: { seed: OpeningSeed; payload: any }[], ownUsername: string) {
+  const found = new Map<string, Prospect>();
+  for (const { seed, payload } of responses) {
+    for (const game of [...(payload.topGames ?? []), ...(payload.recentGames ?? [])]) {
+      const selected = game?.[seed.side as Side];
+      const name = selected?.name;
+      const rating = selected?.rating;
+      if (typeof name !== 'string' || !USERNAME.test(name) ||
+          name.toLowerCase() === ownUsername.toLowerCase() ||
+          !Number.isFinite(rating) || rating < 2200) continue;
+      const id = name.toLowerCase();
+      let player = found.get(id);
+      if (!player) {
+        player = {
+          id, name, title: null, maxObservedRating: 0,
+          routes: new Set(), seenGames: new Set(),
+        };
+        found.set(id, player);
       }
-      lists.push(players);
-      log('discovery', 'eligible titled players', { board, count: players.length });
-    } catch (error) {
-      if (signal.aborted) throw error;
-      log('error', 'leaderboard unavailable', {
-        board, status: httpStatus(error), reason: error instanceof Error ? error.message : String(error),
-      });
-      if (httpStatus(error) === 429 || httpStatus(error) === 401) throw error;
-      lists.push([]);
+      if (TITLES.has(selected.title)) player.title = selected.title;
+      player.maxObservedRating = Math.max(player.maxObservedRating, rating);
+      player.routes.add(seed.route);
+      if (typeof game.id === 'string') player.seenGames.add(game.id);
     }
   }
-  // Round-robin across speeds rather than letting one leaderboard monopolize the sample.
-  const seen = new Set([ownUsername.toLowerCase()]);
-  const candidates: StrongPlayer[] = [];
-  for (let row = 0; row < 100 && candidates.length < count; row++) {
-    for (const list of lists) {
-      const player = list[row];
-      if (!player || seen.has(player.id.toLowerCase())) continue;
-      seen.add(player.id.toLowerCase());
-      candidates.push(player);
-      if (candidates.length === count) break;
-    }
-  }
-  log('discovery', 'candidate cohort assembled', { count: candidates.length, requested: count });
-  return candidates;
+  return [...found.values()].sort((a, b) => b.routes.size - a.routes.size ||
+    b.seenGames.size - a.seenGames.size || b.maxObservedRating - a.maxObservedRating);
 }
 
-async function parseNdjson(response: Response, signal: AbortSignal): Promise<GameResult> {
+export async function discoverCandidates(
+  ownUsername: string, seeds: OpeningSeed[], count: number, log: Log, signal: AbortSignal,
+): Promise<StrongPlayer[]> {
+  const explorerResults: { seed: OpeningSeed; payload: any }[] = [];
+  log('discovery', 'opening-first discovery started', {
+    openingQueries: seeds.length, requestedCandidates: count,
+    seedRoutes: seeds.map(seed => ({ side: seed.side, route: seed.route, visits: seed.visits, ply: seed.ply })),
+  });
+  for (const [index, seed] of seeds.entries()) {
+    const url = new URL('https://explorer.lichess.org/lichess');
+    url.searchParams.set('variant', 'standard');
+    url.searchParams.set('fen', seed.key);
+    url.searchParams.set('speeds', SPEEDS.join(','));
+    url.searchParams.set('ratings', '2200,2500');
+    url.searchParams.set('moves', '0');
+    url.searchParams.set('topGames', '4');
+    url.searchParams.set('recentGames', '8');
+    const started = performance.now();
+    try {
+      log('discovery', 'opening explorer request', {
+        index: index + 1, total: seeds.length, side: seed.side, route: seed.route, visits: seed.visits,
+      });
+      const response = await lichessGateway.request(url, {
+        headers: { Accept: 'application/json' }, signal,
+      }, { signal, urgency: 'background' });
+      if (!response.ok) throw httpError('Opening Explorer', response.status);
+      const payload = await response.json();
+      if (!Array.isArray(payload?.topGames) || !Array.isArray(payload?.recentGames)) {
+        throw new Error('Malformed opening Explorer response');
+      }
+      explorerResults.push({ seed, payload });
+      log('discovery', 'opening explorer games', {
+        route: seed.route, side: seed.side, top: payload.topGames.length,
+        recent: payload.recentGames.length,
+        totalPositionGames: (payload.white ?? 0) + (payload.draws ?? 0) + (payload.black ?? 0),
+        ms: Math.round(performance.now() - started),
+      });
+    } catch (error) {
+      if (signal.aborted) throw error;
+      log('error', 'opening discovery query failed', {
+        route: seed.route, status: httpStatus(error),
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      if ([401, 429].includes(httpStatus(error) ?? -1)) throw error;
+    }
+  }
+  const prospects = extractProspects(seeds, explorerResults, ownUsername);
+  log('discovery', 'opening-derived prospect pool', {
+    prospects: prospects.length,
+    withKnownTitles: prospects.filter(p => p.title).length,
+    top: prospects.slice(0, 12).map(p => ({
+      player: p.name, seedHits: p.routes.size, exampleGames: p.seenGames.size,
+      observedRating: p.maxObservedRating,
+    })),
+  });
+
+  // Verify titled identity and current ratings for Explorer-derived names in one bounded batch.
+  let users: any[] = [];
+  if (prospects.length) {
+    const started = performance.now();
+    try {
+      const response = await lichessSession.authorizedRequest('https://lichess.org/api/users?profile=false', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'text/plain' },
+        body: prospects.slice(0, 100).map(p => p.id).join(','),
+        signal,
+      }, { signal, urgency: 'background' });
+      if (!response.ok) throw httpError('User title lookup', response.status);
+      const payload = await response.json();
+      if (!Array.isArray(payload)) throw new Error('Malformed user title lookup');
+      users = payload;
+      log('discovery', 'user title lookup completed', {
+        requested: Math.min(prospects.length, 100), received: users.length,
+        ms: Math.round(performance.now() - started),
+      });
+    } catch (error) {
+      if (signal.aborted) throw error;
+      log('error', 'user title lookup failed; using Explorer titles where present', {
+        status: httpStatus(error), reason: error instanceof Error ? error.message : String(error),
+      });
+      if ([401, 429].includes(httpStatus(error) ?? -1)) throw error;
+    }
+  }
+  const resolved = new Map<string, any>();
+  for (const user of users) if (typeof user?.id === 'string') resolved.set(user.id.toLowerCase(), user);
+  const discovered: StrongPlayer[] = [];
+  for (const prospect of prospects) {
+    const account = resolved.get(prospect.id);
+    const title = account ? account.title : prospect.title;
+    if (!TITLES.has(title)) continue;
+    const perfs = SPEEDS.map(board => ({ board, rating: Number(account?.perfs?.[board]?.rating ?? 0) }));
+    perfs.sort((a, b) => b.rating - a.rating);
+    const board = perfs[0]?.rating >= 2200 ? perfs[0].board : 'sample';
+    discovered.push({
+      id: prospect.id, name: account?.username || prospect.name, title,
+      rating: board === 'sample' ? prospect.maxObservedRating : perfs[0].rating,
+      board, source: 'opening-explorer', seedHits: prospect.routes.size,
+      seedRoutes: [...prospect.routes], exampleGames: prospect.seenGames.size,
+    });
+    if (discovered.length >= count) break;
+  }
+  log('discovery', 'opening candidates verified', {
+    candidates: discovered.length,
+    names: discovered.map(p => ({ player: p.name, seedHits: p.seedHits, games: p.exampleGames })),
+  });
+
+  if (discovered.length < count) {
+    // Fill the remaining sample with leaderboard players; their source is explicitly labeled.
+    const lists: StrongPlayer[][] = [];
+    for (const board of SPEEDS) {
+      const started = performance.now();
+      try {
+        const response = await lichessGateway.request('https://lichess.org/api/player/top/100/' + board, {
+          headers: { Accept: 'application/vnd.lichess.v3+json' }, signal,
+        }, { signal, urgency: 'background' });
+        if (!response.ok) throw httpError('Leaderboard ' + board, response.status);
+        const payload = await response.json();
+        if (!Array.isArray(payload?.users)) throw new Error('Malformed leaderboard response');
+        const players: StrongPlayer[] = [];
+        for (const u of payload.users) {
+          const rating = u?.perfs?.[board]?.rating;
+          if (typeof u?.id !== 'string' || !USERNAME.test(u.id) ||
+              typeof u?.username !== 'string' || !TITLES.has(u?.title) ||
+              !Number.isFinite(rating) || rating < 2200) continue;
+          players.push({
+            id: u.id.toLowerCase(), name: u.username, title: u.title,
+            rating, board, source: 'leaderboard', seedHits: 0, seedRoutes: [], exampleGames: 0,
+          });
+        }
+        lists.push(players);
+        log('discovery', 'leaderboard fallback loaded', {
+          board, players: players.length, ms: Math.round(performance.now() - started),
+        });
+      } catch (error) {
+        if (signal.aborted) throw error;
+        log('error', 'leaderboard fallback failed', {
+          board, status: httpStatus(error),
+          reason: error instanceof Error ? error.message : String(error),
+        });
+        if ([401, 429].includes(httpStatus(error) ?? -1)) throw error;
+      }
+    }
+    const seen = new Set([ownUsername.toLowerCase(), ...discovered.map(p => p.id)]);
+    for (let i = 0; i < 100 && discovered.length < count; i++) {
+      for (const list of lists) {
+        const p = list[i];
+        if (!p || seen.has(p.id)) continue;
+        discovered.push(p);
+        seen.add(p.id);
+        if (discovered.length >= count) break;
+      }
+    }
+  }
+  log('discovery', 'candidate cohort assembled', {
+    requested: count, total: discovered.length,
+    openingDerived: discovered.filter(p => p.source === 'opening-explorer').length,
+    leaderboardFallback: discovered.filter(p => p.source === 'leaderboard').length,
+  });
+  return discovered;
+}
+
+async function parseNdjson(response: Response, signal: AbortSignal): Promise<Omit<GameResult, 'overflow'>> {
   const games: GameRecord[] = [];
   let rejected = 0, bytes = 0, buffer = '';
   const add = (line: string) => {
@@ -103,17 +263,19 @@ async function parseNdjson(response: Response, signal: AbortSignal): Promise<Gam
   };
   if (!response.body) {
     const whole = await response.text();
-    if (new TextEncoder().encode(whole).length > MAX_BYTES) throw new Error('Game export exceeds safety limit');
+    bytes = new TextEncoder().encode(whole).length;
+    if (bytes > MAX_BYTES) throw new Error('Game export exceeds safety limit');
     for (const line of whole.split(/\r?\n/)) add(line);
-    return { games, rejected };
+    return { games, rejected, received: games.length, bytes };
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  let completed = false;
   try {
     for (;;) {
       if (signal.aborted) throw new Error('Export cancelled');
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) { completed = true; break; }
       bytes += value.byteLength;
       if (bytes > MAX_BYTES) throw new Error('Game export exceeds 3 MB safety limit');
       buffer += decoder.decode(value, { stream: true });
@@ -124,10 +286,10 @@ async function parseNdjson(response: Response, signal: AbortSignal): Promise<Gam
     buffer += decoder.decode();
     add(buffer.trim());
   } finally {
-    if (signal.aborted || bytes > MAX_BYTES) await reader.cancel().catch(() => {});
+    if (!completed) await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
-  return { games, rejected };
+  return { games, rejected, received: games.length, bytes };
 }
 
 export async function exportGames(
@@ -147,11 +309,19 @@ export async function exportGames(
   const response = await lichessSession.authorizedRequest(url, {
     headers: { Accept: 'application/x-ndjson' }, signal,
   }, { signal, urgency: 'background' });
-  log('network', 'game export response', { player, status: response.status, ms: Math.round(performance.now() - started) });
+  log('network', 'game export response', {
+    player, status: response.status, firstByteMs: Math.round(performance.now() - started),
+  });
   if (!response.ok) throw httpError('Game export for ' + player, response.status);
-  const result = await parseNdjson(response, signal);
+  const parsed = await parseNdjson(response, signal);
+  // Some exports include more records than the requested max; enforce a local sample boundary.
+  const result: GameResult = {
+    ...parsed, games: parsed.games.slice(0, limit),
+    overflow: Math.max(0, parsed.received - limit),
+  };
   log('games', 'export parsed', {
-    player, received: result.games.length, rejectedLines: result.rejected,
+    player, requested: limit, received: parsed.received, used: result.games.length,
+    overflow: result.overflow, rejectedLines: result.rejected, bytes: result.bytes,
     elapsedMs: Math.round(performance.now() - started),
   });
   return result;

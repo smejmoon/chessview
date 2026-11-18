@@ -124,8 +124,8 @@ async function parseNdjson(response: Response, signal: AbortSignal): Promise<Gam
     buffer += decoder.decode();
     add(buffer.trim());
   } finally {
+    if (signal.aborted || bytes > MAX_BYTES) await reader.cancel().catch(() => {});
     reader.releaseLock();
-    if (signal.aborted || bytes > MAX_BYTES) await response.body.cancel().catch(() => {});
   }
   return { games, rejected };
 }

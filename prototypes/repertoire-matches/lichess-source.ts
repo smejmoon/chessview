@@ -91,6 +91,7 @@ function extractProspects(seeds: OpeningSeed[], responses: { seed: OpeningSeed; 
 
 export async function discoverCandidates(
   ownUsername: string, seeds: OpeningSeed[], count: number, log: Log, signal: AbortSignal,
+  authorizedRequest: typeof lichessSession.authorizedRequest = lichessSession.authorizedRequest,
 ): Promise<StrongPlayer[]> {
   const explorerResults: { seed: OpeningSeed; payload: any }[] = [];
   log('discovery', 'opening-first discovery started', {
@@ -110,10 +111,16 @@ export async function discoverCandidates(
     try {
       log('discovery', 'opening explorer request', {
         index: index + 1, total: seeds.length, side: seed.side, route: seed.route, visits: seed.visits,
+        auth: 'LichessSession',
       });
-      const response = await lichessGateway.request(url, {
+      // The rated Explorer endpoint requires the same authenticated session as Chessview's Explorer client.
+      const response = await authorizedRequest(url, {
         headers: { Accept: 'application/json' }, signal,
       }, { signal, urgency: 'background' });
+      log('network', 'opening explorer response', {
+        side: seed.side, route: seed.route, status: response.status,
+        elapsedMs: Math.round(performance.now() - started), auth: 'LichessSession',
+      });
       if (!response.ok) throw httpError('Opening Explorer', response.status);
       const payload = await response.json();
       if (!Array.isArray(payload?.topGames) || !Array.isArray(payload?.recentGames)) {
@@ -150,7 +157,7 @@ export async function discoverCandidates(
   if (prospects.length) {
     const started = performance.now();
     try {
-      const response = await lichessSession.authorizedRequest('https://lichess.org/api/users?profile=false', {
+      const response = await authorizedRequest('https://lichess.org/api/users?profile=false', {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'text/plain' },
         body: prospects.slice(0, 100).map(p => p.id).join(','),

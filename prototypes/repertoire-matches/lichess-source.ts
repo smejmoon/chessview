@@ -1,5 +1,6 @@
 import { lichessGateway } from '../../src/lichess-gateway.ts';
 import { lichessSession } from '../../src/lichess-session.ts';
+import { toPlayableFen } from '../../src/graph.ts';
 import type { GameRecord, OpeningSeed, Side } from './matcher.ts';
 
 export type Log = (area: string, event: string, detail?: Record<string, unknown>) => void;
@@ -365,4 +366,156 @@ export async function exportGames(
     elapsedMs: Math.round(performance.now() - started),
   });
   return result;
+}
+
+
+/**
+ * Bounded diagnostic probe of one player/color at a canonical opening root.
+ * Player Explorer is a live indexing stream: a partial snapshot never means
+ * authoritative absence and never enters the game-sample similarity score.
+ */
+export type PlayerBranchProbe = {
+  side: Side;
+  key: string;
+  route: string;
+  status: 'complete' | 'partial' | 'timeout' | 'unavailable';
+  snapshotGames: number | null;
+  queuePosition: number | null;
+  moves: { uci: string; san: string; games: number }[];
+  elapsedMs: number;
+  httpStatus: number | null;
+};
+
+type PlayerSnapshot = {
+  queuePosition: number;
+  white: number;
+  draws: number;
+  black: number;
+  moves: { uci: string; san: string; white: number; draws: number; black: number }[];
+};
+
+function playerSnapshot(line: string): PlayerSnapshot {
+  const value = JSON.parse(line);
+  if (!value || typeof value !== 'object' ||
+      ![value.white, value.draws, value.black, value.queuePosition].every(
+        n => Number.isInteger(n) && n >= 0) ||
+      !Array.isArray(value.moves)) throw new Error('Malformed Player Explorer snapshot');
+  return value as PlayerSnapshot;
+}
+
+/** At most two bounded Player Explorer checks per candidate; never downloaded wholesale. */
+export function selectPlayerProbes(candidate: StrongPlayer, seeds: OpeningSeed[]): OpeningSeed[] {
+  const preferred = seeds.filter(seed => candidate.seedRoutes.includes(seed.route))
+    .sort((a, b) => b.visits - a.visits);
+  const common = (['white', 'black'] as Side[]).map(side =>
+    seeds.filter(seed => seed.side === side).sort((a, b) => b.visits - a.visits)[0])
+    .filter((seed): seed is OpeningSeed => Boolean(seed));
+  const chosen: OpeningSeed[] = [];
+  for (const seed of [...preferred, ...common]) {
+    if (chosen.some(item => item.key === seed.key && item.side === seed.side)) continue;
+    chosen.push(seed);
+    if (chosen.length === 2) break;
+  }
+  return chosen;
+}
+
+export async function probePlayerBranch(
+  player: string, seed: OpeningSeed, months: number, log: Log, signal: AbortSignal,
+  authorizedRequest: typeof lichessSession.authorizedRequest = lichessSession.authorizedRequest,
+  timeoutMs = 2200,
+): Promise<PlayerBranchProbe> {
+  const started = performance.now();
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const requestSignal = AbortSignal.any([signal, timeout]);
+  const url = new URL('https://explorer.lichess.org/player');
+  url.searchParams.set('player', player);
+  url.searchParams.set('color', seed.side);
+  url.searchParams.set('variant', 'standard');
+  url.searchParams.set('fen', toPlayableFen(seed.key));
+  url.searchParams.set('speeds', SPEEDS.join(','));
+  url.searchParams.set('modes', 'rated');
+  url.searchParams.set('since', new Date(Date.now() - months * 30.44 * 86400000).toISOString().slice(0, 7));
+  url.searchParams.set('moves', '4');
+  url.searchParams.set('recentGames', '0');
+  log('player-explorer', 'probe started', {
+    player, side: seed.side, route: seed.route, timeoutMs, since: url.searchParams.get('since'),
+  });
+
+  let snapshot: PlayerSnapshot | null = null;
+  let complete = false;
+  let http: number | null = null;
+  let bytes = 0;
+  const decodeLine = (line: string) => {
+    if (line.trim()) snapshot = playerSnapshot(line);
+  };
+  try {
+    const response = await authorizedRequest(url, {
+      headers: { Accept: 'application/x-ndjson' }, signal: requestSignal,
+    }, { signal: requestSignal, urgency: 'background' });
+    http = response.status;
+    if (!response.ok) throw httpError('Player Explorer', response.status);
+    if (!response.body) {
+      const body = await response.text();
+      bytes = new TextEncoder().encode(body).byteLength;
+      if (bytes > 128_000) throw new Error('Player Explorer snapshot exceeds 128 KB');
+      for (const line of body.split(/\\r?\\n/)) decodeLine(line);
+      complete = true;
+    } else {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) {
+            buffer += decoder.decode();
+            decodeLine(buffer);
+            complete = true;
+            break;
+          }
+          bytes += value.byteLength;
+          if (bytes > 128_000) throw new Error('Player Explorer stream exceeds 128 KB');
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) decodeLine(line);
+        }
+      } finally {
+        if (!complete) await reader.cancel().catch(() => {});
+        reader.releaseLock();
+      }
+    }
+  } catch (error) {
+    if (signal.aborted) throw error;
+    if (!timeout.aborted) {
+      if ([401, 429].includes(httpStatus(error) ?? -1)) throw error;
+      log('error', 'player explorer probe unavailable', {
+        player, side: seed.side, route: seed.route, status: httpStatus(error),
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return { side: seed.side, key: seed.key, route: seed.route, status: 'unavailable',
+        snapshotGames: null, queuePosition: null, moves: [],
+        elapsedMs: Math.round(performance.now() - started), httpStatus: http };
+    }
+  }
+  // A nonzero indexing queue is not a complete database observation, even if
+  // the stream closes. Zero before EOF may also be preliminary.
+  const status = complete && snapshot?.queuePosition === 0 ? 'complete' :
+    snapshot ? 'partial' : 'timeout';
+  const evidence: PlayerBranchProbe = {
+    side: seed.side, key: seed.key, route: seed.route, status,
+    snapshotGames: snapshot ? snapshot.white + snapshot.draws + snapshot.black : null,
+    queuePosition: snapshot?.queuePosition ?? null,
+    moves: snapshot?.moves.slice(0, 4).filter(m => typeof m.uci === 'string' &&
+      typeof m.san === 'string' &&
+      [m.white, m.draws, m.black].every(n => Number.isInteger(n) && n >= 0))
+      .map(m => ({ uci: m.uci, san: m.san, games: m.white + m.draws + m.black })) ?? [],
+    elapsedMs: Math.round(performance.now() - started), httpStatus: http,
+  };
+  log('player-explorer', 'probe completed', {
+    player, side: seed.side, route: seed.route, status,
+    snapshotGames: evidence.snapshotGames, queuePosition: evidence.queuePosition,
+    elapsedMs: evidence.elapsedMs, bytes,
+  });
+  return evidence;
 }

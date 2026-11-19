@@ -8,8 +8,8 @@ import { lichessSession } from '../../src/lichess-session.ts';
 import { toPlayableFen } from '../../src/graph.ts';
 import { buildRepertoire, compareBranchRepertoires, openingSeeds } from './matcher.ts';
 import type { OpeningSeed, Repertoire, BranchComparison, SharedPosition, Side } from './matcher.ts';
-import { accountName, discoverCandidates, exportGames, httpStatus } from './lichess-source.ts';
-import type { DiscoveryBranch, GameResult, Log, StrongPlayer } from './lichess-source.ts';
+import { accountName, discoverCandidates, exportGames, httpStatus, probePlayerBranch, selectPlayerProbes } from './lichess-source.ts';
+import type { DiscoveryBranch, GameResult, Log, StrongPlayer, PlayerBranchProbe } from './lichess-source.ts';
 
 const app = document.querySelector<HTMLElement>('#app');
 if (!app) throw new Error('Repertoire Lab requires #app');
@@ -75,6 +75,7 @@ type MatchRow = {
   match: BranchComparison;
   repertoire: Repertoire;
   exportMeta: Omit<GameResult, 'games'>;
+  playerExplorer: PlayerBranchProbe[];
   elapsedMs: number;
 };
 type Failure = { player?: string; phase: string; status: number | null; reason: string };
@@ -246,13 +247,18 @@ function renderDetail() {
   branches.append(node('h3', 'Opening branches'));
   for (const branch of row.match.branches) {
     const item = node('div', '', 'branch-row');
+    const index = row.playerExplorer.find(p => p.key === branch.key && p.side === branch.side);
     const name = node('strong', (branch.side === 'white' ? 'W' : 'B') + ' · ' + branch.route);
     const evidence = branch.evidence === 'confirmed'
       ? percentage(branch.coverage) + ' coverage · ' + percentage(branch.agreement) + ' agreement'
       : branch.evidence === 'sparse' ? 'Sparse sample' : 'Not observed';
     item.append(name, node('span', evidence),
       node('small', branch.userGames + ' your games · ' + branch.candidateGames +
-        ' theirs · ' + branch.supportedPositions + '/' + branch.userPositions + ' supported positions'));
+        ' theirs · ' + branch.supportedPositions + '/' + branch.userPositions + ' supported positions' +
+        (index ? ' · Player Explorer ' + (index.status === 'complete'
+          ? index.snapshotGames + ' indexed games' : index.status === 'partial'
+            ? 'indexing (partial)' : index.status) : '')));
+
     branches.append(item);
   }
   summary.append(branches);
@@ -293,6 +299,7 @@ function createReport() {
         export: row.exportMeta,
         elapsedMs: row.elapsedMs,
       },
+      playerExplorer: row.playerExplorer,
       score: row.match.score, coverage: row.match.coverage, agreement: row.match.agreement,
       sides: row.match.bySide,
       branches: row.match.branches,
@@ -365,6 +372,14 @@ async function run() {
       status('Comparing ' + (index + 1) + '/' + candidates.length + ': ' + candidate.name);
       const candidateStarted = performance.now();
       try {
+        const playerExplorer: PlayerBranchProbe[] = [];
+        for (const seed of selectPlayerProbes(candidate, seeds)) {
+          if (active.signal.aborted) break;
+          const observation = await probePlayerBranch(
+            candidate.name, seed, months, log, active.signal);
+          playerExplorer.push(observation);
+        }
+        if (active.signal.aborted) break;
         const exported = await exportGames(candidate.name, 140, months, log, active.signal);
         const repertoire = buildRepertoire(candidate.name, exported.games);
         const match = compareBranchRepertoires(ownProfile, repertoire, seeds);
@@ -373,6 +388,8 @@ async function run() {
           bestWhite: match.bySide.white.score, bestBlack: match.bySide.black.score,
           score: match.score, coverage: percentage(match.coverage), agreement: percentage(match.agreement),
           games: repertoire.accepted, skippedReasons: repertoire.skippedReasons,
+          explorer: playerExplorer.map(p => ({ route: p.route, side: p.side,
+            status: p.status, snapshotGames: p.snapshotGames })),
           sharedWhite: match.bySide.white.sharedPositions,
           sharedBlack: match.bySide.black.sharedPositions,
           branchEvidence: match.branches.map(b => ({ side: b.side, route: b.route,
@@ -381,7 +398,7 @@ async function run() {
         });
         if (repertoire.accepted) {
           rows.push({
-            player: candidate, match, repertoire,
+            player: candidate, match, repertoire, playerExplorer,
             exportMeta: {
               rejected: exported.rejected, received: exported.received,
               overflow: exported.overflow, bytes: exported.bytes,

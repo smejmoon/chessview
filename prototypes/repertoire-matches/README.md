@@ -27,9 +27,10 @@ For quality feedback, describe which displayed opening similarities are relevant
 3. Choose up to **four frequent opening-position seeds per color**, at plies 4–11, diversifying the first four move plies when possible.
 4. Query the rated Lichess Opening Explorer at each seed, restricted to rating groups 2200 and 2500, and take up to four top and eight recent game references per position. Find players of the matching color from those games. Resolve candidate titles/current profiles in a bounded `POST /api/users` call (Explorer titles are a fallback when lookup fails). Prefer candidates who appear across more selected opening branches.
 5. If fewer than four opening-derived players are found, add up to four total players from titled 2200+ Lichess blitz/rapid/classical leaderboards, explicitly marking those candidates as **Leaderboard fallback**. The requested count is a ceiling, not a quota.
-6. Export up to **140 recent games** per selected candidate and compare them to the user's sampled position choices. Candidate sampling is intentionally smaller than in v1 to reduce download time, at the expense of statistical confidence.
+6. For each selected candidate, make at most **two short Player Opening Explorer probes** (prefer the discovery branch, plus a popular branch in the other color). Each query is authenticated through the shared session and gateway, reads at most 128 KB, and has a **2.2-second elapsed-time budget**, including queueing. The endpoint is an evolving NDJSON indexing stream: a snapshot before natural completion (or while `queuePosition > 0`) is labeled **partial** and never interpreted as absence or folded into the score.
+7. Export up to **140 recent games** per selected candidate and compare them to the user's sampled position choices. Candidate sampling is intentionally smaller than in v1 to reduce download time, at the expense of statistical confidence.
 
-The user export and player exports honor the local sample limit even if the API returns extra records. The difference between requested, received and used records is logged as `overflow`. No entire game list is persisted.
+The user export and player exports honor the local sample limit even if the API returns extra records. When a candidate export reaches 140 valid records, the stream is cancelled instead of waiting for EOF. `streamStoppedAtLimit` records that cutoff and `received` counts only records actually parsed; `overflow` counts extra records parsed before cutoff, not hypothetical unsent records. No entire game list is persisted.
 
 ## Ranking and interpretation
 
@@ -66,3 +67,7 @@ External API specifications: [game export](https://lichess.org/api#tag/Games/ope
 `openingSeeds` identifies the canonical branch roots. Each `candidates[].branches[]` entry contains `side`, `key`, `route`, `userGames`, `candidateGames`, `candidateSideGames`, `userPositions`, `observedPositions`, `supportedPositions`, `evidence` (`confirmed`, `sparse`, `not-observed`), nullable `coverage`, `agreement`, `score`, and up to eight supporting `choices`. `candidates[].sides` summarizes each color. Null means insufficient evidence; zero means observed but no supported coverage. Counts are from bounded recent-game exports and are not lifetime claims.
 
 The `discoveryBranches[]` report section records discovered accounts, titled accounts, selected accounts, scored candidates with confirmed branch evidence, and sampled candidate games reaching each opening root.
+
+### Player Explorer diagnostics
+
+Each `candidates[].playerExplorer[]` entry records the queried branch, `status` (`complete`, `partial`, `timeout`, `unavailable`), `snapshotGames`, `queuePosition`, up to four move/count summaries, elapsed milliseconds and HTTP status. `complete` requires natural stream EOF and queue position zero. Partial data is strictly diagnostic, never a score or evidence of absence. When indexed results disagree with the recent-game export, check the month-rounded `since` filter and sample limits. This remains a **bounded feasibility probe**, not a replacement for candidate discovery or opening-game sampling.

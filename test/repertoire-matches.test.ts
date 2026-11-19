@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
 import { canonicalPosition } from '../src/graph.ts';
 import { buildRepertoire, compareRepertoires, compareBranchRepertoires, openingSeeds } from '../prototypes/repertoire-matches/matcher.ts';
-import { discoverCandidates, exportGames } from '../prototypes/repertoire-matches/lichess-source.ts';
+import { discoverCandidates, exportGames, probePlayerBranch, selectPlayerProbes } from '../prototypes/repertoire-matches/lichess-source.ts';
 
 function game(id: string, white: string, black: string, moves: string) {
   return { id, rated: true, variant: 'standard', moves,
@@ -236,4 +236,63 @@ test('branch position examples retain candidate game IDs', () => {
     game('cd76540' + i, 'master', 'other', 'e4 e5 Nf3 Nc6 Bb5 a6')));
   const positions = compareBranchRepertoires(own, theirs).shared;
   assert.equal(positions[0].exampleGame, 'cd765400');
+});
+
+test('player Explorer probes retain separate color and authenticated canonical FEN', async () => {
+  const signal = new AbortController().signal;
+  const seed = openingSeeds(buildRepertoire('alice', Array.from({ length: 4 }, (_, i) =>
+    game('ff12340' + i, 'alice', 'other', 'e4 e5 Nf3 Nc6 Bb5 a6'))))[0];
+  const calls: string[] = [];
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async (input, init, work) => {
+      calls.push(String(input));
+      assert.equal(init?.signal, work?.signal);
+      return new Response(
+        JSON.stringify({ queuePosition: 0, white: 3, draws: 1, black: 2,
+          moves: [{ uci: 'f1b5', san: 'Bb5', white: 3, draws: 1, black: 2 }] }) + '\\n',
+        { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
+    };
+  const result = await probePlayerBranch('master', seed, 12, () => {}, signal, request, 500);
+  assert.equal(result.status, 'complete');
+  assert.equal(result.snapshotGames, 6);
+  assert.deepEqual(result.moves, [{ uci: 'f1b5', san: 'Bb5', games: 6 }]);
+  const url = new URL(calls[0]);
+  assert.equal(url.hostname, 'explorer.lichess.org');
+  assert.equal(url.pathname, '/player');
+  assert.equal(url.searchParams.get('color'), 'white');
+  assert.equal(url.searchParams.get('modes'), 'rated');
+  assert.equal(url.searchParams.get('recentGames'), '0');
+  assert.equal(url.searchParams.get('fen')?.split(' ').length, 6);
+});
+
+test('incomplete Player Explorer snapshots are partial and cannot claim absence', async () => {
+  const seed = { side: 'black' as const, key: canonicalPosition(new Chess().fen()),
+    route: 'test', visits: 6, ply: 5 };
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async (_input, init) => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            JSON.stringify({ queuePosition: 5, white: 0, draws: 0, black: 0, moves: [] }) + '\\n'));
+          init?.signal?.addEventListener('abort', () => controller.error(new DOMException('timeout', 'AbortError')));
+        },
+      });
+      return new Response(stream, { status: 200 });
+    };
+  const result = await probePlayerBranch('master', seed, 12,
+    () => {}, new AbortController().signal, request, 25);
+  assert.equal(result.status, 'partial');
+  assert.equal(result.snapshotGames, 0);
+  assert.equal(result.queuePosition, 5);
+});
+
+test('a per-player probe does not scan more than two roots', () => {
+  const seeds = [
+    { side: 'white' as const, key: 'w1', route: 'W1', ply: 4, visits: 20 },
+    { side: 'white' as const, key: 'w2', route: 'W2', ply: 6, visits: 12 },
+    { side: 'black' as const, key: 'b1', route: 'B1', ply: 5, visits: 18 },
+  ];
+  const candidate = { id: 'master', name: 'Master', title: 'IM', rating: 2500,
+    board: 'blitz', source: 'opening-explorer' as const, seedHits: 1, seedRoutes: ['W2'], exampleGames: 1 };
+  assert.deepEqual(selectPlayerProbes(candidate, seeds).map(s => s.route), ['W2', 'W1']);
 });

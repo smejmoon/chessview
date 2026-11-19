@@ -432,3 +432,29 @@ test('complete zero is absence but a partial zero cannot support negative eviden
   assert.equal(partial.bySide.white.checkedPositions, 0);
   assert.equal(partial.bySide.white.overlap, null);
 });
+
+test('discovery includes move representative games and selects strongest titled candidates', async () => {
+  const seed = { side: 'white' as const, key: canonicalPosition(new Chess().fen()),
+    route: 'Representative branch', visits: 10, ply: 8 };
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async (input) => {
+      const url = String(input);
+      if (url.includes('/lichess?')) {
+        assert.equal(new URL(url).searchParams.get('moves'), '12');
+        return new Response(JSON.stringify({
+          topGames: [{ id: 'aa111111', white: { name: 'FMPlayer', rating: 2320 } }],
+          recentGames: [],
+          moves: [{ uci: 'e2e4', game: { id: 'bb222222',
+            white: { name: 'GMPlayer', rating: 2770 } } }],
+        }));
+      }
+      if (url.includes('/api/users')) return new Response(JSON.stringify([
+        { id: 'fmplayer', username: 'FMPlayer', title: 'FM', perfs: { blitz: { rating: 2320 } } },
+        { id: 'gmplayer', username: 'GMPlayer', title: 'GM', perfs: { blitz: { rating: 2770 } } },
+      ]));
+      throw new Error('No candidate game exports or leaderboards permitted');
+    };
+  const result = await discoverCandidates('alice', [seed], 2, () => {},
+    new AbortController().signal, request);
+  assert.deepEqual(result.map(p => p.id), ['gmplayer', 'fmplayer']);
+});

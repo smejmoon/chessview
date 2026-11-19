@@ -17,11 +17,10 @@ LichessGateway. Production Chessview's graph and navigation remain unchanged.
    Thus there are at most 20 selected positions total.
 3. For each selected position, rated aggregate Opening Explorer is searched
    with rating groups 2200 and 2500, and a month-rounded `since` filter matching
-   the UI's history setting (12 months by default). The returned **top and recent
-   game references** are only a partial discovery index. Identify strong players
+   the UI's history setting (12 months by default). The returned **top, recent and per-move representative game references** are only a partial discovery index. Identify strong players
    who were actually the right color at that position; resolve their titled
    accounts and ratings via the bounded authenticated `POST /api/users` request.
-   Prefer accounts found at more selected positions, then higher rated accounts.
+   Prefer the highest-rated titled accounts, then accounts found at more selected positions.
    **There is no generic leaderboard fallback.**
 4. Each selected titled candidate is checked at **up to four positions** using
    the authenticated per-player Opening Explorer. Prefer positions where the
@@ -69,7 +68,7 @@ in force. Unauthorized (401) and rate-limited (429) responses halt discovery
 or verification rather than silently manufacturing evidence.
 
 Player Explorer returns up to 12 moves and no recent game references.
-The aggregate Explorer returns at most four top and four recent references.
+The aggregate Explorer returns at most four top, four recent and twelve move-representative references per position.
 No downloaded candidate game collection exists in this version. Authentication
 tokens, raw games and complete move lists are never included in the diagnostic
 report.

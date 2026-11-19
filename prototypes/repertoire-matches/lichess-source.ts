@@ -68,7 +68,10 @@ type Prospect = {
 function extractProspects(seeds: OpeningSeed[], responses: { seed: OpeningSeed; payload: any }[], ownUsername: string) {
   const found = new Map<string, Prospect>();
   for (const { seed, payload } of responses) {
-    for (const game of [...(payload.topGames ?? []), ...(payload.recentGames ?? [])]) {
+    const representatives = Array.isArray(payload.moves)
+      ? payload.moves.map((move: { game?: unknown }) => move?.game).filter(Boolean) : [];
+    for (const game of [...(payload.topGames ?? []), ...(payload.recentGames ?? []),
+      ...representatives]) {
       const selected = game?.[seed.side as Side];
       const name = selected?.name;
       const rating = selected?.rating;
@@ -90,8 +93,8 @@ function extractProspects(seeds: OpeningSeed[], responses: { seed: OpeningSeed; 
       if (typeof game.id === 'string') player.seenGames.add(game.id);
     }
   }
-  return [...found.values()].sort((a, b) => b.routes.size - a.routes.size ||
-    b.maxObservedRating - a.maxObservedRating || b.seenGames.size - a.seenGames.size);
+  return [...found.values()].sort((a, b) => b.maxObservedRating - a.maxObservedRating ||
+    b.routes.size - a.routes.size || b.seenGames.size - a.seenGames.size);
 }
 
 export async function discoverCandidates(
@@ -115,7 +118,7 @@ export async function discoverCandidates(
     url.searchParams.set('speeds', SPEEDS.join(','));
     url.searchParams.set('ratings', '2200,2500');
     url.searchParams.set('since', new Date(Date.now() - months * 30.44 * 86400000).toISOString().slice(0, 7));
-    url.searchParams.set('moves', '0');
+    url.searchParams.set('moves', '12');
     url.searchParams.set('topGames', '4');
     url.searchParams.set('recentGames', '4');
     const started = performance.now();
@@ -138,9 +141,11 @@ export async function discoverCandidates(
         throw new Error('Malformed opening Explorer response');
       }
       explorerResults.push({ seed, payload });
+      const representativeGames = Array.isArray(payload.moves)
+        ? payload.moves.filter((m: { game?: unknown }) => m?.game).length : 0;
       log('discovery', 'opening explorer games', {
         route: seed.route, side: seed.side, top: payload.topGames.length,
-        recent: payload.recentGames.length,
+        recent: payload.recentGames.length, representativeGames,
         totalPositionGames: (payload.white ?? 0) + (payload.draws ?? 0) + (payload.black ?? 0),
         ms: Math.round(performance.now() - started),
       });
@@ -207,7 +212,7 @@ export async function discoverCandidates(
       seedRoutes: [...prospect.routes], exampleGames: prospect.seenGames.size,
     });
   }
-  discovered.sort((a, b) => b.seedHits - a.seedHits || b.rating - a.rating || a.id.localeCompare(b.id));
+  discovered.sort((a, b) => b.rating - a.rating || b.seedHits - a.seedHits || a.id.localeCompare(b.id));
   discovered.splice(count);
   const branchStats = seeds.filter(seed => !seed.originKey).map(seed => {
     const found = prospects.filter(p => p.routes.has(seed.route));

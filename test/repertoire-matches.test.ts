@@ -136,13 +136,18 @@ test('opening-first discovery uses authenticated requests for Explorer and user 
       throw new Error('Unexpected API request: ' + url);
     };
   const logs: string[] = [];
+  let funnel: import('../prototypes/repertoire-matches/lichess-source.ts').DiscoveryBranch[] = [];
   const result = await discoverCandidates('alice', [{
     side: 'white', key: canonicalPosition(new Chess().fen()), route: '',
     ply: 4, visits: 12,
-  }], 1, (area, event) => logs.push(area + ':' + event), controller.signal, authenticated);
+  }], 1, (area, event) => logs.push(area + ':' + event), controller.signal, authenticated,
+    stats => { funnel = stats; });
   assert.equal(result.length, 1);
   assert.equal(result[0].name, 'GMChess');
   assert.equal(result[0].source, 'opening-explorer');
+  assert.equal(funnel[0].discoveredAccounts, 1);
+  assert.equal(funnel[0].titledAccounts, 1);
+  assert.equal(funnel[0].selectedAccounts, 1);
   assert.deepEqual(calls.map(c => c.method), ['GET', 'POST']);
   assert.ok(logs.includes('network:opening explorer response'));
   assert.ok(calls[0].url.startsWith('https://explorer.lichess.org/lichess'));

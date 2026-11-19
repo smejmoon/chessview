@@ -280,7 +280,7 @@ function createReport() {
       confirmedPlayers: rows.filter(row => row.match.branches.some(b =>
         b.key === branch.key && b.evidence === 'confirmed')).length,
       confirmedCandidateGames: rows.reduce((sum, row) => sum +
-        (row.match.branches.find(b => b.key === branch.key)?.candidateGames ?? 0), 0),
+        (row.match.branches.find(b => b.key === branch.key && b.evidence === 'confirmed')?.candidateGames ?? 0), 0),
     })),
     candidates: rows.map(row => ({
       player: row.player,

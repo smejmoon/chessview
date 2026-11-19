@@ -1,4 +1,3 @@
-import { lichessGateway } from '../../src/lichess-gateway.ts';
 import { lichessSession } from '../../src/lichess-session.ts';
 import { toPlayableFen } from '../../src/graph.ts';
 import type { GameRecord, OpeningSeed, Side } from './matcher.ts';
@@ -10,7 +9,7 @@ export type StrongPlayer = {
   title: string;
   rating: number;
   board: string;
-  source: 'opening-explorer' | 'leaderboard';
+  source: 'opening-explorer';
   seedHits: number;
   seedRoutes: string[];
   exampleGames: number;
@@ -92,7 +91,7 @@ function extractProspects(seeds: OpeningSeed[], responses: { seed: OpeningSeed; 
     }
   }
   return [...found.values()].sort((a, b) => b.routes.size - a.routes.size ||
-    b.seenGames.size - a.seenGames.size || b.maxObservedRating - a.maxObservedRating);
+    b.maxObservedRating - a.maxObservedRating || b.seenGames.size - a.seenGames.size);
 }
 
 export async function discoverCandidates(
@@ -114,9 +113,10 @@ export async function discoverCandidates(
     url.searchParams.set('fen', seed.key);
     url.searchParams.set('speeds', SPEEDS.join(','));
     url.searchParams.set('ratings', '2200,2500');
+    url.searchParams.set('since', new Date(Date.now() - 12 * 30.44 * 86400000).toISOString().slice(0, 7));
     url.searchParams.set('moves', '0');
     url.searchParams.set('topGames', '4');
-    url.searchParams.set('recentGames', '8');
+    url.searchParams.set('recentGames', '4');
     const started = performance.now();
     try {
       log('discovery', 'opening explorer request', {
@@ -205,8 +205,9 @@ export async function discoverCandidates(
       board, source: 'opening-explorer', seedHits: prospect.routes.size,
       seedRoutes: [...prospect.routes], exampleGames: prospect.seenGames.size,
     });
-    if (discovered.length >= count) break;
   }
+  discovered.sort((a, b) => b.seedHits - a.seedHits || b.rating - a.rating || a.id.localeCompare(b.id));
+  discovered.splice(count);
   const branchStats = seeds.filter(seed => !seed.originKey).map(seed => {
     const found = prospects.filter(p => p.routes.has(seed.route));
     return {
@@ -223,57 +224,10 @@ export async function discoverCandidates(
     names: discovered.map(p => ({ player: p.name, seedHits: p.seedHits, games: p.exampleGames })),
   });
 
-  if (discovered.length < count && discovered.length < 4) {
-    // Keep generic fallback bounded rather than filling the cohort with unrelated players.
-    const lists: StrongPlayer[][] = [];
-    for (const board of SPEEDS) {
-      const started = performance.now();
-      try {
-        const response = await lichessGateway.request('https://lichess.org/api/player/top/100/' + board, {
-          headers: { Accept: 'application/vnd.lichess.v3+json' }, signal,
-        }, { signal, urgency: 'background' });
-        if (!response.ok) throw httpError('Leaderboard ' + board, response.status);
-        const payload = await response.json();
-        if (!Array.isArray(payload?.users)) throw new Error('Malformed leaderboard response');
-        const players: StrongPlayer[] = [];
-        for (const u of payload.users) {
-          const rating = u?.perfs?.[board]?.rating;
-          if (typeof u?.id !== 'string' || !USERNAME.test(u.id) ||
-              typeof u?.username !== 'string' || !TITLES.has(u?.title) ||
-              !Number.isFinite(rating) || rating < 2200) continue;
-          players.push({
-            id: u.id.toLowerCase(), name: u.username, title: u.title,
-            rating, board, source: 'leaderboard', seedHits: 0, seedRoutes: [], exampleGames: 0,
-          });
-        }
-        lists.push(players);
-        log('discovery', 'leaderboard fallback loaded', {
-          board, players: players.length, ms: Math.round(performance.now() - started),
-        });
-      } catch (error) {
-        if (signal.aborted) throw error;
-        log('error', 'leaderboard fallback failed', {
-          board, status: httpStatus(error),
-          reason: error instanceof Error ? error.message : String(error),
-        });
-        if ([401, 429].includes(httpStatus(error) ?? -1)) throw error;
-      }
-    }
-    const seen = new Set([ownUsername.toLowerCase(), ...discovered.map(p => p.id)]);
-    for (let i = 0; i < 100 && discovered.length < Math.min(count, 4); i++) {
-      for (const list of lists) {
-        const p = list[i];
-        if (!p || seen.has(p.id)) continue;
-        discovered.push(p);
-        seen.add(p.id);
-        if (discovered.length >= count) break;
-      }
-    }
-  }
   log('discovery', 'candidate cohort assembled', {
     requested: count, total: discovered.length,
     openingDerived: discovered.filter(p => p.source === 'opening-explorer').length,
-    leaderboardFallback: discovered.filter(p => p.source === 'leaderboard').length,
+    leaderboardFallback: 0,
   });
   return discovered;
 }
@@ -406,18 +360,19 @@ function playerSnapshot(line: string): PlayerSnapshot {
   return value as PlayerSnapshot;
 }
 
-/** At most two bounded Player Explorer checks per candidate; never downloaded wholesale. */
-export function selectPlayerProbes(candidate: StrongPlayer, seeds: OpeningSeed[]): OpeningSeed[] {
+/** Prefer discovery hits, then frequent positions for each color; never more than four. */
+export function selectPlayerProbes(candidate: StrongPlayer, seeds: OpeningSeed[], limit = 4): OpeningSeed[] {
   const preferred = seeds.filter(seed => candidate.seedRoutes.includes(seed.route))
     .sort((a, b) => b.visits - a.visits);
-  const common = (['white', 'black'] as Side[]).map(side =>
+  const balanced = (['white', 'black'] as Side[]).map(side =>
     seeds.filter(seed => seed.side === side).sort((a, b) => b.visits - a.visits)[0])
     .filter((seed): seed is OpeningSeed => Boolean(seed));
+  const remaining = [...seeds].sort((a, b) => b.visits - a.visits);
   const chosen: OpeningSeed[] = [];
-  for (const seed of [...preferred, ...common]) {
-    if (chosen.some(item => item.key === seed.key && item.side === seed.side)) continue;
+  for (const seed of [...preferred, ...balanced, ...remaining]) {
+    if (chosen.some(item => item.side === seed.side && item.key === seed.key)) continue;
     chosen.push(seed);
-    if (chosen.length === 2) break;
+    if (chosen.length >= limit) break;
   }
   return chosen;
 }
@@ -438,7 +393,7 @@ export async function probePlayerBranch(
   url.searchParams.set('speeds', SPEEDS.join(','));
   url.searchParams.set('modes', 'rated');
   url.searchParams.set('since', new Date(Date.now() - months * 30.44 * 86400000).toISOString().slice(0, 7));
-  url.searchParams.set('moves', '4');
+  url.searchParams.set('moves', '12');
   url.searchParams.set('recentGames', '0');
   log('player-explorer', 'probe started', {
     player, side: seed.side, route: seed.route, timeoutMs, since: url.searchParams.get('since'),
@@ -509,7 +464,7 @@ export async function probePlayerBranch(
     side: seed.side, key: seed.key, route: seed.route, status,
     snapshotGames: snapshot ? snapshot.white + snapshot.draws + snapshot.black : null,
     queuePosition: snapshot?.queuePosition ?? null,
-    moves: snapshot?.moves.slice(0, 4).filter(m => typeof m.uci === 'string' &&
+    moves: snapshot?.moves.slice(0, 12).filter(m => typeof m.uci === 'string' &&
       typeof m.san === 'string' &&
       [m.white, m.draws, m.black].every(n => Number.isInteger(n) && n >= 0))
       .map(m => ({ uci: m.uci, san: m.san, games: m.white + m.draws + m.black })) ?? [],

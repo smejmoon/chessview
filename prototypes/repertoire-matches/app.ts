@@ -6,8 +6,10 @@ import './style.css';
 import { Chessground } from '@lichess-org/chessground';
 import { lichessSession } from '../../src/lichess-session.ts';
 import { toPlayableFen } from '../../src/graph.ts';
-import { buildRepertoire, compareBranchRepertoires, openingFollowups, openingSeeds } from './matcher.ts';
-import type { OpeningSeed, Repertoire, BranchComparison, SharedPosition, Side } from './matcher.ts';
+import { buildRepertoire } from './matcher.ts';
+import { frequentPositions, comparePositionStats } from './position-matcher.ts';
+import type { OpeningSeed, Repertoire, SharedPosition, Side } from './matcher.ts';
+import type { PositionComparison } from './position-matcher.ts';
 import { accountName, discoverCandidates, exportGames, httpStatus, probePlayerBranch, selectPlayerProbes } from './lichess-source.ts';
 import type { DiscoveryBranch, GameResult, Log, StrongPlayer, PlayerBranchProbe } from './lichess-source.ts';
 
@@ -22,11 +24,11 @@ app.innerHTML = [
   '<option value="12" selected>12 players</option><option value="20">20 players</option></select></label>',
   '<button id="start" type="submit" class="primary">Find matches</button><button id="stop" type="button" disabled>Cancel</button></form>',
   '<span id="status" role="status" aria-live="polite">Sign in with Lichess to begin.</span></div>',
-  '<div class="profile-line" id="profile-line">Opening-first discovery · White and Black analyzed separately</div>',
+  '<div class="profile-line" id="profile-line">Frequent positions at depths 8 and 10 · White and Black separately</div>',
   '<section class="content"><aside class="rankings"><div class="pane-title">MATCHES <span id="match-count">—</span></div>',
   '<div id="results"><p class="muted">Run a search to find titled players appearing in your opening branches.</p></div></aside>',
   '<main class="details"><div id="summary" class="summary"><h2>Select a match</h2>',
-  '<p class="muted">The experiment compares sampled game positions and actual move choices.</p></div>',
+  '<p class="muted">Explorer verifies candidate moves at your frequent positions. No candidate games downloaded.</p></div>',
   '<div class="detail-tools"><label for="view">Inspect</label><select id="view"><option value="differences">Different choices</option>',
   '<option value="shared">Common positions</option></select><span id="position-count" class="muted"></span></div>',
   '<div class="workspace"><div id="positions" class="positions"></div>',
@@ -72,9 +74,7 @@ const log: Log = (area, event, detail = {}) => {
 
 type MatchRow = {
   player: StrongPlayer;
-  match: BranchComparison;
-  repertoire: Repertoire;
-  exportMeta: Omit<GameResult, 'games'>;
+  match: PositionComparison;
   playerExplorer: PlayerBranchProbe[];
   elapsedMs: number;
 };
@@ -83,7 +83,7 @@ type SessionReport = {
   startedAt: string;
   finishedAt: string | null;
   state: 'running' | 'complete' | 'cancelled' | 'failed';
-  settings: { months: number; candidates: number; ownGameLimit: number; candidateGameLimit: number };
+  settings: { months: number; candidates: number; ownGameLimit: number; perDepth: number; probeLimitPerCandidate: number };
   ownExport: Omit<GameResult, 'games'> | null;
   failures: Failure[];
 };
@@ -102,8 +102,8 @@ const SIDES: Side[] = ['white', 'black'];
 const nowIso = () => new Date().toISOString();
 const percentage = (v: number | null) => v === null ? '—' : Math.round(v * 100) + '%';
 const score = (row: MatchRow) => Math.max(row.match.bySide.white.score ?? -1, row.match.bySide.black.score ?? -1);
-const sourceLabel = (p: StrongPlayer) => p.source === 'opening-explorer' ?
-  'Opening ' + p.seedHits + ' branch' + (p.seedHits === 1 ? '' : 'es') : 'Leaderboard fallback';
+const sourceLabel = (p: StrongPlayer) =>
+  'Discovered in ' + p.seedHits + ' position' + (p.seedHits === 1 ? '' : 's');
 
 function status(message: string, error = false) {
   el('status').textContent = message;
@@ -193,7 +193,7 @@ function renderPositions(row: MatchRow) {
   el('position-count').textContent = set.length + ' positions';
   if (!set.length) {
     container.append(node('p', isDifference ? 'No different choices in the overlapping sample.' :
-      'No common positions in the sampled openings.', 'muted'));
+      'No fully indexed shared positions yet.', 'muted'));
     return;
   }
   for (const p of set) {
@@ -235,39 +235,44 @@ function renderDetail() {
     const block = node('div', '', 'stat');
     block.append(node('span', side === 'white' ? 'AS WHITE' : 'AS BLACK', 'stat-label'),
       node('strong', match.score === null ? '—' : match.score + '%', 'stat-value'),
-      node('span', percentage(match.coverage) + ' coverage · ' + percentage(match.agreement) + ' agreement'),
-      node('small', match.userGames + ' your games / ' + match.candidateGames + ' theirs'));
+      node('span', percentage(match.coverage) + ' checked · ' + percentage(match.agreement) + ' agreement'),
+      node('small', match.checkedPositions + '/' + match.selectedPositions +
+        ' indexed positions · ' + match.confirmedPositions + ' confirmed · ' +
+        match.partialPositions + ' pending'));
     stats.append(block);
   }
-  summary.append(stats, node('p', sourceLabel(row.player) + ' · ' + row.repertoire.accepted +
-    ' analyzed games (' + row.repertoire.skipped + ' excluded) · combined score ' +
-    (row.match.coverage === null ? 'unconfirmed' : row.match.score + '%') +
-    '. Scores require at least three games per opening branch.', 'muted compact'));
-  const branches = node('div', '', 'branch-list');
-  branches.append(node('h3', 'Opening branches'));
-  for (const branch of row.match.branches) {
-    const item = node('div', '', 'branch-row');
-    const index = row.playerExplorer.find(p => p.key === branch.key && p.side === branch.side);
-    const name = node('strong', (branch.side === 'white' ? 'W' : 'B') + ' · ' + branch.route);
-    const evidence = branch.evidence === 'confirmed'
-      ? percentage(branch.coverage) + ' coverage · ' + percentage(branch.agreement) + ' agreement'
-      : branch.evidence === 'sparse' ? 'Sparse sample' : 'Not observed';
-    item.append(name, node('span', evidence),
-      node('small', branch.userGames + ' your games · ' + branch.candidateGames +
-        ' theirs · ' + branch.supportedPositions + '/' + branch.userPositions + ' supported positions' +
-        (index ? ' · Player Explorer ' + (index.status === 'complete'
-          ? index.snapshotGames + ' indexed games' : index.status === 'partial'
-            ? 'indexing (partial)' : index.status) : '')));
 
-    branches.append(item);
+  summary.append(stats, node('p', sourceLabel(row.player) +
+    ' · Explorer-only evidence · combined score ' +
+    (row.match.coverage === null ? 'unverified' : row.match.score + '%') +
+    '. Scores are conservative evidence across selected positions, not a lifetime similarity estimate.', 'muted compact'));
+  const positions = node('div', '', 'branch-list');
+  positions.append(node('h3', 'Selected positions · 8/10 plies'));
+  for (const item of row.match.positions) {
+    const entry = node('div', '', 'branch-row');
+    const observed = item.candidateGames === null ? '—' : String(item.candidateGames);
+    const statusLabel = item.status === 'confirmed'
+      ? 'Confirmed · ' + percentage(item.agreement) + ' agreement'
+      : item.status === 'rare' ? 'Only ' + observed + ' indexed games'
+      : item.status === 'absent' ? '0 games (fully indexed)'
+      : item.status === 'not-checked' ? 'Not queried'
+      : item.status === 'partial' ? 'Indexing incomplete'
+      : item.status === 'timeout' ? 'Timed out' : 'Unavailable';
+    entry.append(
+      node('strong', (item.side === 'white' ? 'W' : 'B') + ' · ' + item.route),
+      node('span', statusLabel),
+      node('small', item.userGames + ' your games · ' +
+        observed + ' theirs · ply ' + item.ply),
+    );
+    positions.append(entry);
   }
-  summary.append(branches);
+  summary.append(positions);
   renderPositions(row);
 }
 
 function createReport() {
   return {
-    schemaVersion: 'repertoire-lab-4',
+    schemaVersion: 'repertoire-lab-5',
     exportedAt: nowIso(),
     app: 'Chessview / Repertoire Lab',
     viewer: username,
@@ -284,30 +289,26 @@ function createReport() {
     openingSeeds: seeds,
     discoveryBranches: discoveryBranches.map(branch => ({
       ...branch,
-      confirmedPlayers: rows.filter(row => row.match.branches.some(b =>
-        b.key === branch.key && b.evidence === 'confirmed')).length,
+      confirmedPlayers: rows.filter(row => row.match.positions.some(p =>
+        p.key === branch.key && p.side === branch.side && p.status === 'confirmed')).length,
       confirmedCandidateGames: rows.reduce((sum, row) => sum +
-        (row.match.branches.find(b => b.key === branch.key && b.evidence === 'confirmed')?.candidateGames ?? 0), 0),
+        (row.match.positions.find(p => p.key === branch.key &&
+          p.side === branch.side && p.status === 'confirmed')?.candidateGames ?? 0), 0),
     })),
     candidates: rows.map(row => ({
       player: row.player,
-      sample: {
-        accepted: row.repertoire.accepted,
-        skipped: row.repertoire.skipped,
-        skippedReasons: row.repertoire.skippedReasons,
-        games: row.repertoire.games,
-        export: row.exportMeta,
-        elapsedMs: row.elapsedMs,
-      },
+      elapsedMs: row.elapsedMs,
       playerExplorer: row.playerExplorer,
-      score: row.match.score, coverage: row.match.coverage, agreement: row.match.agreement,
+      score: row.match.score,
+      checkedCoverage: row.match.coverage,
+      agreement: row.match.agreement,
       sides: row.match.bySide,
-      branches: row.match.branches,
+      positions: row.match.positions,
       commonPositions: row.match.shared,
       differentChoices: row.match.differences,
     })),
     events: [...events],
-    note: 'No OAuth tokens or full game move lists; includes account names and opening positions. Review before sharing.',
+    note: 'One bounded export of viewer games; no candidate game exports or OAuth tokens. Includes account names, opening keys and aggregate Explorer counts. Partial indexing is not negative evidence.',
   };
 }
 function reportJson() {
@@ -331,7 +332,7 @@ async function run() {
   const candidatesCount = Number(el<HTMLSelectElement>('candidates').value);
   report = {
     startedAt: nowIso(), finishedAt: null, state: 'running',
-    settings: { months, candidates: candidatesCount, ownGameLimit: 500, candidateGameLimit: 140 },
+    settings: { months, candidates: candidatesCount, ownGameLimit: 500, perDepth: 5, probeLimitPerCandidate: 4 },
     ownExport: null, failures: [],
   };
   selectedId = null;
@@ -356,24 +357,23 @@ async function run() {
       whitePositions: ownProfile.positions.white.size, blackPositions: ownProfile.positions.black.size,
     });
     if (!ownProfile.accepted) throw new Error('No eligible rated standard games in this period.');
-    seeds = openingSeeds(ownProfile);
-    log('profile', 'opening branches selected', {
+    seeds = frequentPositions(ownProfile);
+    log('profile', 'fixed-depth positions selected', {
       seeds: seeds.map(s => ({ side: s.side, route: s.route, visits: s.visits, ply: s.ply })),
     });
     el('profile-line').textContent = ownProfile.accepted + ' games · ' +
-      seeds.filter(s => s.side === 'white').length + ' White branches · ' +
-      seeds.filter(s => s.side === 'black').length + ' Black branches';
-    const extraSeeds = openingFollowups(ownProfile, seeds);
-    log('profile', 'deeper discovery positions selected', {
-      count: extraSeeds.length,
-      seeds: extraSeeds.map(s => ({ side: s.side, originRoute: s.originRoute,
-        route: s.route, visits: s.visits, ply: s.ply })),
-    });
-    status('Finding titled players in your opening branches…');
-    const candidates = await discoverCandidates(username, [...seeds, ...extraSeeds],
-      candidatesCount, log, active.signal,
-      undefined, stats => { discoveryBranches = stats; });
-    if (!candidates.length) throw new Error('No suitable titled-player candidates found.');
+      seeds.filter(s => s.side === 'white').length + ' White positions · ' +
+      seeds.filter(s => s.side === 'black').length + ' Black positions · plies 8/10';
+    if (!seeds.length) throw new Error('No frequent positions at the selected depths.');
+
+    status('Finding titled players from your frequent positions…');
+    const candidates = await discoverCandidates(username, seeds, candidatesCount, log, active.signal,
+      undefined, stats => { discoveryBranches = stats; }, months);
+    if (!candidates.length) {
+      report.state = 'complete';
+      status('No titled players in returned Explorer game references; export diagnostics.');
+      return;
+    }
     for (const [index, candidate] of candidates.entries()) {
       if (active.signal.aborted) break;
       status('Comparing ' + (index + 1) + '/' + candidates.length + ': ' + candidate.name);
@@ -387,40 +387,26 @@ async function run() {
           playerExplorer.push(observation);
         }
         if (active.signal.aborted) break;
-        const exported = await exportGames(candidate.name, 140, months, log, active.signal);
-        const repertoire = buildRepertoire(candidate.name, exported.games);
-        const match = compareBranchRepertoires(ownProfile, repertoire, seeds);
-        log('match', 'candidate scored', {
-          player: candidate.name, source: candidate.source, seeds: candidate.seedHits,
-          bestWhite: match.bySide.white.score, bestBlack: match.bySide.black.score,
-          score: match.score, coverage: percentage(match.coverage), agreement: percentage(match.agreement),
-          games: repertoire.accepted, skippedReasons: repertoire.skippedReasons,
-          explorer: playerExplorer.map(p => ({ route: p.route, side: p.side,
-            status: p.status, snapshotGames: p.snapshotGames })),
-          sharedWhite: match.bySide.white.sharedPositions,
-          sharedBlack: match.bySide.black.sharedPositions,
-          branchEvidence: match.branches.map(b => ({ side: b.side, route: b.route,
-            userGames: b.userGames, candidateGames: b.candidateGames,
-            supportedPositions: b.supportedPositions, evidence: b.evidence })),
+        const match = comparePositionStats(ownProfile, seeds, playerExplorer);
+        log('match', 'candidate Explorer statistics scored', {
+          player: candidate.name, source: candidate.source,
+          seedHits: candidate.seedHits, rating: candidate.rating,
+          white: match.bySide.white, black: match.bySide.black, score: match.score,
+          probes: playerExplorer.map(p => ({ side: p.side, route: p.route,
+            status: p.status, games: p.snapshotGames, queue: p.queuePosition })),
         });
-        if (repertoire.accepted) {
-          rows.push({
-            player: candidate, match, repertoire, playerExplorer,
-            exportMeta: {
-              rejected: exported.rejected, received: exported.received,
-              overflow: exported.overflow, bytes: exported.bytes,
-              streamStoppedAtLimit: exported.streamStoppedAtLimit,
-            },
-            elapsedMs: Math.round(performance.now() - candidateStarted),
-          });
-          rows.sort((a, b) => score(b) - score(a) || b.match.score - a.match.score);
-          if (!selectedId) selectedId = rows[0].player.id;
-          renderRanks();
-          if (selectedId === candidate.id) renderDetail();
-        }
+        rows.push({
+          player: candidate, match, playerExplorer,
+          elapsedMs: Math.round(performance.now() - candidateStarted),
+        });
+        rows.sort((a, b) => score(b) - score(a) || b.player.seedHits - a.player.seedHits ||
+          b.player.rating - a.player.rating);
+        if (!selectedId) selectedId = rows[0].player.id;
+        renderRanks();
+        if (selectedId === candidate.id) renderDetail();
       } catch (error) {
         if (active.signal.aborted) break;
-        captureFailure('candidate export', error, candidate.name);
+        captureFailure('player Explorer verification', error, candidate.name);
         if ([401, 429].includes(httpStatus(error) ?? -1)) throw error;
       }
     }
@@ -430,8 +416,8 @@ async function run() {
         side: branch.side, route: branch.route,
         discovered: branch.discoveredAccounts, titled: branch.titledAccounts,
         selected: branch.selectedAccounts,
-        confirmed: rows.filter(row => row.match.branches.some(b =>
-          b.key === branch.key && b.evidence === 'confirmed')).length,
+        confirmed: rows.filter(row => row.match.positions.some(p =>
+          p.key === branch.key && p.side === branch.side && p.status === 'confirmed')).length,
       })),
     });
     report.state = 'complete';

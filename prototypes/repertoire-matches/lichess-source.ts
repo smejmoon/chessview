@@ -98,6 +98,7 @@ export async function discoverCandidates(
   ownUsername: string, seeds: OpeningSeed[], count: number, log: Log, signal: AbortSignal,
   authorizedRequest: typeof lichessSession.authorizedRequest = lichessSession.authorizedRequest,
   onBranches?: (stats: DiscoveryBranch[]) => void,
+  months = 12,
 ): Promise<StrongPlayer[]> {
   const explorerResults: { seed: OpeningSeed; payload: any }[] = [];
   log('discovery', 'opening-first discovery started', {
@@ -113,7 +114,7 @@ export async function discoverCandidates(
     url.searchParams.set('fen', seed.key);
     url.searchParams.set('speeds', SPEEDS.join(','));
     url.searchParams.set('ratings', '2200,2500');
-    url.searchParams.set('since', new Date(Date.now() - 12 * 30.44 * 86400000).toISOString().slice(0, 7));
+    url.searchParams.set('since', new Date(Date.now() - months * 30.44 * 86400000).toISOString().slice(0, 7));
     url.searchParams.set('moves', '0');
     url.searchParams.set('topGames', '4');
     url.searchParams.set('recentGames', '4');

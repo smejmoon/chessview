@@ -98,7 +98,8 @@ export function comparePositionStats(
       const result: PositionEvidence = {
         side, key: seed.key, route: seed.route, ply: seed.ply,
         userGames: choice.visits, candidateGames: n,
-        status: !probe ? 'not-checked' : !complete ? probe.status :
+        status: !probe ? 'not-checked' : !complete ?
+          (probe.status === 'complete' ? 'partial' : probe.status) :
           n! >= MIN_GAMES ? 'confirmed' : n! ? 'rare' : 'absent',
         agreement: null, userMove: null, candidateMove: null, checked: complete,
       };

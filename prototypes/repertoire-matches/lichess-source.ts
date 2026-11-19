@@ -87,7 +87,7 @@ function extractProspects(seeds: OpeningSeed[], responses: { seed: OpeningSeed; 
       }
       if (TITLES.has(selected.title)) player.title = selected.title;
       player.maxObservedRating = Math.max(player.maxObservedRating, rating);
-      player.routes.add(seed.route);
+      player.routes.add(seed.originRoute ?? seed.route);
       if (typeof game.id === 'string') player.seenGames.add(game.id);
     }
   }
@@ -103,7 +103,10 @@ export async function discoverCandidates(
   const explorerResults: { seed: OpeningSeed; payload: any }[] = [];
   log('discovery', 'opening-first discovery started', {
     openingQueries: seeds.length, requestedCandidates: count,
-    seedRoutes: seeds.map(seed => ({ side: seed.side, route: seed.route, visits: seed.visits, ply: seed.ply })),
+    seedRoutes: seeds.map(seed => ({
+      side: seed.side, route: seed.route, originRoute: seed.originRoute ?? null,
+      visits: seed.visits, ply: seed.ply,
+    })),
   });
   for (const [index, seed] of seeds.entries()) {
     const url = new URL('https://explorer.lichess.org/lichess');
@@ -204,7 +207,7 @@ export async function discoverCandidates(
     });
     if (discovered.length >= count) break;
   }
-  const branchStats = seeds.map(seed => {
+  const branchStats = seeds.filter(seed => !seed.originKey).map(seed => {
     const found = prospects.filter(p => p.routes.has(seed.route));
     return {
       side: seed.side, key: seed.key, route: seed.route,

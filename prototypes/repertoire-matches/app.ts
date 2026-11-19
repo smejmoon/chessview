@@ -6,7 +6,7 @@ import './style.css';
 import { Chessground } from '@lichess-org/chessground';
 import { lichessSession } from '../../src/lichess-session.ts';
 import { toPlayableFen } from '../../src/graph.ts';
-import { buildRepertoire, compareBranchRepertoires, openingSeeds } from './matcher.ts';
+import { buildRepertoire, compareBranchRepertoires, openingFollowups, openingSeeds } from './matcher.ts';
 import type { OpeningSeed, Repertoire, BranchComparison, SharedPosition, Side } from './matcher.ts';
 import { accountName, discoverCandidates, exportGames, httpStatus, probePlayerBranch, selectPlayerProbes } from './lichess-source.ts';
 import type { DiscoveryBranch, GameResult, Log, StrongPlayer, PlayerBranchProbe } from './lichess-source.ts';
@@ -363,8 +363,15 @@ async function run() {
     el('profile-line').textContent = ownProfile.accepted + ' games · ' +
       seeds.filter(s => s.side === 'white').length + ' White branches · ' +
       seeds.filter(s => s.side === 'black').length + ' Black branches';
+    const extraSeeds = openingFollowups(ownProfile, seeds);
+    log('profile', 'deeper discovery positions selected', {
+      count: extraSeeds.length,
+      seeds: extraSeeds.map(s => ({ side: s.side, originRoute: s.originRoute,
+        route: s.route, visits: s.visits, ply: s.ply })),
+    });
     status('Finding titled players in your opening branches…');
-    const candidates = await discoverCandidates(username, seeds, candidatesCount, log, active.signal,
+    const candidates = await discoverCandidates(username, [...seeds, ...extraSeeds],
+      candidatesCount, log, active.signal,
       undefined, stats => { discoveryBranches = stats; });
     if (!candidates.length) throw new Error('No suitable titled-player candidates found.');
     for (const [index, candidate] of candidates.entries()) {

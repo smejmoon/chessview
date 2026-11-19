@@ -37,6 +37,8 @@ export type OpeningSeed = {
   ply: number;
   visits: number;
   route: string;
+  originKey?: string;
+  originRoute?: string;
 };
 export type SharedPosition = {
   side: Side;
@@ -205,6 +207,42 @@ export function openingSeeds(user: Repertoire, perSide = 4): OpeningSeed[] {
     }
   }
   return seeds;
+}
+
+
+/**
+ * One deeper discovery position per scoring branch. This widens the sparse
+ * representative-game candidate index without expanding the scoring branches.
+ * Parentage follows canonical positions in observed games, not SAN prefixes.
+ */
+export function openingFollowups(user: Repertoire, roots: OpeningSeed[]): OpeningSeed[] {
+  const followups: OpeningSeed[] = [];
+  for (const root of roots) {
+    const descendants = new Map<string, { visits: number; ply: number; route: string }>();
+    for (const line of user.lines[root.side]) {
+      const index = line.choices.findIndex(choice => choice.key === root.key);
+      if (index < 0) continue;
+      for (const choice of line.choices.slice(index + 1)) {
+        if (choice.ply <= root.ply + 1 || choice.ply > 11) continue;
+        const previous = descendants.get(choice.key);
+        descendants.set(choice.key, {
+          visits: (previous?.visits ?? 0) + 1, ply: choice.ply,
+          route: choice.route.join(' '),
+        });
+      }
+    }
+    const next = [...descendants.entries()]
+      .filter(([, data]) => data.visits >= 3)
+      .sort((a, b) => b[1].visits - a[1].visits ||
+        b[1].ply - a[1].ply || a[0].localeCompare(b[0]))[0];
+    if (!next) continue;
+    followups.push({
+      side: root.side, key: next[0], route: next[1].route,
+      visits: next[1].visits, ply: next[1].ply,
+      originKey: root.key, originRoute: root.route,
+    });
+  }
+  return followups;
 }
 
 export function compareRepertoires(user: Repertoire, candidate: Repertoire): RepertoireMatch {

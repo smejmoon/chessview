@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
 import { canonicalPosition } from '../src/graph.ts';
-import { buildRepertoire, compareRepertoires, compareBranchRepertoires, openingSeeds } from '../prototypes/repertoire-matches/matcher.ts';
+import { buildRepertoire, compareRepertoires, compareBranchRepertoires, openingFollowups, openingSeeds } from '../prototypes/repertoire-matches/matcher.ts';
 import { discoverCandidates, exportGames, probePlayerBranch, selectPlayerProbes } from '../prototypes/repertoire-matches/lichess-source.ts';
 
 function game(id: string, white: string, black: string, moves: string) {
@@ -295,4 +295,50 @@ test('a per-player probe does not scan more than two roots', () => {
   const candidate = { id: 'master', name: 'Master', title: 'IM', rating: 2500,
     board: 'blitz', source: 'opening-explorer' as const, seedHits: 1, seedRoutes: ['W2'], exampleGames: 1 };
   assert.deepEqual(selectPlayerProbes(candidate, seeds).map(s => s.route), ['W2', 'W1']);
+});
+
+test('deeper discovery uses a canonical descendant but retains the parent branch identity', () => {
+  const user = buildRepertoire('alice', Array.from({ length: 6 }, (_, i) =>
+    game('da12340' + i, 'alice', 'other', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6')));
+  const roots = openingSeeds(user);
+  const extras = openingFollowups(user, roots);
+  assert.equal(extras.length, 1);
+  assert.equal(extras[0].originKey, roots[0].key);
+  assert.equal(extras[0].originRoute, roots[0].route);
+  assert.equal(extras[0].visits, 6);
+  assert.ok(extras[0].ply > roots[0].ply);
+});
+
+test('deep and shallow game references count as one discovery branch', async () => {
+  const root = { side: 'white' as const, key: 'root', route: 'e4 e5 Nf3 Nc6', ply: 4, visits: 9 };
+  const deep = { side: 'white' as const, key: 'deep', route: 'e4 e5 Nf3 Nc6 Bb5 a6',
+    ply: 6, visits: 7, originKey: root.key, originRoute: root.route };
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async (input) => {
+      const url = String(input);
+      if (url.includes('/lichess?')) {
+        const isDeep = new URL(url).searchParams.get('fen') === deep.key;
+        return new Response(JSON.stringify({
+          topGames: [
+            { id: 'abcde001', white: { name: 'GMChess', rating: 2550 } },
+            ...(isDeep ? [{ id: 'abcde002', white: { name: 'IMChess', rating: 2510 } }] : []),
+          ],
+          recentGames: [],
+        }));
+      }
+      if (url.includes('/api/users')) return new Response(JSON.stringify([
+        { id: 'gmchess', username: 'GMChess', title: 'GM' },
+        { id: 'imchess', username: 'IMChess', title: 'IM' },
+      ]));
+      throw new Error('Unexpected request');
+    };
+  let funnels: import('../prototypes/repertoire-matches/lichess-source.ts').DiscoveryBranch[] = [];
+  const players = await discoverCandidates('alice', [root, deep], 2, () => {},
+    new AbortController().signal, request, stats => { funnels = stats; });
+  assert.equal(players.length, 2);
+  assert.equal(funnels.length, 1);
+  assert.equal(funnels[0].discoveredAccounts, 2);
+  assert.equal(funnels[0].titledAccounts, 2);
+  assert.equal(players.find(p => p.id === 'gmchess')?.seedHits, 1);
+  assert.equal(players.find(p => p.id === 'imchess')?.seedHits, 1);
 });

@@ -357,6 +357,10 @@ async function run() {
       white: ownProfile.games.white, black: ownProfile.games.black,
       whitePositions: ownProfile.positions.white.size, blackPositions: ownProfile.positions.black.size,
     });
+    if (!ownProfile.accepted && mine.rejected > 0 && mine.received === 0) {
+      throw new Error('Lichess returned game data, but no NDJSON records could be parsed. ' +
+        'Download diagnostics and check the export parser.');
+    }
     if (!ownProfile.accepted) throw new Error('No eligible rated standard games in this period.');
     seeds = frequentPositions(ownProfile);
     log('profile', 'fixed-depth positions selected', {

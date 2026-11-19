@@ -69,7 +69,7 @@ or verification rather than silently manufacturing evidence.
 
 Player Explorer returns up to 12 moves and no recent game references.
 The aggregate Explorer returns at most four top, four recent and twelve move-representative references per position.
-No downloaded candidate game collection exists in this version. Authentication
+The NDJSON parsers split streamed or whole-response data on real newline delimiters (LF and CRLF), tolerate partial network chunks and keep the last Player Explorer indexing snapshot. No downloaded candidate game collection exists in this version. Authentication
 tokens, raw games and complete move lists are never included in the diagnostic
 report.
 

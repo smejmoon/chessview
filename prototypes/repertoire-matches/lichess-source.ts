@@ -257,7 +257,7 @@ async function parseNdjson(
     const whole = await response.text();
     bytes = new TextEncoder().encode(whole).length;
     if (bytes > MAX_BYTES) throw new Error('Game export exceeds safety limit');
-    for (const line of whole.split(/\\r?\\n/)) add(line);
+    for (const line of whole.split(/\r?\n/)) add(line);
     return { games, rejected, received, bytes, streamStoppedAtLimit };
   }
   const reader = response.body.getReader();
@@ -271,7 +271,7 @@ async function parseNdjson(
       bytes += value.byteLength;
       if (bytes > MAX_BYTES) throw new Error('Game export exceeds 3 MB safety limit');
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\\n');
+      const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
       for (const line of lines) {
         add(line.trim());
@@ -422,7 +422,7 @@ export async function probePlayerBranch(
       const body = await response.text();
       bytes = new TextEncoder().encode(body).byteLength;
       if (bytes > 128_000) throw new Error('Player Explorer snapshot exceeds 128 KB');
-      for (const line of body.split(/\\r?\\n/)) decodeLine(line);
+      for (const line of body.split(/\r?\n/)) decodeLine(line);
       complete = true;
     } else {
       const reader = response.body.getReader();
@@ -440,7 +440,7 @@ export async function probePlayerBranch(
           bytes += value.byteLength;
           if (bytes > 128_000) throw new Error('Player Explorer stream exceeds 128 KB');
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\\n');
+          const lines = buffer.split('\n');
           buffer = lines.pop() ?? '';
           for (const line of lines) decodeLine(line);
         }

@@ -213,7 +213,7 @@ test('candidate export stops at the bounded NDJSON sample without waiting for EO
     start(controller) {
       const encoder = new TextEncoder();
       for (let i = 0; i < 140; i++) controller.enqueue(encoder.encode(
-        JSON.stringify(game('ab' + String(i).padStart(6, '0'), 'master', 'other', 'e4 e5')) + '\\n'));
+        JSON.stringify(game('ab' + String(i).padStart(6, '0'), 'master', 'other', 'e4 e5')) + '\n'));
       // Intentionally never close: the application must cancel at its sample cap.
     },
     cancel() { cancelled = true; },
@@ -250,7 +250,7 @@ test('player Explorer probes retain separate color and authenticated canonical F
       assert.equal(init?.signal, work?.signal);
       return new Response(
         JSON.stringify({ queuePosition: 0, white: 3, draws: 1, black: 2,
-          moves: [{ uci: 'f1b5', san: 'Bb5', white: 3, draws: 1, black: 2 }] }) + '\\n',
+          moves: [{ uci: 'f1b5', san: 'Bb5', white: 3, draws: 1, black: 2 }] }) + '\n',
         { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
     };
   const result = await probePlayerBranch('master', seed, 12, () => {}, signal, request, 500);
@@ -274,7 +274,7 @@ test('incomplete Player Explorer snapshots are partial and cannot claim absence'
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
           controller.enqueue(new TextEncoder().encode(
-            JSON.stringify({ queuePosition: 5, white: 0, draws: 0, black: 0, moves: [] }) + '\\n'));
+            JSON.stringify({ queuePosition: 5, white: 0, draws: 0, black: 0, moves: [] }) + '\n'));
           init?.signal?.addEventListener('abort', () => controller.error(new DOMException('timeout', 'AbortError')));
         },
       });
@@ -406,7 +406,7 @@ test('candidate verification only calls the authenticated Player Explorer endpoi
       calls.push(String(input));
       assert.equal(init?.signal, work?.signal);
       return new Response(JSON.stringify({ queuePosition: 0, white: 4, draws: 1, black: 2,
-        moves: [{ uci: 'e2e4', san: 'e4', white: 4, draws: 1, black: 2 }] }) + '\\n');
+        moves: [{ uci: 'e2e4', san: 'e4', white: 4, draws: 1, black: 2 }] }) + '\n');
     };
   const observed = await verifyCandidatePositions(candidate, seeds, 12, () => {},
     new AbortController().signal, request, 500);
@@ -457,4 +457,61 @@ test('discovery includes move representative games and selects strongest titled 
   const result = await discoverCandidates('alice', [seed], 2, () => {},
     new AbortController().signal, request);
   assert.deepEqual(result.map(p => p.id), ['gmplayer', 'fmplayer']);
+});
+
+test('Lichess game export parses real CRLF and LF across arbitrary network chunks', async () => {
+  const items = [
+    JSON.stringify(game('dd000001', 'alice', 'op', 'e4 e5 Nf3 Nc6')),
+    JSON.stringify(game('dd000002', 'op', 'alice', 'd4 d5 c4 e6')),
+    JSON.stringify(game('dd000003', 'alice', 'op', 'c4 e5 Nc3 Nf6')),
+  ];
+  const content = items[0] + '\r\n' + items[1] + '\n' + items[2] + '\n';
+  // Break inside a JSON token and between CR and LF.
+  const separator = content.indexOf('\r\n');
+  const chunks = [
+    content.slice(0, 19),
+    content.slice(19, separator + 1),
+    content.slice(separator + 1, separator + 2),
+    content.slice(separator + 2, separator + 35),
+    content.slice(separator + 35),
+  ];
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+      controller.close();
+    },
+  });
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async () => new Response(stream, { status: 200 });
+  const result = await exportGames('alice', 500, 12, () => {},
+    new AbortController().signal, request);
+  assert.equal(result.received, 3);
+  assert.equal(result.rejected, 0);
+  assert.equal(result.streamStoppedAtLimit, false);
+  assert.deepEqual(result.games.map(g => g.id), ['dd000001', 'dd000002', 'dd000003']);
+  assert.equal(buildRepertoire('alice', result.games).accepted, 3);
+});
+
+test('Player Explorer reads successive NDJSON snapshots and uses the final indexed record', async () => {
+  const seed = { side: 'white' as const, key: canonicalPosition(new Chess().fen()),
+    route: 'sample', visits: 5, ply: 8 };
+  const pending = JSON.stringify({ queuePosition: 6, white: 0, draws: 0, black: 0, moves: [] });
+  const done = JSON.stringify({ queuePosition: 0, white: 3, draws: 2, black: 1,
+    moves: [{ uci: 'e2e4', san: 'e4', white: 3, draws: 2, black: 1 }] });
+  const content = pending + '\n' + done + '\r\n';
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(content.slice(0, 27)));
+      controller.enqueue(new TextEncoder().encode(content.slice(27)));
+      controller.close();
+    },
+  });
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async () => new Response(stream, { status: 200 });
+  const result = await probePlayerBranch('master', seed, 12, () => {},
+    new AbortController().signal, request, 500);
+  assert.equal(result.status, 'complete');
+  assert.equal(result.queuePosition, 0);
+  assert.equal(result.snapshotGames, 6);
+  assert.deepEqual(result.moves, [{ uci: 'e2e4', san: 'e4', games: 6 }]);
 });

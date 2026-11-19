@@ -9,7 +9,7 @@ import { toPlayableFen } from '../../src/graph.ts';
 import { buildRepertoire, compareBranchRepertoires, openingSeeds } from './matcher.ts';
 import type { OpeningSeed, Repertoire, BranchComparison, SharedPosition, Side } from './matcher.ts';
 import { accountName, discoverCandidates, exportGames, httpStatus } from './lichess-source.ts';
-import type { GameResult, Log, StrongPlayer } from './lichess-source.ts';
+import type { DiscoveryBranch, GameResult, Log, StrongPlayer } from './lichess-source.ts';
 
 const app = document.querySelector<HTMLElement>('#app');
 if (!app) throw new Error('Repertoire Lab requires #app');
@@ -92,6 +92,7 @@ let selectedId: string | null = null;
 let rows: MatchRow[] = [];
 let ownProfile: Repertoire | null = null;
 let seeds: OpeningSeed[] = [];
+let discoveryBranches: DiscoveryBranch[] = [];
 let report: SessionReport | null = null;
 let ground: ReturnType<typeof Chessground> | null = null;
 let running = false;
@@ -274,6 +275,13 @@ function createReport() {
       },
     } : null,
     openingSeeds: seeds,
+    discoveryBranches: discoveryBranches.map(branch => ({
+      ...branch,
+      confirmedPlayers: rows.filter(row => row.match.branches.some(b =>
+        b.key === branch.key && b.evidence === 'confirmed')).length,
+      confirmedCandidateGames: rows.reduce((sum, row) => sum +
+        (row.match.branches.find(b => b.key === branch.key)?.candidateGames ?? 0), 0),
+    })),
     candidates: rows.map(row => ({
       player: row.player,
       sample: {
@@ -322,6 +330,7 @@ async function run() {
   rows = [];
   ownProfile = null;
   seeds = [];
+  discoveryBranches = [];
   renderRanks();
   renderDetail();
   const started = performance.now();
@@ -346,7 +355,8 @@ async function run() {
       seeds.filter(s => s.side === 'white').length + ' White branches · ' +
       seeds.filter(s => s.side === 'black').length + ' Black branches';
     status('Finding titled players in your opening branches…');
-    const candidates = await discoverCandidates(username, seeds, candidatesCount, log, active.signal);
+    const candidates = await discoverCandidates(username, seeds, candidatesCount, log, active.signal,
+      undefined, stats => { discoveryBranches = stats; });
     if (!candidates.length) throw new Error('No suitable titled-player candidates found.');
     for (const [index, candidate] of candidates.entries()) {
       if (active.signal.aborted) break;
@@ -388,6 +398,15 @@ async function run() {
       }
     }
     if (active.signal.aborted) return;
+    log('discovery', 'per-branch confirmed overlap', {
+      branches: discoveryBranches.map(branch => ({
+        side: branch.side, route: branch.route,
+        discovered: branch.discoveredAccounts, titled: branch.titledAccounts,
+        selected: branch.selectedAccounts,
+        confirmed: rows.filter(row => row.match.branches.some(b =>
+          b.key === branch.key && b.evidence === 'confirmed')).length,
+      })),
+    });
     report.state = 'complete';
     status('Finished: ' + rows.length + ' players · ' +
       Math.round((performance.now() - started) / 1000) + 's. Export diagnostics after reviewing.');

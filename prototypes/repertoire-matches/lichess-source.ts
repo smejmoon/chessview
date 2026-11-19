@@ -14,6 +14,10 @@ export type StrongPlayer = {
   seedRoutes: string[];
   exampleGames: number;
 };
+export type DiscoveryBranch = {
+  side: Side; key: string; route: string;
+  discoveredAccounts: number; titledAccounts: number; selectedAccounts: number;
+};
 export type GameResult = {
   games: GameRecord[];
   rejected: number;
@@ -92,6 +96,7 @@ function extractProspects(seeds: OpeningSeed[], responses: { seed: OpeningSeed; 
 export async function discoverCandidates(
   ownUsername: string, seeds: OpeningSeed[], count: number, log: Log, signal: AbortSignal,
   authorizedRequest: typeof lichessSession.authorizedRequest = lichessSession.authorizedRequest,
+  onBranches?: (stats: DiscoveryBranch[]) => void,
 ): Promise<StrongPlayer[]> {
   const explorerResults: { seed: OpeningSeed; payload: any }[] = [];
   log('discovery', 'opening-first discovery started', {
@@ -197,13 +202,24 @@ export async function discoverCandidates(
     });
     if (discovered.length >= count) break;
   }
+  const branchStats = seeds.map(seed => {
+    const found = prospects.filter(p => p.routes.has(seed.route));
+    return {
+      side: seed.side, key: seed.key, route: seed.route,
+      discoveredAccounts: found.length,
+      titledAccounts: found.filter(p => TITLES.has(resolved.get(p.id)?.title ?? p.title)).length,
+      selectedAccounts: discovered.filter(d => d.seedRoutes.includes(seed.route)).length,
+    };
+  });
+  onBranches?.(branchStats);
+  log('discovery', 'per-branch candidate funnel', { branches: branchStats });
   log('discovery', 'opening candidates verified', {
     candidates: discovered.length,
     names: discovered.map(p => ({ player: p.name, seedHits: p.seedHits, games: p.exampleGames })),
   });
 
-  if (discovered.length < count) {
-    // Fill the remaining sample with leaderboard players; their source is explicitly labeled.
+  if (discovered.length < count && discovered.length < 4) {
+    // Keep generic fallback bounded rather than filling the cohort with unrelated players.
     const lists: StrongPlayer[][] = [];
     for (const board of SPEEDS) {
       const started = performance.now();
@@ -239,7 +255,7 @@ export async function discoverCandidates(
       }
     }
     const seen = new Set([ownUsername.toLowerCase(), ...discovered.map(p => p.id)]);
-    for (let i = 0; i < 100 && discovered.length < count; i++) {
+    for (let i = 0; i < 100 && discovered.length < Math.min(count, 4); i++) {
       for (const list of lists) {
         const p = list[i];
         if (!p || seen.has(p.id)) continue;

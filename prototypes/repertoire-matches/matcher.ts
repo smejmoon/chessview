@@ -21,10 +21,12 @@ export type PositionChoice = {
   route: string[];
   moves: Map<string, { count: number; gameId: string }>;
 };
+export type GameLine = { choices: { key: string; ply: number; uci: string; route: string[] }[] };
 export type Repertoire = {
   player: string;
   games: Record<Side, number>;
   positions: Record<Side, Map<string, PositionChoice>>;
+  lines: Record<Side, GameLine[]>;
   accepted: number;
   skipped: number;
   skippedReasons: Record<SkipReason, number>;
@@ -101,6 +103,7 @@ export function buildRepertoire(player: string, games: readonly GameRecord[]): R
   const repertoire: Repertoire = {
     player, games: { white: 0, black: 0 },
     positions: { white: new Map(), black: new Map() },
+    lines: { white: [], black: [] },
     accepted: 0, skipped: 0, skippedReasons,
   };
   for (const game of games) {
@@ -150,6 +153,7 @@ export function buildRepertoire(player: string, games: readonly GameRecord[]): R
         const existing = item.moves.get(choice.uci);
         item.moves.set(choice.uci, { count: (existing?.count ?? 0) + 1, gameId: existing?.gameId ?? game.id! });
       }
+      repertoire.lines[side].push({ choices });
       repertoire.games[side]++;
       repertoire.accepted++;
     } catch {
@@ -255,6 +259,171 @@ export function compareRepertoires(user: Repertoire, candidate: Repertoire): Rep
   return {
     score, coverage, agreement, bySide,
     shared: shared.slice().sort(byWeight).slice(0, 16),
+    differences: shared.filter(p => p.userMove !== p.candidateMove)
+      .sort((a, b) => b.weight * (1 - b.agreement) - a.weight * (1 - a.agreement))
+      .slice(0, 12),
+  };
+}
+
+/**
+ * Branch-specific evidence from at most 18 plies per accepted game.
+ * Assign each game to its deepest reached seed (one branch per color/game).
+ * All membership and move joins use canonical board positions, not SAN paths.
+ */
+export type BranchMatch = {
+  side: Side;
+  key: string;
+  route: string;
+  userGames: number;
+  candidateGames: number;
+  candidateSideGames: number;
+  userPositions: number;
+  observedPositions: number;
+  supportedPositions: number;
+  coverage: number | null;
+  agreement: number | null;
+  score: number | null;
+  evidence: 'confirmed' | 'sparse' | 'not-observed';
+  choices: SharedPosition[];
+};
+export type BranchComparison = RepertoireMatch & { branches: BranchMatch[] };
+
+const MIN_BRANCH_GAMES = 3;
+const MIN_POSITION_GAMES = 3;
+
+function partitionLines(profile: Repertoire, seeds: OpeningSeed[]): Map<string, GameLine[]> {
+  const result = new Map<string, GameLine[]>(seeds.map(seed => [seed.key, []]));
+  for (const side of SIDES) {
+    const roots = seeds.filter(seed => seed.side === side)
+      .sort((a, b) => b.ply - a.ply || a.key.localeCompare(b.key));
+    for (const line of profile.lines[side]) {
+      const chosen = roots.find(seed => line.choices.some(choice => choice.key === seed.key));
+      if (!chosen) continue;
+      const index = line.choices.findIndex(choice => choice.key === chosen.key);
+      result.get(chosen.key)!.push({ choices: line.choices.slice(index) });
+    }
+  }
+  return result;
+}
+
+function summarizeLines(lines: GameLine[]): Map<string, PositionChoice> {
+  const positions = new Map<string, PositionChoice>();
+  for (const line of lines) {
+    for (const choice of line.choices) {
+      let position = positions.get(choice.key);
+      if (!position) {
+        position = { visits: 0, plyTotal: 0, route: choice.route, moves: new Map() };
+        positions.set(choice.key, position);
+      }
+      position.visits++;
+      position.plyTotal += choice.ply;
+      const previous = position.moves.get(choice.uci);
+      position.moves.set(choice.uci, {
+        count: (previous?.count ?? 0) + 1,
+        gameId: previous?.gameId ?? '',
+      });
+    }
+  }
+  return positions;
+}
+
+/**
+ * A score is available only after at least three candidate games reach a branch.
+ * Choices with fewer than three candidate observations are excluded from the
+ * numerator, never presented as precise move agreement. Missing branches remain
+ * explicitly unconfirmed (not a claim about the candidate's lifetime repertoire).
+ */
+export function compareBranchRepertoires(
+  user: Repertoire, candidate: Repertoire, seeds: OpeningSeed[] = openingSeeds(user),
+): BranchComparison {
+  const ownGroups = partitionLines(user, seeds);
+  const candidateGroups = partitionLines(candidate, seeds);
+  const branches: BranchMatch[] = [];
+  const shared: SharedPosition[] = [];
+  for (const seed of seeds) {
+    const ourLines = ownGroups.get(seed.key) ?? [];
+    const theirLines = candidateGroups.get(seed.key) ?? [];
+    const ours = summarizeLines(ourLines);
+    const theirs = summarizeLines(theirLines);
+    const confirmed = ourLines.length >= 2 && theirLines.length >= MIN_BRANCH_GAMES;
+    let total = 0, covered = 0, agreed = 0, observed = 0, supported = 0;
+    const choices: SharedPosition[] = [];
+    for (const [key, ownChoice] of ours) {
+      const ply = ownChoice.plyTotal / ownChoice.visits;
+      const weight = ownChoice.visits * depthWeight(ply);
+      total += weight;
+      const otherChoice = theirs.get(key);
+      if (!otherChoice) continue;
+      observed++;
+      if (!confirmed || otherChoice.visits < MIN_POSITION_GAMES) continue;
+      supported++;
+      covered += weight;
+      let probability = 0;
+      for (const [uci, move] of ownChoice.moves) {
+        probability += (move.count / ownChoice.visits) *
+          ((otherChoice.moves.get(uci)?.count ?? 0) / otherChoice.visits);
+      }
+      agreed += weight * probability;
+      const oursTop = topMove(ownChoice);
+      const otherTop = topMove(otherChoice);
+      const position: SharedPosition = {
+        side: seed.side, key, route: ownChoice.route.join(' '), ply,
+        visits: ownChoice.visits, candidateVisits: otherChoice.visits,
+        userMove: asSan(key, oursTop[0]), candidateMove: asSan(key, otherTop[0]),
+        userShare: oursTop[1].count / ownChoice.visits,
+        candidateShare: otherTop[1].count / otherChoice.visits,
+        exampleGame: otherTop[1].gameId, agreement: probability, weight,
+      };
+      choices.push(position);
+      shared.push(position);
+    }
+    const coverage = confirmed && total ? covered / total : null;
+    const agreement = confirmed && covered ? agreed / covered : null;
+    branches.push({
+      side: seed.side, key: seed.key, route: seed.route,
+      userGames: ourLines.length, candidateGames: theirLines.length,
+      candidateSideGames: candidate.games[seed.side],
+      userPositions: ours.size, observedPositions: observed, supportedPositions: supported,
+      coverage, agreement,
+      score: confirmed && total ? Math.round(100 * (0.65 * covered + 0.35 * agreed) / total) : null,
+      evidence: confirmed ? 'confirmed' : theirLines.length ? 'sparse' : 'not-observed',
+      choices: choices.sort((a, b) => b.weight - a.weight).slice(0, 8),
+    });
+  }
+  const bySide = {} as Record<Side, SideMatch>;
+  let totalWeight = 0, totalCovered = 0, totalAgreed = 0, anyConfirmed = false;
+  for (const side of SIDES) {
+    const ownBranches = branches.filter(b => b.side === side);
+    const weight = ownBranches.reduce((sum, b) => sum + b.userGames, 0);
+    const confirmed = ownBranches.filter(b => b.evidence === 'confirmed');
+    let covered = 0, agreed = 0;
+    for (const branch of confirmed) {
+      covered += branch.userGames * (branch.coverage ?? 0);
+      agreed += branch.userGames * (branch.coverage ?? 0) * (branch.agreement ?? 0);
+    }
+    if (confirmed.length) anyConfirmed = true;
+    bySide[side] = {
+      score: confirmed.length && weight ?
+        Math.round(100 * (0.65 * covered + 0.35 * agreed) / weight) : null,
+      coverage: confirmed.length && weight ? covered / weight : null,
+      agreement: covered ? agreed / covered : null,
+      sharedPositions: confirmed.reduce((sum, b) => sum + b.supportedPositions, 0),
+      profilePositions: ownBranches.reduce((sum, b) => sum + b.userPositions, 0),
+      userGames: user.games[side], candidateGames: candidate.games[side],
+    };
+    totalWeight += weight;
+    totalCovered += covered;
+    totalAgreed += agreed;
+  }
+  const sortByWeight = (a: SharedPosition, b: SharedPosition) =>
+    b.weight - a.weight || a.key.localeCompare(b.key);
+  return {
+    branches, bySide,
+    score: anyConfirmed && totalWeight ?
+      Math.round(100 * (0.65 * totalCovered + 0.35 * totalAgreed) / totalWeight) : 0,
+    coverage: anyConfirmed && totalWeight ? totalCovered / totalWeight : null,
+    agreement: totalCovered ? totalAgreed / totalCovered : null,
+    shared: shared.slice().sort(sortByWeight).slice(0, 16),
     differences: shared.filter(p => p.userMove !== p.candidateMove)
       .sort((a, b) => b.weight * (1 - b.agreement) - a.weight * (1 - a.agreement))
       .slice(0, 12),

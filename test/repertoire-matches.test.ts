@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
 import { canonicalPosition } from '../src/graph.ts';
-import { buildRepertoire, compareRepertoires, openingSeeds } from '../prototypes/repertoire-matches/matcher.ts';
+import { buildRepertoire, compareRepertoires, compareBranchRepertoires, openingSeeds } from '../prototypes/repertoire-matches/matcher.ts';
 import { discoverCandidates } from '../prototypes/repertoire-matches/lichess-source.ts';
 
 function game(id: string, white: string, black: string, moves: string) {
@@ -146,4 +146,56 @@ test('opening-first discovery uses authenticated requests for Explorer and user 
   assert.deepEqual(calls.map(c => c.method), ['GET', 'POST']);
   assert.ok(logs.includes('network:opening explorer response'));
   assert.ok(calls[0].url.startsWith('https://explorer.lichess.org/lichess'));
+});
+
+test('branch matching excludes generic starting positions and unrelated openings', () => {
+  const own = buildRepertoire('alice', Array.from({ length: 4 }, (_, i) =>
+    game('ab12340' + i, 'alice', 'opponent', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6')));
+  const other = buildRepertoire('master', Array.from({ length: 4 }, (_, i) =>
+    game('cd12340' + i, 'master', 'opponent', 'e4 c5 Nf3 Nc6 Bb5 d6')));
+  const seeds = openingSeeds(own);
+  const result = compareBranchRepertoires(own, other, seeds);
+  assert.equal(result.bySide.white.score, null);
+  assert.equal(result.shared.length, 0);
+  assert.equal(result.branches[0].candidateGames, 0);
+  assert.equal(result.branches[0].evidence, 'not-observed');
+});
+
+test('repeated matching branch games yield supported choice agreement', () => {
+  const own = buildRepertoire('alice', Array.from({ length: 4 }, (_, i) =>
+    game('ab45670' + i, 'alice', 'opponent', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6')));
+  const theirs = buildRepertoire('master', Array.from({ length: 3 }, (_, i) =>
+    game('cd45670' + i, 'master', 'opponent', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6')));
+  const result = compareBranchRepertoires(own, theirs);
+  assert.equal(result.branches[0].evidence, 'confirmed');
+  assert.equal(result.branches[0].candidateGames, 3);
+  assert.equal(result.branches[0].coverage, 1);
+  assert.equal(result.branches[0].agreement, 1);
+  assert.equal(result.branches[0].score, 100);
+  assert.ok(result.shared.every(choice => choice.ply >= 4));
+});
+
+test('sparse candidate branches remain unknown instead of displaying a false percentage', () => {
+  const own = buildRepertoire('alice', Array.from({ length: 4 }, (_, i) =>
+    game('ab78900' + i, 'alice', 'opponent', 'e4 e5 Nf3 Nc6 Bb5 a6')));
+  const theirs = buildRepertoire('master', [
+    game('cd789000', 'master', 'opponent', 'e4 e5 Nf3 Nc6 Bb5 a6'),
+  ]);
+  const result = compareBranchRepertoires(own, theirs);
+  assert.equal(result.branches[0].candidateGames, 1);
+  assert.equal(result.branches[0].evidence, 'sparse');
+  assert.equal(result.branches[0].coverage, null);
+  assert.equal(result.branches[0].agreement, null);
+  assert.equal(result.bySide.white.score, null);
+});
+
+test('branch roots converge across transposed opening routes', () => {
+  const own = buildRepertoire('alice', Array.from({ length: 4 }, (_, i) =>
+    game('ab90120' + i, 'alice', 'opponent', 'Nf3 Nf6 g3 g6 Bg2 Bg7')));
+  const theirs = buildRepertoire('master', Array.from({ length: 3 }, (_, i) =>
+    game('cd90120' + i, 'master', 'opponent', 'g3 g6 Nf3 Nf6 Bg2 Bg7')));
+  const result = compareBranchRepertoires(own, theirs);
+  assert.equal(result.branches[0].candidateGames, 3);
+  assert.equal(result.branches[0].evidence, 'confirmed');
+  assert.equal(result.branches[0].agreement, 1);
 });

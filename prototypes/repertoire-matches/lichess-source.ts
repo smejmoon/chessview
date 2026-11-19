@@ -370,7 +370,7 @@ export function selectPlayerProbes(candidate: StrongPlayer, seeds: OpeningSeed[]
     .filter((seed): seed is OpeningSeed => Boolean(seed));
   const remaining = [...seeds].sort((a, b) => b.visits - a.visits);
   const chosen: OpeningSeed[] = [];
-  for (const seed of [...preferred, ...balanced, ...remaining]) {
+  for (const seed of [...preferred.slice(0, 2), ...balanced, ...preferred.slice(2), ...remaining]) {
     if (chosen.some(item => item.side === seed.side && item.key === seed.key)) continue;
     chosen.push(seed);
     if (chosen.length >= limit) break;
@@ -477,4 +477,31 @@ export async function probePlayerBranch(
     elapsedMs: evidence.elapsedMs, bytes,
   });
   return evidence;
+}
+
+/** Single bounded verification entry point; no game-history exports. */
+export async function verifyCandidatePositions(
+  candidate: StrongPlayer, seeds: OpeningSeed[], months: number, log: Log, signal: AbortSignal,
+  authorizedRequest: typeof lichessSession.authorizedRequest = lichessSession.authorizedRequest,
+  timeoutMs = 2200,
+): Promise<PlayerBranchProbe[]> {
+  const results: PlayerBranchProbe[] = [];
+  const selected = selectPlayerProbes(candidate, seeds);
+  for (const [index, seed] of selected.entries()) {
+    if (signal.aborted) break;
+    log('verification', 'candidate position query', {
+      player: candidate.name, index: index + 1, total: selected.length,
+      side: seed.side, route: seed.route,
+    });
+    results.push(await probePlayerBranch(candidate.name, seed, months, log, signal,
+      authorizedRequest, timeoutMs));
+  }
+  log('verification', 'candidate verification completed', {
+    player: candidate.name, requested: selected.length,
+    complete: results.filter(p => p.status === 'complete').length,
+    incomplete: results.filter(p => p.status !== 'complete').length,
+    observed: results.filter(p => p.status === 'complete' &&
+      (p.snapshotGames ?? 0) >= 3).length,
+  });
+  return results;
 }

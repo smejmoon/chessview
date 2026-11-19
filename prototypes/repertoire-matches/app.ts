@@ -10,7 +10,7 @@ import { buildRepertoire } from './matcher.ts';
 import { frequentPositions, comparePositionStats } from './position-matcher.ts';
 import type { OpeningSeed, Repertoire, SharedPosition, Side } from './matcher.ts';
 import type { PositionComparison } from './position-matcher.ts';
-import { accountName, discoverCandidates, exportGames, httpStatus, probePlayerBranch, selectPlayerProbes } from './lichess-source.ts';
+import { accountName, discoverCandidates, exportGames, httpStatus, verifyCandidatePositions } from './lichess-source.ts';
 import type { DiscoveryBranch, GameResult, Log, StrongPlayer, PlayerBranchProbe } from './lichess-source.ts';
 
 const app = document.querySelector<HTMLElement>('#app');
@@ -235,7 +235,7 @@ function renderDetail() {
     const block = node('div', '', 'stat');
     block.append(node('span', side === 'white' ? 'AS WHITE' : 'AS BLACK', 'stat-label'),
       node('strong', match.score === null ? '—' : match.score + '%', 'stat-value'),
-      node('span', percentage(match.coverage) + ' checked · ' + percentage(match.agreement) + ' agreement'),
+      node('span', percentage(match.coverage) + ' checked · ' + percentage(match.overlap) + ' overlap · ' + percentage(match.agreement) + ' agreement'),
       node('small', match.checkedPositions + '/' + match.selectedPositions +
         ' indexed positions · ' + match.confirmedPositions + ' confirmed · ' +
         match.partialPositions + ' pending'));
@@ -301,6 +301,7 @@ function createReport() {
       playerExplorer: row.playerExplorer,
       score: row.match.score,
       checkedCoverage: row.match.coverage,
+      checkedOverlap: row.match.overlap,
       agreement: row.match.agreement,
       sides: row.match.bySide,
       positions: row.match.positions,
@@ -379,13 +380,8 @@ async function run() {
       status('Comparing ' + (index + 1) + '/' + candidates.length + ': ' + candidate.name);
       const candidateStarted = performance.now();
       try {
-        const playerExplorer: PlayerBranchProbe[] = [];
-        for (const seed of selectPlayerProbes(candidate, seeds)) {
-          if (active.signal.aborted) break;
-          const observation = await probePlayerBranch(
-            candidate.name, seed, months, log, active.signal);
-          playerExplorer.push(observation);
-        }
+        const playerExplorer = await verifyCandidatePositions(
+          candidate, seeds, months, log, active.signal);
         if (active.signal.aborted) break;
         const match = comparePositionStats(ownProfile, seeds, playerExplorer);
         log('match', 'candidate Explorer statistics scored', {

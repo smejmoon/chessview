@@ -19,6 +19,7 @@ export type PositionEvidence = {
 export type PositionSideMatch = {
   score: number | null;
   coverage: number | null;
+  overlap: number | null;
   agreement: number | null;
   userGames: number;
   selectedPositions: number;
@@ -30,6 +31,7 @@ export type PositionSideMatch = {
 export type PositionComparison = {
   score: number;
   coverage: number | null;
+  overlap: number | null;
   agreement: number | null;
   bySide: Record<Side, PositionSideMatch>;
   positions: PositionEvidence[];
@@ -134,6 +136,7 @@ export function comparePositionStats(
       score: checkedPositions && total ?
         Math.round(100 * (0.65 * supported + 0.35 * agreed) / total) : null,
       coverage: checkedPositions && total ? checked / total : null,
+      overlap: checked ? supported / checked : null,
       agreement: supported ? agreed / supported : null,
       userGames: user.games[side], selectedPositions: ownSeeds.length,
       checkedPositions, confirmedPositions, partialPositions, observedGames,
@@ -148,6 +151,7 @@ export function comparePositionStats(
     score: checkedWeight && allWeight ?
       Math.round(100 * (0.65 * supportedWeight + 0.35 * agreementWeight) / allWeight) : 0,
     coverage: allWeight ? checkedWeight / allWeight : null,
+    overlap: checkedWeight ? supportedWeight / checkedWeight : null,
     agreement: supportedWeight ? agreementWeight / supportedWeight : null,
     bySide, positions: results, shared: sorted.slice(0, 16),
     differences: sorted.filter(p => p.userMove !== p.candidateMove).slice(0, 12),

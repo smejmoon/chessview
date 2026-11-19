@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
 import { canonicalPosition } from '../src/graph.ts';
 import { buildRepertoire, compareRepertoires, compareBranchRepertoires, openingFollowups, openingSeeds } from '../prototypes/repertoire-matches/matcher.ts';
-import { discoverCandidates, exportGames, probePlayerBranch, selectPlayerProbes } from '../prototypes/repertoire-matches/lichess-source.ts';
+import { discoverCandidates, exportGames, probePlayerBranch, selectPlayerProbes, verifyCandidatePositions } from '../prototypes/repertoire-matches/lichess-source.ts';
 
 function game(id: string, white: string, black: string, moves: string) {
   return { id, rated: true, variant: 'standard', moves,
@@ -392,4 +392,43 @@ test('partial Player Explorer indexing never counts as absence or full evidence'
   assert.equal(score.positions[0].status, 'partial');
   assert.equal(score.positions[0].checked, false);
   assert.equal(score.shared.length, 0);
+});
+
+test('candidate verification only calls the authenticated Player Explorer endpoint', async () => {
+  const seeds = [
+    { side: 'white' as const, key: canonicalPosition(new Chess().fen()), route: 'Start', ply: 8, visits: 20 },
+  ];
+  const candidate = { id: 'gm', name: 'GM', title: 'GM', board: 'blitz', rating: 2700,
+    source: 'opening-explorer' as const, seedHits: 1, seedRoutes: ['Start'], exampleGames: 1 };
+  const calls: string[] = [];
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async (input, init, work) => {
+      calls.push(String(input));
+      assert.equal(init?.signal, work?.signal);
+      return new Response(JSON.stringify({ queuePosition: 0, white: 4, draws: 1, black: 2,
+        moves: [{ uci: 'e2e4', san: 'e4', white: 4, draws: 1, black: 2 }] }) + '\\n');
+    };
+  const observed = await verifyCandidatePositions(candidate, seeds, 12, () => {},
+    new AbortController().signal, request, 500);
+  assert.equal(observed.length, 1);
+  assert.equal(observed[0].status, 'complete');
+  assert.equal(observed[0].snapshotGames, 7);
+  assert.equal(calls.length, 1);
+  assert.equal(new URL(calls[0]).pathname, '/player');
+});
+
+test('complete zero is absence but a partial zero cannot support negative evidence', () => {
+  const user = buildRepertoire('alice', Array.from({ length: 5 }, (_, i) =>
+    game('ee12340' + i, 'alice', 'op', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7')));
+  const seed = frequentPositions(user)[0];
+  const base = { side: seed.side, key: seed.key, route: seed.route,
+    snapshotGames: 0, queuePosition: 0, httpStatus: 200, elapsedMs: 3, moves: [] };
+  const complete = comparePositionStats(user, [seed], [{ ...base, status: 'complete' }]);
+  const partial = comparePositionStats(user, [seed], [{ ...base, status: 'partial' }]);
+  assert.equal(complete.positions[0].status, 'absent');
+  assert.equal(complete.bySide.white.checkedPositions, 1);
+  assert.equal(complete.bySide.white.overlap, 0);
+  assert.equal(partial.positions[0].status, 'partial');
+  assert.equal(partial.bySide.white.checkedPositions, 0);
+  assert.equal(partial.bySide.white.overlap, null);
 });

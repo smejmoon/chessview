@@ -1,3 +1,4 @@
+import { frequentPositions, comparePositionStats } from '../prototypes/repertoire-matches/position-matcher.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
@@ -294,7 +295,7 @@ test('a per-player probe does not scan more than two roots', () => {
   ];
   const candidate = { id: 'master', name: 'Master', title: 'IM', rating: 2500,
     board: 'blitz', source: 'opening-explorer' as const, seedHits: 1, seedRoutes: ['W2'], exampleGames: 1 };
-  assert.deepEqual(selectPlayerProbes(candidate, seeds).map(s => s.route), ['W2', 'W1']);
+  assert.deepEqual(selectPlayerProbes(candidate, seeds).map(s => s.route), ['W2', 'W1', 'B1']);
 });
 
 test('deeper discovery uses a canonical descendant but retains the parent branch identity', () => {
@@ -344,4 +345,51 @@ test('deep and shallow game references count as one discovery branch', async () 
   assert.equal(funnels[0].titledAccounts, 2);
   assert.equal(players.find(p => p.id === 'gmchess')?.seedHits, 1);
   assert.equal(players.find(p => p.id === 'imchess')?.seedHits, 1);
+});
+
+test('frequent positions select canonical White and Black decisions at 8/10 plies', () => {
+  const own = buildRepertoire('alice', Array.from({ length: 5 }, (_, i) =>
+    game('aa12340' + i, 'alice', 'op', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5')) .concat(
+    Array.from({ length: 5 }, (_, i) =>
+      game('bb12340' + i, 'op', 'alice', 'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5 Ng3 Bg6'))));
+  const selected = frequentPositions(own);
+  assert.ok(selected.some(s => s.side === 'white' && s.ply === 8 && s.visits === 5));
+  assert.ok(selected.some(s => s.side === 'white' && s.ply === 10 && s.visits === 5));
+  assert.ok(selected.some(s => s.side === 'black' && s.ply === 7 && s.visits === 5));
+  assert.ok(selected.some(s => s.side === 'black' && s.ply === 9 && s.visits === 5));
+  assert.equal(new Set(selected.map(s => s.side + s.key)).size, selected.length);
+});
+
+test('verified Player Explorer moves determine agreement without candidate game downloads', () => {
+  const own = buildRepertoire('alice', Array.from({ length: 5 }, (_, i) =>
+    game('cc12340' + i, 'alice', 'op', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5')));
+  const seed = frequentPositions(own).find(s => s.ply === 8)!;
+  const choice = own.positions.white.get(seed.key)!;
+  const uci = [...choice.moves.keys()][0];
+  const sample = {
+    side: seed.side, key: seed.key, route: seed.route, status: 'complete' as const,
+    snapshotGames: 10, queuePosition: 0, httpStatus: 200, elapsedMs: 9,
+    moves: [{ uci, san: 'O-O', games: 8 }],
+  };
+  const score = comparePositionStats(own, [seed], [sample]);
+  assert.equal(score.bySide.white.checkedPositions, 1);
+  assert.equal(score.bySide.white.confirmedPositions, 1);
+  assert.equal(score.bySide.white.agreement, 0.8);
+  assert.equal(score.shared[0].candidateVisits, 10);
+  assert.equal(score.shared[0].exampleGame, '');
+});
+
+test('partial Player Explorer indexing never counts as absence or full evidence', () => {
+  const own = buildRepertoire('alice', Array.from({ length: 5 }, (_, i) =>
+    game('dd12340' + i, 'alice', 'op', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5')));
+  const seed = frequentPositions(own)[0];
+  const partial = {
+    side: seed.side, key: seed.key, route: seed.route, status: 'partial' as const,
+    snapshotGames: 0, queuePosition: 12, httpStatus: 200, elapsedMs: 2000, moves: [],
+  };
+  const score = comparePositionStats(own, [seed], [partial]);
+  assert.equal(score.bySide.white.score, null);
+  assert.equal(score.positions[0].status, 'partial');
+  assert.equal(score.positions[0].checked, false);
+  assert.equal(score.shared.length, 0);
 });

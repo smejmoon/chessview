@@ -490,8 +490,8 @@ export async function probePlayerBranch(
     }
   } catch (error) {
     if (signal.aborted) throw error;
+    if ([401, 429].includes(httpStatus(error) ?? -1)) throw error;
     if (!timeout.aborted) {
-      if ([401, 429].includes(httpStatus(error) ?? -1)) throw error;
       log('error', 'player explorer probe unavailable', {
         player, side: seed.side, route: seed.route, status: httpStatus(error),
         reason: error instanceof Error ? error.message : String(error),

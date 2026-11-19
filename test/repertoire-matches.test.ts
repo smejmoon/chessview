@@ -300,7 +300,10 @@ test('a per-player probe does not scan more than two roots', () => {
 test('deeper discovery uses a canonical descendant but retains the parent branch identity', () => {
   const user = buildRepertoire('alice', Array.from({ length: 6 }, (_, i) =>
     game('da12340' + i, 'alice', 'other', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6')));
-  const roots = openingSeeds(user);
+  const allRoots = openingSeeds(user);
+  // One root for each distinct scoring branch; deeper scoring roots are not new discovery positions.
+  assert.equal(openingFollowups(user, allRoots).length, 0);
+  const roots = allRoots.filter(seed => seed.ply === 4);
   const extras = openingFollowups(user, roots);
   assert.equal(extras.length, 1);
   assert.equal(extras[0].originKey, roots[0].key);

@@ -16,7 +16,7 @@ Open **Diagnostics**, then either:
 - **Download JSON**: attach the `chessview-repertoire-report-YYYY-MM-DD.json` file to the chat.
 - **Copy log**: fallback to the chronological text trace.
 
-Prefer the structured JSON report. It includes schema version `repertoire-lab-3`, test settings and timestamps, account name, bounded game-export counters and byte sizes, skipped-game reasons, color-specific sample sizes, frequent opening seeds, candidate discovery sources/branch hits, branch-by-branch user/candidate game counts, evidence status, supported positions, scored positions, disagreements, failed calls, and chronological log events. The report contains **no OAuth tokens, raw game export or full move histories**. It **does** contain account names, canonical positions, and opening routes; review before sharing.
+Prefer the structured JSON report. It includes schema version `repertoire-lab-4`, test settings and timestamps, account name, bounded game-export counters and byte sizes, skipped-game reasons, color-specific sample sizes, frequent opening seeds, candidate discovery sources/branch hits, branch-by-branch user/candidate game counts, evidence status, supported positions, scored positions, disagreements, failed calls, and chronological log events. The report contains **no OAuth tokens, raw game export or full move histories**. It **does** contain account names, canonical positions, and opening routes; review before sharing.
 
 For quality feedback, describe which displayed opening similarities are relevant or misleading and whether player matches differ between White and Black.
 
@@ -62,12 +62,14 @@ This is still an **experimental prototype**. It does not change production Chess
 
 External API specifications: [game export](https://lichess.org/api#tag/Games/operation/apiGamesUser), [Opening Explorer](https://github.com/lichess-org/api/blob/master/doc/specs/tags/openingexplorer/lichess.yaml), [batch user lookup](https://github.com/lichess-org/api/blob/master/doc/specs/tags/users/api-users.yaml).
 
-### Report schema `repertoire-lab-3`
+### Report schema `repertoire-lab-4`
 
-`openingSeeds` identifies the eight scoring roots; the extra search positions are recorded in discovery events. Each `candidates[].branches[]` entry contains `side`, `key`, `route`, `userGames`, `candidateGames`, `candidateSideGames`, `userPositions`, `observedPositions`, `supportedPositions`, `evidence` (`confirmed`, `sparse`, `not-observed`), nullable `coverage`, `agreement`, `score`, and up to eight supporting `choices`. `candidates[].sides` summarizes each color. Null means insufficient evidence; zero means observed but no supported coverage. Counts are from bounded recent-game exports and are not lifetime claims.
+`openingSeeds` identifies the scoring roots; additional distinct search positions are recorded in discovery events. Deeper searches never duplicate an existing scoring root. Each `candidates[].branches[]` entry contains `side`, `key`, `route`, `userGames`, `candidateGames`, `candidateSideGames`, `userPositions`, `observedPositions`, `supportedPositions`, `evidence` (`confirmed`, `sparse`, `not-observed`), nullable `coverage`, `agreement`, `score`, and up to eight supporting `choices`. `candidates[].sides` summarizes each color. Null means insufficient evidence; zero means observed but no supported coverage. Counts are from bounded recent-game exports and are not lifetime claims.
 
 The `discoveryBranches[]` report section records discovered accounts, titled accounts, selected accounts, scored candidates with confirmed branch evidence, and sampled candidate games reaching each opening root.
 
 ### Player Explorer diagnostics
 
 Each `candidates[].playerExplorer[]` entry records the queried branch, `status` (`complete`, `partial`, `timeout`, `unavailable`), `snapshotGames`, `queuePosition`, up to four move/count summaries, elapsed milliseconds and HTTP status. `complete` requires natural stream EOF and queue position zero. Partial data is strictly diagnostic, never a score or evidence of absence. When indexed results disagree with the recent-game export, check the month-rounded `since` filter and sample limits. This remains a **bounded feasibility probe**, not a replacement for candidate discovery or opening-game sampling.
+
+The `repertoire-lab-4` report adds `streamStoppedAtLimit` to each export and a `playerExplorer` diagnostics array per candidate; existing branch comparison metrics retain their definitions. Report data is a sampled observation, not a longitudinal repertoire census.

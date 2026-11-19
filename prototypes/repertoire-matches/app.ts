@@ -267,7 +267,7 @@ function renderDetail() {
 
 function createReport() {
   return {
-    schemaVersion: 'repertoire-lab-3',
+    schemaVersion: 'repertoire-lab-4',
     exportedAt: nowIso(),
     app: 'Chessview / Repertoire Lab',
     viewer: username,

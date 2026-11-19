@@ -223,7 +223,8 @@ export function openingFollowups(user: Repertoire, roots: OpeningSeed[]): Openin
       const index = line.choices.findIndex(choice => choice.key === root.key);
       if (index < 0) continue;
       for (const choice of line.choices.slice(index + 1)) {
-        if (choice.ply <= root.ply + 1 || choice.ply > 11) continue;
+        if (choice.ply <= root.ply + 1 || choice.ply > 11 ||
+            roots.some(seed => seed.side === root.side && seed.key === choice.key)) continue;
         const previous = descendants.get(choice.key);
         descendants.set(choice.key, {
           visits: (previous?.visits ?? 0) + 1, ply: choice.ply,

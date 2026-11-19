@@ -173,10 +173,11 @@ function inspectPosition(position: SharedPosition, player: StrongPlayer) {
   });
   const url = new URL(import.meta.env.BASE_URL, window.location.href);
   url.searchParams.set('fen', position.key);
-  el('board-links').replaceChildren(
-    link(url.toString(), 'Open Nodus in Chessview'),
-    link('https://lichess.org/' + position.exampleGame, 'Example ' + player.name + ' game'),
-  );
+  const links = [link(url.toString(), 'Open Nodus in Chessview')];
+  if (/^[A-Za-z0-9]{8}$/.test(position.exampleGame)) {
+    links.push(link('https://lichess.org/' + position.exampleGame, 'Example ' + player.name + ' game'));
+  }
+  el('board-links').replaceChildren(...links);
   log('ui', 'opening position inspected', {
     player: player.name, side: position.side, route: position.route, userMove: position.userMove,
     candidateMove: position.candidateMove,
@@ -338,7 +339,8 @@ async function run() {
     status('Loading your recent games…');
     const mine = await exportGames(username, 500, months, log, active.signal);
     report.ownExport = {
-      rejected: mine.rejected, received: mine.received, overflow: mine.overflow, bytes: mine.bytes,
+      rejected: mine.rejected, received: mine.received, overflow: mine.overflow,
+      bytes: mine.bytes, streamStoppedAtLimit: mine.streamStoppedAtLimit,
     };
     ownProfile = buildRepertoire(username, mine.games);
     log('profile', 'user repertoire constructed', {
@@ -383,6 +385,7 @@ async function run() {
             exportMeta: {
               rejected: exported.rejected, received: exported.received,
               overflow: exported.overflow, bytes: exported.bytes,
+              streamStoppedAtLimit: exported.streamStoppedAtLimit,
             },
             elapsedMs: Math.round(performance.now() - candidateStarted),
           });

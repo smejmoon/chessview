@@ -24,6 +24,7 @@ export type GameResult = {
   received: number;
   overflow: number;
   bytes: number;
+  streamStoppedAtLimit: boolean;
 };
 const SPEEDS = ['blitz', 'rapid', 'classical'] as const;
 const TITLES = new Set(['GM', 'WGM', 'IM', 'WIM', 'FM', 'WFM']);
@@ -273,23 +274,27 @@ export async function discoverCandidates(
   return discovered;
 }
 
-async function parseNdjson(response: Response, signal: AbortSignal): Promise<Omit<GameResult, 'overflow'>> {
+async function parseNdjson(
+  response: Response, signal: AbortSignal, limit: number,
+): Promise<Omit<GameResult, 'overflow'>> {
   const games: GameRecord[] = [];
-  let rejected = 0, bytes = 0, buffer = '';
+  let rejected = 0, received = 0, bytes = 0, buffer = '', streamStoppedAtLimit = false;
   const add = (line: string) => {
     if (!line.trim()) return;
     try {
       const parsed = JSON.parse(line);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) games.push(parsed as GameRecord);
-      else rejected++;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        received++;
+        if (games.length < limit) games.push(parsed as GameRecord);
+      } else rejected++;
     } catch { rejected++; }
   };
   if (!response.body) {
     const whole = await response.text();
     bytes = new TextEncoder().encode(whole).length;
     if (bytes > MAX_BYTES) throw new Error('Game export exceeds safety limit');
-    for (const line of whole.split(/\r?\n/)) add(line);
-    return { games, rejected, received: games.length, bytes };
+    for (const line of whole.split(/\\r?\\n/)) add(line);
+    return { games, rejected, received, bytes, streamStoppedAtLimit };
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -302,21 +307,32 @@ async function parseNdjson(response: Response, signal: AbortSignal): Promise<Omi
       bytes += value.byteLength;
       if (bytes > MAX_BYTES) throw new Error('Game export exceeds 3 MB safety limit');
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
+      const lines = buffer.split('\\n');
       buffer = lines.pop() ?? '';
-      for (const line of lines) add(line.trim());
+      for (const line of lines) {
+        add(line.trim());
+        if (games.length >= limit) {
+          // We deliberately do not wait for the export's trailing stream/keepalive.
+          streamStoppedAtLimit = true;
+          break;
+        }
+      }
+      if (streamStoppedAtLimit) break;
     }
-    buffer += decoder.decode();
-    add(buffer.trim());
+    if (!streamStoppedAtLimit) {
+      buffer += decoder.decode();
+      add(buffer.trim());
+    }
   } finally {
     if (!completed) await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
-  return { games, rejected, received: games.length, bytes };
+  return { games, rejected, received, bytes, streamStoppedAtLimit };
 }
 
 export async function exportGames(
   player: string, limit: number, months: number, log: Log, signal: AbortSignal,
+  authorizedRequest: typeof lichessSession.authorizedRequest = lichessSession.authorizedRequest,
 ): Promise<GameResult> {
   const url = new URL('https://lichess.org/api/games/user/' + encodeURIComponent(player));
   url.searchParams.set('max', String(limit));
@@ -329,14 +345,14 @@ export async function exportGames(
   url.searchParams.set('evals', 'false');
   const started = performance.now();
   log('network', 'game export started', { player, limit, months });
-  const response = await lichessSession.authorizedRequest(url, {
+  const response = await authorizedRequest(url, {
     headers: { Accept: 'application/x-ndjson' }, signal,
   }, { signal, urgency: 'background' });
   log('network', 'game export response', {
     player, status: response.status, firstByteMs: Math.round(performance.now() - started),
   });
   if (!response.ok) throw httpError('Game export for ' + player, response.status);
-  const parsed = await parseNdjson(response, signal);
+  const parsed = await parseNdjson(response, signal, limit);
   // Some exports include more records than the requested max; enforce a local sample boundary.
   const result: GameResult = {
     ...parsed, games: parsed.games.slice(0, limit),
@@ -345,6 +361,7 @@ export async function exportGames(
   log('games', 'export parsed', {
     player, requested: limit, received: parsed.received, used: result.games.length,
     overflow: result.overflow, rejectedLines: result.rejected, bytes: result.bytes,
+    streamStoppedAtLimit: result.streamStoppedAtLimit,
     elapsedMs: Math.round(performance.now() - started),
   });
   return result;

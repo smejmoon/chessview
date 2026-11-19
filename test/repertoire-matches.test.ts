@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
 import { canonicalPosition } from '../src/graph.ts';
 import { buildRepertoire, compareRepertoires, compareBranchRepertoires, openingSeeds } from '../prototypes/repertoire-matches/matcher.ts';
-import { discoverCandidates } from '../prototypes/repertoire-matches/lichess-source.ts';
+import { discoverCandidates, exportGames } from '../prototypes/repertoire-matches/lichess-source.ts';
 
 function game(id: string, white: string, black: string, moves: string) {
   return { id, rated: true, variant: 'standard', moves,
@@ -203,4 +203,37 @@ test('branch roots converge across transposed opening routes', () => {
   assert.equal(result.branches[0].candidateGames, 3);
   assert.equal(result.branches[0].evidence, 'confirmed');
   assert.equal(result.branches[0].agreement, 1);
+});
+
+test('candidate export stops at the bounded NDJSON sample without waiting for EOF', async () => {
+  const logEvents: string[] = [];
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const encoder = new TextEncoder();
+      for (let i = 0; i < 140; i++) controller.enqueue(encoder.encode(
+        JSON.stringify(game('ab' + String(i).padStart(6, '0'), 'master', 'other', 'e4 e5')) + '\\n'));
+      // Intentionally never close: the application must cancel at its sample cap.
+    },
+    cancel() { cancelled = true; },
+  });
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async () => new Response(stream, { status: 200 });
+  const result = await exportGames('master', 140, 12,
+    (_area, event) => logEvents.push(event), new AbortController().signal, request);
+  assert.equal(result.games.length, 140);
+  assert.equal(result.received, 140);
+  assert.equal(result.streamStoppedAtLimit, true);
+  assert.equal(result.overflow, 0);
+  assert.equal(cancelled, true);
+  assert.ok(logEvents.includes('export parsed'));
+});
+
+test('branch position examples retain candidate game IDs', () => {
+  const own = buildRepertoire('alice', Array.from({ length: 4 }, (_, i) =>
+    game('ab76540' + i, 'alice', 'other', 'e4 e5 Nf3 Nc6 Bb5 a6')));
+  const theirs = buildRepertoire('master', Array.from({ length: 3 }, (_, i) =>
+    game('cd76540' + i, 'master', 'other', 'e4 e5 Nf3 Nc6 Bb5 a6')));
+  const positions = compareBranchRepertoires(own, theirs).shared;
+  assert.equal(positions[0].exampleGame, 'cd765400');
 });

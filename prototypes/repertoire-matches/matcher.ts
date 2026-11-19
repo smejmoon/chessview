@@ -21,7 +21,7 @@ export type PositionChoice = {
   route: string[];
   moves: Map<string, { count: number; gameId: string }>;
 };
-export type GameLine = { choices: { key: string; ply: number; uci: string; route: string[] }[] };
+export type GameLine = { choices: { key: string; ply: number; uci: string; route: string[]; gameId: string }[] };
 export type Repertoire = {
   player: string;
   games: Record<Side, number>;
@@ -127,7 +127,7 @@ export function buildRepertoire(player: string, games: readonly GameRecord[]): R
     }
     try {
       const board = new Chess();
-      const choices: { key: string; ply: number; uci: string; route: string[] }[] = [];
+      const choices: GameLine['choices'] = [];
       const sanMoves = game.moves.trim().split(/\s+/);
       const route: string[] = [];
       const seen = new Set<string>();
@@ -137,7 +137,7 @@ export function buildRepertoire(player: string, games: readonly GameRecord[]): R
         if (!move) throw new Error('Invalid SAN');
         if ((side === 'white' ? ply % 2 === 0 : ply % 2 === 1) && !seen.has(key)) {
           seen.add(key);
-          choices.push({ key, ply, uci: move.from + move.to + (move.promotion ?? ''), route: [...route] });
+          choices.push({ key, ply, uci: move.from + move.to + (move.promotion ?? ''), route: [...route], gameId: game.id! });
         }
         route.push(move.san);
       }
@@ -320,7 +320,7 @@ function summarizeLines(lines: GameLine[]): Map<string, PositionChoice> {
       const previous = position.moves.get(choice.uci);
       position.moves.set(choice.uci, {
         count: (previous?.count ?? 0) + 1,
-        gameId: previous?.gameId ?? '',
+        gameId: previous?.gameId ?? choice.gameId,
       });
     }
   }

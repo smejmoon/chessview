@@ -16,7 +16,7 @@ Open **Diagnostics**, then either:
 - **Download JSON**: attach the `chessview-repertoire-report-YYYY-MM-DD.json` file to the chat.
 - **Copy log**: fallback to the chronological text trace.
 
-Prefer the structured JSON report. It includes schema version `repertoire-lab-2`, test settings and timestamps, account name, bounded game-export counters and byte sizes, skipped-game reasons, color-specific sample sizes, frequent opening seeds, candidate discovery sources/branch hits, scored positions, disagreements, failed calls, and chronological log events. The report contains **no OAuth tokens, raw game export or full move histories**. It **does** contain account names, canonical positions, and opening routes; review before sharing.
+Prefer the structured JSON report. It includes schema version `repertoire-lab-3`, test settings and timestamps, account name, bounded game-export counters and byte sizes, skipped-game reasons, color-specific sample sizes, frequent opening seeds, candidate discovery sources/branch hits, branch-by-branch user/candidate game counts, evidence status, supported positions, scored positions, disagreements, failed calls, and chronological log events. The report contains **no OAuth tokens, raw game export or full move histories**. It **does** contain account names, canonical positions, and opening routes; review before sharing.
 
 For quality feedback, describe which displayed opening similarities are relevant or misleading and whether player matches differ between White and Black.
 
@@ -33,9 +33,10 @@ The user export and player exports honor the local sample limit even if the API 
 
 ## Ranking and interpretation
 
-- **Coverage** is the percentage of the user's weighted opening decisions occurring in candidate games of the **same color**.
-- **Agreement** is the weighted probability the user and candidate play the same move from a shared position.
-- Per-color score = 70% coverage plus 30% covered-weighted agreement, relative to all the user's decision weight. Early decisions count; depth gently increases position weights. Combined score uses both colors.
+- Opening branches are the selected frequent canonical positions (up to four per color). Each sampled game belongs to its **deepest reached** selected branch, preventing double counting. Transpositions converge by canonical position identity. Positions before the branch root, including universal first moves, are excluded.
+- **Coverage** is the fraction of the user's weighted decisions at or after that branch root also observed with at least three candidate visits. **Agreement** is the probability of the same move on those supported positions.
+- Branch percentages require at least three candidate games reaching the branch and two user games. Otherwise the UI shows **Sparse sample** or **Not observed**, not an invented zero or a precise agreement.
+- Per-color score weights confirmed branch coverage and agreement at 65%/35% by the user's branch game counts. Unconfirmed branches contribute no evidence, but retain their weight in the displayed score if other branches are confirmed. A side with no confirmed branches displays **—**. Combined score uses both sides. These are sample scores, not lifetime-repertoire probabilities.
 - Sidebar rank uses the **better of White or Black scores**, clearly marked `best side`; the main panel shows both separate scores, coverage, agreement, and game counts.
 - **Different choices** highlights shared positions where the players' most frequent moves differ, while **Common positions** shows their highest-weight overlaps.
 
@@ -59,3 +60,7 @@ Logging is intentionally verbose but kept out of the main page. The console mirr
 This is still an **experimental prototype**. It does not change production Chessview navigation, graph admission rules, or persistent chess evidence.
 
 External API specifications: [game export](https://lichess.org/api#tag/Games/operation/apiGamesUser), [Opening Explorer](https://github.com/lichess-org/api/blob/master/doc/specs/tags/openingexplorer/lichess.yaml), [batch user lookup](https://github.com/lichess-org/api/blob/master/doc/specs/tags/users/api-users.yaml).
+
+### Report schema `repertoire-lab-3`
+
+`openingSeeds` identifies the canonical branch roots. Each `candidates[].branches[]` entry contains `side`, `key`, `route`, `userGames`, `candidateGames`, `candidateSideGames`, `userPositions`, `observedPositions`, `supportedPositions`, `evidence` (`confirmed`, `sparse`, `not-observed`), nullable `coverage`, `agreement`, `score`, and up to eight supporting `choices`. `candidates[].sides` summarizes each color. Null means insufficient evidence; zero means observed but no supported coverage. Counts are from bounded recent-game exports and are not lifetime claims.

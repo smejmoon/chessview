@@ -6,8 +6,8 @@ import './style.css';
 import { Chessground } from '@lichess-org/chessground';
 import { lichessSession } from '../../src/lichess-session.ts';
 import { toPlayableFen } from '../../src/graph.ts';
-import { buildRepertoire, compareRepertoires, openingSeeds } from './matcher.ts';
-import type { OpeningSeed, Repertoire, RepertoireMatch, SharedPosition, Side } from './matcher.ts';
+import { buildRepertoire, compareBranchRepertoires, openingSeeds } from './matcher.ts';
+import type { OpeningSeed, Repertoire, BranchComparison, SharedPosition, Side } from './matcher.ts';
 import { accountName, discoverCandidates, exportGames, httpStatus } from './lichess-source.ts';
 import type { GameResult, Log, StrongPlayer } from './lichess-source.ts';
 
@@ -72,7 +72,7 @@ const log: Log = (area, event, detail = {}) => {
 
 type MatchRow = {
   player: StrongPlayer;
-  match: RepertoireMatch;
+  match: BranchComparison;
   repertoire: Repertoire;
   exportMeta: Omit<GameResult, 'games'>;
   elapsedMs: number;
@@ -99,7 +99,7 @@ let running = false;
 const SIDES: Side[] = ['white', 'black'];
 const nowIso = () => new Date().toISOString();
 const percentage = (v: number | null) => v === null ? '—' : Math.round(v * 100) + '%';
-const score = (row: MatchRow) => Math.max(row.match.bySide.white.score ?? 0, row.match.bySide.black.score ?? 0);
+const score = (row: MatchRow) => Math.max(row.match.bySide.white.score ?? -1, row.match.bySide.black.score ?? -1);
 const sourceLabel = (p: StrongPlayer) => p.source === 'opening-explorer' ?
   'Opening ' + p.seedHits + ' branch' + (p.seedHits === 1 ? '' : 'es') : 'Leaderboard fallback';
 
@@ -145,10 +145,10 @@ function renderRanks() {
     button.type = 'button';
     const top = node('div', '', 'result-main');
     top.append(node('strong', row.player.title + ' ' + row.player.name),
-      node('span', score(row) + '% best side', 'result-score'));
+      node('span', score(row) < 0 ? 'Unconfirmed' : score(row) + '% best side', 'result-score'));
     const more = node('div', '', 'result-meta');
-    more.append(node('span', 'W ' + (row.match.bySide.white.score ?? 0) + '%  ·  B ' +
-      (row.match.bySide.black.score ?? 0) + '%'),
+    more.append(node('span', 'W ' + (row.match.bySide.white.score === null ? '—' : row.match.bySide.white.score + '%') + '  ·  B ' +
+      (row.match.bySide.black.score === null ? '—' : row.match.bySide.black.score + '%')),
       node('small', sourceLabel(row.player)));
     button.append(top, more);
     button.addEventListener('click', () => {
@@ -231,20 +231,35 @@ function renderDetail() {
     const match = row.match.bySide[side];
     const block = node('div', '', 'stat');
     block.append(node('span', side === 'white' ? 'AS WHITE' : 'AS BLACK', 'stat-label'),
-      node('strong', (match.score ?? 0) + '%', 'stat-value'),
+      node('strong', match.score === null ? '—' : match.score + '%', 'stat-value'),
       node('span', percentage(match.coverage) + ' coverage · ' + percentage(match.agreement) + ' agreement'),
       node('small', match.userGames + ' your games / ' + match.candidateGames + ' theirs'));
     stats.append(block);
   }
   summary.append(stats, node('p', sourceLabel(row.player) + ' · ' + row.repertoire.accepted +
-    ' analyzed games (' + row.repertoire.skipped + ' excluded) · combined score ' + row.match.score +
-    '%. Small samples can understate overlap.', 'muted compact'));
+    ' analyzed games (' + row.repertoire.skipped + ' excluded) · combined score ' +
+    (row.match.coverage === null ? 'unconfirmed' : row.match.score + '%') +
+    '. Scores require at least three games per opening branch.', 'muted compact'));
+  const branches = node('div', '', 'branch-list');
+  branches.append(node('h3', 'Opening branches'));
+  for (const branch of row.match.branches) {
+    const item = node('div', '', 'branch-row');
+    const name = node('strong', (branch.side === 'white' ? 'W' : 'B') + ' · ' + branch.route);
+    const evidence = branch.evidence === 'confirmed'
+      ? percentage(branch.coverage) + ' coverage · ' + percentage(branch.agreement) + ' agreement'
+      : branch.evidence === 'sparse' ? 'Sparse sample' : 'Not observed';
+    item.append(name, node('span', evidence),
+      node('small', branch.userGames + ' your games · ' + branch.candidateGames +
+        ' theirs · ' + branch.supportedPositions + '/' + branch.userPositions + ' supported positions'));
+    branches.append(item);
+  }
+  summary.append(branches);
   renderPositions(row);
 }
 
 function createReport() {
   return {
-    schemaVersion: 'repertoire-lab-2',
+    schemaVersion: 'repertoire-lab-3',
     exportedAt: nowIso(),
     app: 'Chessview / Repertoire Lab',
     viewer: username,
@@ -271,6 +286,7 @@ function createReport() {
       },
       score: row.match.score, coverage: row.match.coverage, agreement: row.match.agreement,
       sides: row.match.bySide,
+      branches: row.match.branches,
       commonPositions: row.match.shared,
       differentChoices: row.match.differences,
     })),
@@ -339,7 +355,7 @@ async function run() {
       try {
         const exported = await exportGames(candidate.name, 140, months, log, active.signal);
         const repertoire = buildRepertoire(candidate.name, exported.games);
-        const match = compareRepertoires(ownProfile, repertoire);
+        const match = compareBranchRepertoires(ownProfile, repertoire, seeds);
         log('match', 'candidate scored', {
           player: candidate.name, source: candidate.source, seeds: candidate.seedHits,
           bestWhite: match.bySide.white.score, bestBlack: match.bySide.black.score,
@@ -347,6 +363,9 @@ async function run() {
           games: repertoire.accepted, skippedReasons: repertoire.skippedReasons,
           sharedWhite: match.bySide.white.sharedPositions,
           sharedBlack: match.bySide.black.sharedPositions,
+          branchEvidence: match.branches.map(b => ({ side: b.side, route: b.route,
+            userGames: b.userGames, candidateGames: b.candidateGames,
+            supportedPositions: b.supportedPositions, evidence: b.evidence })),
         });
         if (repertoire.accepted) {
           rows.push({

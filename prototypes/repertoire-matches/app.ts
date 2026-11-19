@@ -8,7 +8,7 @@ import { lichessSession } from '../../src/lichess-session.ts';
 import { toPlayableFen } from '../../src/graph.ts';
 import { buildRepertoire } from './matcher.ts';
 import { frequentPositions, comparePositionStats } from './position-matcher.ts';
-import { createPositionExport } from './position-export.ts';
+import { createPositionExport, serializePositionExport } from './position-export.ts';
 import type { OpeningSeed, Repertoire, SharedPosition, Side } from './matcher.ts';
 import type { PositionComparison } from './position-matcher.ts';
 import { accountName, discoverCandidates, exportGames, httpStatus, verifyCandidatePositions } from './lichess-source.ts';
@@ -494,7 +494,7 @@ async function exportPositions() {
       depth: rawDepth === 'all' ? null : Number(rawDepth),
       minGames: Number(el<HTMLSelectElement>('export-min').value),
     }, { months, gameLimit: 500, exportedAt: nowIso() });
-    const blob = new Blob([JSON.stringify(summary, null, 2) + '\\n'],
+    const blob = new Blob([serializePositionExport(summary)],
       { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');

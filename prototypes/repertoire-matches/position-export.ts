@@ -122,3 +122,8 @@ export function createPositionExport(
     positions,
   };
 }
+
+/** Produce strict JSON with an actual trailing newline, not a literal \n token. */
+export function serializePositionExport(report: ReturnType<typeof createPositionExport>): string {
+  return JSON.stringify(report, null, 2) + '\n';
+}

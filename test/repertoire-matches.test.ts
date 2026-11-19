@@ -1,4 +1,4 @@
-import { createPositionExport } from '../prototypes/repertoire-matches/position-export.ts';
+import { createPositionExport, serializePositionExport } from '../prototypes/repertoire-matches/position-export.ts';
 import { frequentPositions, comparePositionStats } from '../prototypes/repertoire-matches/position-matcher.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -590,4 +590,17 @@ test('position export honors color, depth and minimum-game filters', () => {
   assert.equal(onlyBlack.positions[0].side, 'black');
   assert.equal(createPositionExport(profile,
     { side: 'both', depth: 4, minGames: 6 }, context).summary.positions, 0);
+});
+
+test('position export serialization creates strict JSON with real newline terminator', () => {
+  const profile = buildRepertoire('alice', [
+    game('ff123456', 'alice', 'op', 'e4 e5 Nf3 Nc6 Bb5 a6'),
+  ]);
+  const report = createPositionExport(profile,
+    { side: 'both', depth: 4, minGames: 1 },
+    { months: 12, gameLimit: 500, exportedAt: '2026-11-19T00:00:00Z' });
+  const raw = serializePositionExport(report);
+  assert.equal(raw.at(-1), '\n');
+  assert.equal(raw.endsWith('\\n'), false);
+  assert.deepEqual(JSON.parse(raw), report);
 });

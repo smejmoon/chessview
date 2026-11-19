@@ -1,3 +1,4 @@
+import { createPositionExport } from '../prototypes/repertoire-matches/position-export.ts';
 import { frequentPositions, comparePositionStats } from '../prototypes/repertoire-matches/position-matcher.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -551,4 +552,42 @@ test('Player Explorer reports timeout when a hanging stream never delivers a sna
     new AbortController().signal, request, 40);
   assert.equal(result.status, 'timeout');
   assert.equal(result.snapshotGames, null);
+});
+
+test('position export combines transpositions with canonical identity and accurate move counts', () => {
+  const games = Array.from({ length: 3 }, (_, i) =>
+    game('fa12340' + i, 'alice', 'op', 'Nf3 Nf6 g3 g6 Bg2 Bg7')).concat(
+    Array.from({ length: 2 }, (_, i) =>
+      game('fb12340' + i, 'alice', 'op', 'g3 g6 Nf3 Nf6 Bg2 Bg7')));
+  const profile = buildRepertoire('alice', games);
+  const exportData = createPositionExport(profile,
+    { side: 'white', depth: 4, minGames: 3 },
+    { months: 12, gameLimit: 500, exportedAt: '2026-11-19T00:00:00Z' });
+  assert.equal(exportData.schemaVersion, 'repertoire-positions-1');
+  assert.equal(exportData.player, 'alice');
+  assert.equal(exportData.summary.positions, 1);
+  assert.equal(exportData.positions[0].games, 5);
+  assert.equal(exportData.positions[0].shareOfColorGames, 1);
+  assert.deepEqual(exportData.positions[0].plies, [4]);
+  assert.deepEqual(exportData.positions[0].moves.map(m => ({ san: m.san, games: m.games })), [
+    { san: 'Bg2', games: 5 },
+  ]);
+});
+
+test('position export honors color, depth and minimum-game filters', () => {
+  const games = Array.from({ length: 5 }, (_, i) =>
+    game('ga12340' + i, 'alice', 'op', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6')).concat(
+    Array.from({ length: 4 }, (_, i) =>
+      game('gb12340' + i, 'op', 'alice', 'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5')));
+  const profile = buildRepertoire('alice', games);
+  const context = { months: 12, gameLimit: 500, exportedAt: '2026-11-19T00:00:00Z' };
+  const atFour = createPositionExport(profile, { side: 'both', depth: 4, minGames: 3 }, context);
+  assert.equal(atFour.summary.white, 1);
+  assert.equal(atFour.summary.black, 1);
+  assert.deepEqual(atFour.positions.map(x => x.plies), [[4], [3]]);
+  const onlyBlack = createPositionExport(profile, { side: 'black', depth: 4, minGames: 3 }, context);
+  assert.equal(onlyBlack.positions.length, 1);
+  assert.equal(onlyBlack.positions[0].side, 'black');
+  assert.equal(createPositionExport(profile,
+    { side: 'both', depth: 4, minGames: 6 }, context).summary.positions, 0);
 });

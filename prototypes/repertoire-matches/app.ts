@@ -8,6 +8,7 @@ import { lichessSession } from '../../src/lichess-session.ts';
 import { toPlayableFen } from '../../src/graph.ts';
 import { buildRepertoire } from './matcher.ts';
 import { frequentPositions, comparePositionStats } from './position-matcher.ts';
+import { createPositionExport } from './position-export.ts';
 import type { OpeningSeed, Repertoire, SharedPosition, Side } from './matcher.ts';
 import type { PositionComparison } from './position-matcher.ts';
 import { accountName, discoverCandidates, exportGames, httpStatus, verifyCandidatePositions } from './lichess-source.ts';
@@ -23,6 +24,16 @@ app.innerHTML = [
   '</select></label><label>Compare <select id="candidates"><option value="8">8 players</option>',
   '<option value="12" selected>12 players</option><option value="20">20 players</option></select></label>',
   '<button id="start" type="submit" class="primary">Find matches</button><button id="stop" type="button" disabled>Cancel</button></form>',
+  '<div class="export-controls"><label>Color <select id="export-color"><option value="both">Both</option>',
+  '<option value="white">White</option><option value="black">Black</option></select></label>',
+  '<label>Depth <select id="export-depth"><option value="all">All</option>',
+  '<option value="6">W6/B5</option><option value="8" selected>W8/B7</option>',
+  '<option value="10">W10/B9</option><option value="12">W12/B11</option>',
+  '<option value="14">W14/B13</option><option value="16">W16/B15</option></select></label>',
+  '<label>Min games <select id="export-min"><option value="2">2</option>',
+  '<option value="3" selected>3</option><option value="5">5</option>',
+  '<option value="10">10</option></select></label>',
+  '<button id="export-positions" type="button" disabled>Export positions</button></div>',
   '<span id="status" role="status" aria-live="polite">Sign in with Lichess to begin.</span></div>',
   '<div class="profile-line" id="profile-line">Frequent positions at depths 8 and 10 · White and Black separately</div>',
   '<section class="content"><aside class="rankings"><div class="pane-title">MATCHES <span id="match-count">—</span></div>',
@@ -92,6 +103,7 @@ let controller: AbortController | null = null;
 let selectedId: string | null = null;
 let rows: MatchRow[] = [];
 let ownProfile: Repertoire | null = null;
+let ownProfileMonths: number | null = null;
 let seeds: OpeningSeed[] = [];
 let discoveryBranches: DiscoveryBranch[] = [];
 let report: SessionReport | null = null;
@@ -113,9 +125,13 @@ function status(message: string, error = false) {
 function runningState(value: boolean) {
   running = value;
   el<HTMLButtonElement>('start').disabled = value || !username;
+  el<HTMLButtonElement>('export-positions').disabled = value || !username;
   el<HTMLButtonElement>('stop').disabled = !value;
   el<HTMLSelectElement>('months').disabled = value;
   el<HTMLSelectElement>('candidates').disabled = value;
+  el<HTMLSelectElement>('export-color').disabled = value;
+  el<HTMLSelectElement>('export-depth').disabled = value;
+  el<HTMLSelectElement>('export-min').disabled = value;
 }
 function node(tag: string, content: string, cls = ''): HTMLElement {
   const item = document.createElement(tag);
@@ -339,6 +355,7 @@ async function run() {
   selectedId = null;
   rows = [];
   ownProfile = null;
+  ownProfileMonths = null;
   seeds = [];
   discoveryBranches = [];
   renderRanks();
@@ -352,6 +369,7 @@ async function run() {
       bytes: mine.bytes, streamStoppedAtLimit: mine.streamStoppedAtLimit,
     };
     ownProfile = buildRepertoire(username, mine.games);
+    ownProfileMonths = months;
     log('profile', 'user repertoire constructed', {
       games: ownProfile.accepted, skipped: ownProfile.skipped, skippedReasons: ownProfile.skippedReasons,
       white: ownProfile.games.white, black: ownProfile.games.black,
@@ -446,6 +464,64 @@ async function run() {
     }
   }
 }
+
+async function exportPositions() {
+  if (!username || running) return;
+  const active = new AbortController();
+  controller = active;
+  runningState(true);
+  const months = Number(el<HTMLSelectElement>('months').value);
+  try {
+    let profile = ownProfile;
+    if (!profile || ownProfileMonths !== months ||
+        profile.player.toLowerCase() !== username.toLowerCase()) {
+      status('Loading your games for position export…');
+      const exported = await exportGames(username, 500, months, log, active.signal);
+      if (active.signal.aborted) return;
+      profile = buildRepertoire(username, exported.games);
+      if (profile.accepted === 0) throw new Error('No eligible games to export positions from.');
+      ownProfile = profile;
+      ownProfileMonths = months;
+    } else {
+      log('profile', 'reusing loaded games for position export', {
+        player: username, months, accepted: profile.accepted,
+      });
+    }
+    if (active.signal.aborted) return;
+    const rawDepth = el<HTMLSelectElement>('export-depth').value;
+    const summary = createPositionExport(profile, {
+      side: el<HTMLSelectElement>('export-color').value as 'both' | Side,
+      depth: rawDepth === 'all' ? null : Number(rawDepth),
+      minGames: Number(el<HTMLSelectElement>('export-min').value),
+    }, { months, gameLimit: 500, exportedAt: nowIso() });
+    const blob = new Blob([JSON.stringify(summary, null, 2) + '\\n'],
+      { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'chessview-positions-' + summary.player.toLowerCase() + '-' +
+      nowIso().slice(0, 10) + '.json';
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status('Exported ' + summary.summary.positions + ' positions from ' +
+      profile.accepted + ' games. No candidate lookup was needed.');
+    log('profile', 'position-frequency snapshot exported', {
+      filter: summary.filter, positions: summary.summary,
+      acceptedGames: profile.accepted, bytes: blob.size,
+    });
+  } catch (error) {
+    if (!active.signal.aborted) {
+      captureFailure('position export', error);
+      status(error instanceof Error ? error.message : String(error), true);
+    }
+  } finally {
+    if (controller === active) {
+      controller = null;
+      runningState(false);
+    }
+  }
+}
+el('export-positions').addEventListener('click', () => { void exportPositions(); });
 
 el<HTMLFormElement>('controls').addEventListener('submit', event => {
   event.preventDefault();

@@ -119,3 +119,35 @@ after deployment.
 Official APIs: [aggregate Explorer](https://github.com/lichess-org/api/blob/master/doc/specs/tags/openingexplorer/lichess.yaml),
 [player Explorer](https://github.com/lichess-org/api/blob/master/doc/specs/tags/openingexplorer/player.yaml),
 [games export](https://lichess.org/api#tag/Games/operation/apiGamesUser).
+
+## Export positions
+
+Use **Export positions** independently of **Find matches**. Select **History**
+(6/12/24 months) and the compact export filters:
+**Color** (Both/White/Black), **Depth** (All or paired W/B ply values), and
+**Min games** (2/3/5/10). The button downloads
+`chessview-positions-<player>-YYYY-MM-DD.json`. It loads only the signed-in
+player's up-to-500 recent rated standard games via the existing authenticated
+LichessGateway path, or reuses the current in-memory profile if the history
+period is unchanged. It **does not** query any other player's games or Explorer.
+Changing filters after a download requires no new Lichess request while the
+profile remains loaded.
+
+Depth `W8/B7` means the White-to-move board after ply 8 and the Black-to-move
+board after ply 7. `All` includes every opening decision recorded in the
+first 18 plies. Canonical position keys merge transposed move orders. The
+frequency filter is applied after the color/depth restriction.
+
+### `repertoire-positions-1` schema
+
+The JSON includes the signed-in player's account name (no anonymization),
+export timestamp, chosen filters, bounded game sample size, accepted/skipped
+game totals, White/Black game counts, and all qualifying positions ordered
+by frequency. Each position contains its **canonical key**, representative
+SAN route, exact observed ply(s), per-color game frequency, and move choices
+with SAN, UCI, observed game counts, share, and one example-game ID.
+It deliberately contains **no complete game scores or OAuth tokens**.
+
+Save or commit that JSON snapshot when you want a reproducible set of
+positions to inspect and compare with Explorer data. The public repository
+does not automatically receive any exported data.

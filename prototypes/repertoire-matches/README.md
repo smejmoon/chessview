@@ -26,7 +26,8 @@ LichessGateway. Production Chessview's graph and navigation remain unchanged.
    the authenticated per-player Opening Explorer. Prefer positions where the
    aggregate Explorer found the account, then diversify by color and frequency.
    Each check reads at most 128 KB and has a 2.2-second overall timeout, including
-   gateway queue time. Player Explorer returns an on-demand **NDJSON indexing
+   gateway queue time. This budget also interrupts a pending NDJSON stream read,
+   even if the remote stream never closes after request cancellation. Player Explorer returns an on-demand **NDJSON indexing
    stream**, not a completed lookup with every response. A complete observation
    requires natural stream end and `queuePosition = 0`.
 5. Similarity uses Player Explorer's position totals and move frequencies.

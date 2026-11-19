@@ -383,6 +383,34 @@ export function selectPlayerProbes(candidate: StrongPlayer, seeds: OpeningSeed[]
   return chosen;
 }
 
+/**
+ * Response headers may arrive quickly while Player Explorer indexing keeps the
+ * NDJSON stream open. A fetch AbortSignal alone is not guaranteed to settle a
+ * pending browser stream reader. Race each read against the same demand signal.
+ */
+function readPlayerChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>, signal: AbortSignal,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      reject(signal.reason);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    void reader.read().then(
+      result => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(result);
+      },
+      error => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 export async function probePlayerBranch(
   player: string, seed: OpeningSeed, months: number, log: Log, signal: AbortSignal,
   authorizedRequest: typeof lichessSession.authorizedRequest = lichessSession.authorizedRequest,
@@ -430,7 +458,7 @@ export async function probePlayerBranch(
       let buffer = '';
       try {
         for (;;) {
-          const { value, done } = await reader.read();
+          const { value, done } = await readPlayerChunk(reader, requestSignal);
           if (done) {
             buffer += decoder.decode();
             decodeLine(buffer);
@@ -445,7 +473,11 @@ export async function probePlayerBranch(
           for (const line of lines) decodeLine(line);
         }
       } finally {
-        if (!complete) await reader.cancel().catch(() => {});
+        if (!complete) {
+          // Never let reader cancellation itself postpone the elapsed-time budget.
+          // The aborted HTTP request and stream reader are no longer live work.
+          void reader.cancel().catch(() => {});
+        }
         reader.releaseLock();
       }
     }
@@ -479,7 +511,7 @@ export async function probePlayerBranch(
   log('player-explorer', 'probe completed', {
     player, side: seed.side, route: seed.route, status,
     snapshotGames: evidence.snapshotGames, queuePosition: evidence.queuePosition,
-    elapsedMs: evidence.elapsedMs, bytes,
+    elapsedMs: evidence.elapsedMs, bytes, timedOut: timeout.aborted,
   });
   return evidence;
 }

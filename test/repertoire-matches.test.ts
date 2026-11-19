@@ -515,3 +515,40 @@ test('Player Explorer reads successive NDJSON snapshots and uses the final index
   assert.equal(result.snapshotGames, 6);
   assert.deepEqual(result.moves, [{ uci: 'e2e4', san: 'e4', games: 6 }]);
 });
+
+
+test('Player Explorer aborts a hanging stream read within its budget even when the stream ignores the signal', async () => {
+  const seed = { side: 'white' as const, key: canonicalPosition(new Chess().fen()),
+    route: 'hanging stream', visits: 5, ply: 8 };
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(
+        JSON.stringify({ queuePosition: 4, white: 2, draws: 0, black: 0, moves: [] }) + '\n'));
+      // The server neither closes the stream nor handles request aborts.
+    },
+    cancel() { cancelled = true; },
+  });
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async () => new Response(stream, { status: 200 });
+  const started = performance.now();
+  const result = await probePlayerBranch('master', seed, 12, () => {},
+    new AbortController().signal, request, 40);
+  assert.ok(performance.now() - started < 750, 'pending stream read must not block for minutes');
+  assert.equal(result.status, 'partial');
+  assert.equal(result.queuePosition, 4);
+  assert.equal(result.snapshotGames, 2);
+  assert.equal(cancelled, true);
+});
+
+test('Player Explorer reports timeout when a hanging stream never delivers a snapshot', async () => {
+  const seed = { side: 'black' as const, key: canonicalPosition(new Chess().fen()),
+    route: 'empty hanging stream', visits: 4, ply: 7 };
+  const stream = new ReadableStream<Uint8Array>({ start() {} });
+  const request: typeof import('../src/lichess-session.ts').lichessSession.authorizedRequest =
+    async () => new Response(stream, { status: 200 });
+  const result = await probePlayerBranch('master', seed, 12, () => {},
+    new AbortController().signal, request, 40);
+  assert.equal(result.status, 'timeout');
+  assert.equal(result.snapshotGames, null);
+});
